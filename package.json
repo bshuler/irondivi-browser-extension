@@ -1,6 +1,6 @@
 {
   "name": "pdivi-extension",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "PrivateDivi Wallet Browser Extension",
   "type": "module",
   "scripts": {
