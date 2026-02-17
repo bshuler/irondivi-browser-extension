@@ -1,0 +1,33 @@
+{
+  "name": "pdivi-extension",
+  "version": "1.0.0",
+  "description": "PrivateDivi Wallet Browser Extension",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js chrome",
+    "build:all": "node scripts/build.js all",
+    "build:firefox": "node scripts/build.js firefox",
+    "build:edge": "node scripts/build.js edge",
+    "watch": "node scripts/build.js chrome --watch",
+    "package": "node scripts/package.js",
+    "package:release": "npm run build:all && npm run package",
+    "lint": "eslint src/",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:unit": "vitest"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@playwright/test": "^1.42.0",
+    "@types/chrome": "^0.1.36",
+    "archiver": "^6.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4"
+  }
+}

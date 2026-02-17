@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, initial-scale=1.0">
+  <title>PrivateDivi Wallet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <img src="../icons/icon-32.png" alt="PrivateDivi" class="logo">
+        <span class="brand">PrivateDivi</span>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Account Selector -->
+    <div class="account-selector" id="account-selector">
+      <button class="account-dropdown" id="account-dropdown">
+        <span class="account-name" id="current-account-name">Loading...</span>
+        <span class="dropdown-arrow">▼</span>
+      </button>
+      <div class="account-menu hidden" id="account-menu">
+        <div class="account-list" id="account-list"></div>
+        <button class="menu-item add-account" id="add-account-btn">
+          <span>+</span> Add Account
+        </button>
+      </div>
+    </div>
+
+    <!-- Network Badge -->
+    <div class="network-badge" id="network-badge">Testnet</div>
+
+    <!-- Main Balance Display -->
+    <div class="balance-section" id="balance-section">
+      <div class="balance-row">
+        <span class="balance-amount" id="balance-amount">0.00</span>
+        <button class="icon-btn hide-balance-btn" id="hide-balance-btn" title="Toggle Balance Visibility">👁️</button>
+      </div>
+      <span class="balance-label">PDIVI</span>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="action-btn" id="send-btn">
+        <span class="action-icon">↑</span>
+        <span>Send</span>
+      </button>
+      <button class="action-btn" id="receive-btn">
+        <span class="action-icon">↓</span>
+        <span>Receive</span>
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="activity">Activity</button>
+      <button class="tab" data-tab="contacts">Contacts</button>
+    </div>
+
+    <!-- Tab Content: Activity -->
+    <div class="tab-content active" id="tab-activity">
+      <div class="transaction-list" id="transaction-list">
+        <div class="empty-state">No transactions yet</div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Contacts -->
+    <div class="tab-content" id="tab-contacts">
+      <div class="contacts-header">
+        <input type="text" class="search-input" id="contact-search" placeholder="Search contacts...">
+        <button class="icon-btn" id="add-contact-btn">+</button>
+      </div>
+      <div class="contact-list" id="contact-list">
+        <div class="empty-state">No contacts yet</div>
+      </div>
+    </div>
+
+    <!-- Views (initially hidden) -->
+
+    <!-- Send View -->
+    <div class="view hidden" id="view-send">
+      <div class="view-header">
+        <button class="back-btn" id="send-back-btn">←</button>
+        <h2>Send PDIVI</h2>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label>To Address</label>
+          <input type="text" id="send-to" placeholder="Enter address or select contact" autocomplete="off">
+          <div class="contact-suggestions hidden" id="contact-suggestions"></div>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <div class="amount-input-wrapper">
+            <input type="number" id="send-amount" placeholder="0.00" step="0.00000001">
+            <button class="max-btn" id="send-max-btn">MAX</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Fee</label>
+          <input type="number" id="send-fee" value="0.0001" step="0.00000001">
+        </div>
+        <button class="primary-btn" id="send-confirm-btn">Continue</button>
+      </div>
+    </div>
+
+    <!-- Send Confirm View (password entry) -->
+    <div class="view hidden" id="view-send-confirm">
+      <div class="view-header">
+        <button class="back-btn" id="send-confirm-back-btn">←</button>
+        <h2>Confirm Send</h2>
+      </div>
+      <div class="confirm-details">
+        <div class="detail-row">
+          <span>To:</span>
+          <span id="confirm-to" class="address-display"></span>
+        </div>
+        <div class="detail-row">
+          <span>Amount:</span>
+          <span id="confirm-amount"></span>
+        </div>
+        <div class="detail-row">
+          <span>Fee:</span>
+          <span id="confirm-fee"></span>
+        </div>
+        <div class="detail-row">
+          <span>Total:</span>
+          <span id="send-confirm-total"></span>
+        </div>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label>Enter Password to Sign</label>
+          <input type="password" id="send-password" placeholder="Password" autocomplete="current-password">
+        </div>
+        <button class="primary-btn" id="send-submit-btn">Send</button>
+      </div>
+    </div>
+
+    <!-- Receive View -->
+    <div class="view hidden" id="view-receive">
+      <div class="view-header">
+        <button class="back-btn" id="receive-back-btn">←</button>
+        <h2>Receive PDIVI</h2>
+      </div>
+      <div class="receive-content">
+        <div class="qr-code" id="qr-code"></div>
+        <div class="address-display-full" id="receive-address"></div>
+        <button class="secondary-btn copy-btn" id="copy-address-btn">
+          <span>📋</span> Copy Address
+        </button>
+        <div class="faucet-section" id="faucet-section" style="display: none;">
+          <p class="faucet-label">Need test coins?</p>
+          <button class="secondary-btn" id="request-faucet-btn">Request from Faucet</button>
+          <div class="faucet-status" id="faucet-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings View -->
+    <div class="view hidden" id="view-settings">
+      <div class="view-header">
+        <button class="back-btn" id="settings-back-btn">←</button>
+        <h2>Settings</h2>
+      </div>
+      <div class="settings-list">
+        <div class="setting-item">
+          <span>Network</span>
+          <select id="setting-network">
+            <option value="testnet">Testnet</option>
+            <option value="mainnet">Mainnet</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <span>Hide Balance</span>
+          <input type="checkbox" id="setting-hide-balance">
+        </div>
+        <div class="setting-item">
+          <span>Auth Timeout</span>
+          <select id="setting-auth-timeout">
+            <option value="1">1 minute</option>
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+          </select>
+        </div>
+        <button class="setting-item danger" id="export-mnemonic-btn">
+          Export Recovery Phrase
+        </button>
+        <div class="setting-section">
+          <h3>Connected Sites</h3>
+          <div id="connected-sites-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Account View -->
+    <div class="view hidden" id="view-add-account">
+      <div class="view-header">
+        <button class="back-btn" id="add-account-back-btn">←</button>
+        <h2>Add Account</h2>
+      </div>
+      <div class="add-account-options">
+        <button class="option-btn" id="create-account-btn">
+          <span class="option-icon">✨</span>
+          <span>Create New Wallet</span>
+        </button>
+        <button class="option-btn" id="import-account-btn">
+          <span class="option-icon">📥</span>
+          <span>Import Recovery Phrase</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Create Account View -->
+    <div class="view hidden" id="view-create-account">
+      <div class="view-header">
+        <button class="back-btn" id="create-back-btn">←</button>
+        <h2>Create Wallet</h2>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label>Wallet Name</label>
+          <input type="text" id="create-name" placeholder="My Wallet">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="create-password" placeholder="Enter password">
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="create-password-confirm" placeholder="Confirm password">
+        </div>
+        <div class="form-group">
+          <label>Word Count</label>
+          <select id="create-word-count">
+            <option value="12">12 words</option>
+            <option value="24">24 words</option>
+          </select>
+        </div>
+        <button class="primary-btn" id="create-submit-btn">Create Wallet</button>
+      </div>
+    </div>
+
+    <!-- Import Account View -->
+    <div class="view hidden" id="view-import-account">
+      <div class="view-header">
+        <button class="back-btn" id="import-back-btn">←</button>
+        <h2>Import Wallet</h2>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label>Wallet Name</label>
+          <input type="text" id="import-name" placeholder="My Wallet">
+        </div>
+        <div class="form-group">
+          <label>Recovery Phrase</label>
+          <textarea id="import-mnemonic" placeholder="Enter your 12 or 24 word recovery phrase" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="import-password" placeholder="Enter password">
+        </div>
+        <button class="primary-btn" id="import-submit-btn">Import Wallet</button>
+      </div>
+    </div>
+
+    <!-- Mnemonic Modal -->
+    <div class="modal-overlay hidden" id="mnemonic-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="mnemonic-modal-title">Recovery Phrase</h3>
+        </div>
+        <p class="modal-warning">Write down these words in order and store them safely. Never share them with anyone.</p>
+        <div class="mnemonic-grid blurred" id="mnemonic-grid"></div>
+        <div class="modal-actions">
+          <button class="secondary-btn mnemonic-toggle-btn" id="mnemonic-toggle-blur">Show Phrase</button>
+          <button class="primary-btn" id="mnemonic-confirm-btn">I've Written It Down</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="password-modal-title">Enter Password</h3>
+        </div>
+        <input type="password" id="password-modal-input" class="input" placeholder="Password" autocomplete="current-password">
+        <div class="modal-actions">
+          <button id="password-modal-cancel" class="secondary-btn">Cancel</button>
+          <button id="password-modal-submit" class="primary-btn">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="confirm-modal-title">Confirm</h3>
+        </div>
+        <p id="confirm-modal-message" style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;line-height:1.5;"></p>
+        <div class="modal-actions">
+          <button id="confirm-modal-cancel" class="secondary-btn">Cancel</button>
+          <button id="confirm-modal-ok" class="primary-btn" style="background:var(--danger);border-color:var(--danger);">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signing Request View -->
+    <div class="view hidden" id="view-signing-request">
+      <div class="view-header">
+        <button class="back-btn" id="signing-request-back-btn">←</button>
+        <h2>Signing Request</h2>
+      </div>
+      <div class="signing-request-content">
+        <div class="signing-origin-wrapper">
+          <span class="signing-origin-label">Request from:</span>
+          <div id="signing-origin" class="signing-origin"></div>
+        </div>
+        <div id="signing-type" class="signing-type"></div>
+        <div id="signing-details" class="signing-details"></div>
+        <div class="signing-warning">
+          <span class="warning-icon">!</span>
+          <span>Only approve requests from sites you trust. Approving will sign data or send funds.</span>
+        </div>
+        <div class="form">
+          <div class="form-group">
+            <label>Enter Password to Confirm</label>
+            <input type="password" id="signing-password" placeholder="Password" autocomplete="current-password">
+          </div>
+          <div class="signing-actions">
+            <button id="reject-request-btn" class="secondary-btn">Reject</button>
+            <button id="approve-request-btn" class="primary-btn">Approve</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Contact View -->
+    <div class="view hidden" id="view-add-contact">
+      <div class="view-header">
+        <button class="back-btn" id="add-contact-back-btn">←</button>
+        <h2 id="add-contact-title">Add Contact</h2>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="contact-name" placeholder="Contact name">
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" id="contact-address" placeholder="PDIVI address">
+        </div>
+        <div class="form-group">
+          <label>Notes (optional)</label>
+          <textarea id="contact-notes" placeholder="Optional notes" rows="2"></textarea>
+        </div>
+        <button class="primary-btn" id="save-contact-btn">Save Contact</button>
+        <button class="secondary-btn hidden" id="cancel-edit-contact-btn" style="margin-top:8px;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Onboarding View (shown when no accounts exist) -->
+    <div class="view hidden" id="view-onboarding">
+      <div class="onboarding-content">
+        <img src="../icons/icon-128.png" alt="PrivateDivi" class="onboarding-logo">
+        <h1>Welcome to PrivateDivi</h1>
+        <p>Your secure cryptocurrency wallet</p>
+        <div class="onboarding-buttons">
+          <button class="primary-btn" id="onboard-create-btn">Create New Wallet</button>
+          <button class="secondary-btn" id="onboard-import-btn">Import Existing Wallet</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loading">
+      <div class="spinner"></div>
+      <span id="loading-message">Loading...</span>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast hidden" id="toast"></div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

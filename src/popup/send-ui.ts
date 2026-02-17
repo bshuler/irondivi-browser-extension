@@ -1,0 +1,221 @@
+/**
+ * Send transaction UI - send flow, confirmation, fee calculation
+ */
+
+import { elements } from './elements';
+import { state } from './state';
+import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
+import { sendMessage } from './message-api';
+import { MSG } from '../shared/constants';
+import { loadBalance, loadTransactions } from './wallet-ui';
+
+// ============================================================
+// Send Transaction Handlers
+// ============================================================
+
+/**
+ * Handle send max button click
+ */
+export function handleSendMax(): void {
+  const amountInput = document.getElementById('send-amount') as HTMLInputElement;
+  const feeInput = document.getElementById('send-fee') as HTMLInputElement;
+  const fee = parseFloat(feeInput.value) || 0.0001;
+  const maxAmount = Math.max(0, state.balance - fee);
+  amountInput.value = String(maxAmount);
+}
+
+/**
+ * Handle send confirm button - validate and show confirmation view
+ */
+export async function handleSendConfirm(): Promise<void> {
+  const toInput = document.getElementById('send-to') as HTMLInputElement;
+  const amountInput = document.getElementById('send-amount') as HTMLInputElement;
+  const feeInput = document.getElementById('send-fee') as HTMLInputElement;
+
+  const to = toInput.value.trim();
+  const amount = parseFloat(amountInput.value);
+  const fee = parseFloat(feeInput.value);
+
+  if (!to || !amount || amount <= 0) {
+    showToast('Please enter a valid address and amount', 'error');
+    return;
+  }
+
+  if (amount + fee > state.balance) {
+    showToast('Insufficient balance', 'error');
+    return;
+  }
+
+  // Validate the recipient address
+  try {
+    const validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: to });
+    if (!validation.isValid) {
+      showToast('Invalid recipient address', 'error');
+      return;
+    }
+  } catch {
+    showToast('Failed to validate address', 'error');
+    return;
+  }
+
+  state.pendingSendTx = { to, amount, fee };
+
+  // Update confirm view
+  (document.getElementById('confirm-to') as HTMLSpanElement).textContent = formatAddress(to);
+  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} PDIVI`;
+  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} PDIVI`;
+
+  // Calculate and display total
+  const total = amount + fee;
+  (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} PDIVI`;
+
+  showView(elements.viewSendConfirm);
+}
+
+/**
+ * Handle send submit - execute the transaction
+ */
+export async function handleSendSubmit(): Promise<void> {
+  const passwordInput = document.getElementById('send-password') as HTMLInputElement;
+  const password = passwordInput.value;
+
+  if (!password) {
+    showToast('Please enter your password', 'error');
+    return;
+  }
+
+  try {
+    await sendTransaction(password);
+  } finally {
+    clearPasswordInput(passwordInput);
+  }
+}
+
+/**
+ * Execute the send transaction
+ */
+async function sendTransaction(password: string): Promise<void> {
+  if (!state.pendingSendTx) return;
+
+  const toAddress = state.pendingSendTx.to;
+
+  try {
+    showLoading('Sending transaction...');
+
+    // First authenticate
+    await sendMessage(MSG.AUTHENTICATE, { accountId: state.currentAccount?.id, password });
+
+    // Then send transaction
+    const response = await sendMessage<{ txid: string }>(MSG.SEND_TRANSACTION, {
+      to: toAddress,
+      amount: state.pendingSendTx.amount,
+      fee: state.pendingSendTx.fee,
+    });
+
+    showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
+    state.pendingSendTx = null;
+
+    // Mark contact as recently used if this address is a contact
+    try {
+      const contact = state.contacts.find(c => c.address === toAddress);
+      if (contact) {
+        await sendMessage(MSG.MARK_CONTACT_USED, { contactId: contact.id });
+      }
+    } catch {
+      // Ignore errors marking contact used
+    }
+
+    // Refresh data
+    await loadBalance();
+    await loadTransactions();
+
+    hideView();
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to send transaction';
+    showToast(errorMessage, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * Setup contact suggestions in send form
+ */
+export function setupContactSuggestions(): void {
+  const sendToInput = document.getElementById('send-to') as HTMLInputElement;
+  const suggestionsContainer = document.getElementById('contact-suggestions') as HTMLDivElement;
+
+  sendToInput.addEventListener('input', (e) => {
+    const value = (e.target as HTMLInputElement).value.toLowerCase();
+
+    if (value.length < 2) {
+      suggestionsContainer.classList.add('hidden');
+      suggestionsContainer.innerHTML = '';
+      return;
+    }
+
+    const matches = state.contacts.filter(c =>
+      c.name.toLowerCase().includes(value) ||
+      c.address.toLowerCase().includes(value)
+    );
+
+    if (matches.length === 0) {
+      suggestionsContainer.classList.add('hidden');
+      suggestionsContainer.innerHTML = '';
+      return;
+    }
+
+    suggestionsContainer.innerHTML = '';
+    matches.forEach(contact => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'suggestion-name';
+      nameDiv.textContent = contact.name;
+      const addressDiv = document.createElement('div');
+      addressDiv.className = 'suggestion-address';
+      addressDiv.textContent = contact.address;
+      item.appendChild(nameDiv);
+      item.appendChild(addressDiv);
+      item.addEventListener('click', () => {
+        sendToInput.value = contact.address;
+        suggestionsContainer.classList.add('hidden');
+        suggestionsContainer.innerHTML = '';
+      });
+      suggestionsContainer.appendChild(item);
+    });
+
+    suggestionsContainer.classList.remove('hidden');
+  });
+
+  // Close suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.form-group')) {
+      suggestionsContainer.classList.add('hidden');
+    }
+  });
+}
+
+/**
+ * Setup send UI event listeners
+ */
+export function setupSendUIHandlers(): void {
+  elements.sendBtn.addEventListener('click', () => {
+    showView(elements.viewSend);
+  });
+
+  document.getElementById('send-back-btn')?.addEventListener('click', hideView);
+  document.getElementById('send-max-btn')?.addEventListener('click', handleSendMax);
+  document.getElementById('send-confirm-btn')?.addEventListener('click', handleSendConfirm);
+
+  // Send confirm view
+  document.getElementById('send-confirm-back-btn')?.addEventListener('click', () => {
+    showView(elements.viewSend);
+  });
+
+  document.getElementById('send-submit-btn')?.addEventListener('click', handleSendSubmit);
+
+  // Setup contact suggestions
+  setupContactSuggestions();
+}
