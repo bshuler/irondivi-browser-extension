@@ -24,6 +24,12 @@ function isValidOrigin(origin: string): boolean {
   }
 }
 
+// Verify sender is from our extension (popup or background)
+function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
+  // Messages from popup/extension pages have sender.id === our extension ID
+  return sender.id === chrome.runtime.id;
+}
+
 // Message handler type
 interface Message {
   type: string;
@@ -64,6 +70,20 @@ async function handleMessage(
     }
   }
 
+  // For sensitive popup-only operations, verify sender is from our extension
+  // These operations don't have an origin (popup messages) and require extension context
+  const popupOnlyOperations = [
+    MSG.CREATE_ACCOUNT, MSG.IMPORT_ACCOUNT, MSG.DELETE_ACCOUNT,
+    MSG.EXPORT_MNEMONIC, MSG.GENERATE_MNEMONIC, MSG.AUTHENTICATE,
+    MSG.APPROVE_SIGNING_REQUEST, MSG.REJECT_SIGNING_REQUEST,
+    MSG.UPDATE_SETTINGS, MSG.GENERATE_NEW_ADDRESS
+  ];
+  if (popupOnlyOperations.includes(type as any)) {
+    if (!isExtensionSender(sender)) {
+      return { success: false, error: 'Unauthorized sender' };
+    }
+  }
+
   try {
     switch (type) {
       // ============ Account Operations ============
@@ -82,6 +102,15 @@ async function handleMessage(
       case MSG.SELECT_ACCOUNT:
         await accountManager.selectAccount(payload.accountId);
         return { success: true };
+
+      case MSG.GENERATE_MNEMONIC: {
+        const { Mnemonic } = await import('../lib/mnemonic');
+        const mnemonic = await Mnemonic.generate(
+          payload?.wordCount || 12,
+          payload?.language || 'english'
+        );
+        return { success: true, data: { mnemonic } };
+      }
 
       case MSG.CREATE_ACCOUNT: {
         // Generate mnemonic
@@ -144,9 +173,44 @@ async function handleMessage(
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
 
-        const addresses = account.addresses.map(a => a.address);
-        const history = await rpcClient.getTransactionHistory(addresses, payload?.limit || 50);
-        return { success: true, data: { transactions: history } };
+        const ourAddresses = account.addresses.map(a => a.address);
+        const ourAddressSet = new Set(ourAddresses);
+        const history = await rpcClient.getTransactionHistory(ourAddresses, payload?.limit || 50);
+
+        // Map to UI Transaction format
+        const transactions = history.map(tx => {
+          // Find the "other" address (not ours) for display
+          // For sends: show destination address
+          // For receives: show sender address
+          let displayAddress = '';
+          if (tx.type === 'send') {
+            // Find first address that isn't ours
+            displayAddress = tx.addresses.find(a => !ourAddressSet.has(a)) || tx.addresses[0] || '';
+          } else {
+            // For receives, show the sender (vin address) - but we only have vout addresses here
+            // So show the first address that isn't ours, or first address
+            displayAddress = tx.addresses.find(a => !ourAddressSet.has(a)) || tx.addresses[0] || '';
+          }
+
+          return {
+            txid: tx.txid,
+            type: tx.type,
+            amount: tx.amount,
+            address: displayAddress,
+            timestamp: tx.time * 1000, // Convert seconds to milliseconds
+            confirmations: tx.confirmations,
+          };
+        });
+
+        return { success: true, data: { transactions } };
+      }
+
+      case MSG.GENERATE_NEW_ADDRESS: {
+        const newAddress = await accountManager.generateNewAddress(
+          payload.accountId,
+          payload.password
+        );
+        return { success: true, data: { address: newAddress } };
       }
 
       // ============ Signing Operations ============
@@ -158,7 +222,7 @@ async function handleMessage(
         return { success: authenticated, error: authenticated ? undefined : 'Invalid password' };
 
       case MSG.SIGN_MESSAGE: {
-        // If called from a dApp (has origin), verify permission
+        // If called from a dApp (has origin), create pending request and wait for approval
         if (origin && isValidOrigin(origin)) {
           const accountId = await getSelectedAccountId();
           if (!accountId) return { success: false, error: 'No account selected' };
@@ -168,12 +232,27 @@ async function handleMessage(
             return { success: false, error: 'Site not connected. Please connect first.' };
           }
 
-          const hasPermission = await connectionManager.hasPermission(origin, accountId, 'sign_message');
-          if (!hasPermission) {
-            return { success: false, error: 'Site does not have sign_message permission' };
+          try {
+            // Create signing request and wait for user approval
+            const result = await connectionManager.createSigningRequest(
+              'sign_message',
+              origin,
+              accountId,
+              {
+                message: payload.message,
+                addressIndex: payload.addressIndex ?? 0,
+              }
+            );
+            return { success: true, data: result };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Signing rejected'
+            };
           }
         }
 
+        // Called from popup (no origin) - sign directly
         const signature = await signingSession.signMessage(
           payload.message,
           payload.addressIndex,
@@ -211,6 +290,7 @@ async function handleMessage(
           to: payload.to,
           amount: payload.amount,
           fee: payload.fee,
+          fromAddresses: payload.fromAddresses,
         }, account.network);
 
         // Get seed from signing session
@@ -317,9 +397,25 @@ async function handleMessage(
           };
         }
 
-        // Create connection request (will open popup)
-        await connectionManager.requestConnection(origin, accountId);
-        return { success: true, data: { pending: true } };
+        // Create connection request and wait for approval
+        try {
+          await connectionManager.requestConnection(origin, accountId);
+          // Connection approved - return address
+          const account = await accountManager.getSelectedAccount();
+          return {
+            success: true,
+            data: {
+              address: account?.addresses[0]?.address,
+              connected: true
+            }
+          };
+        } catch (error) {
+          // Connection rejected or timed out
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Connection rejected'
+          };
+        }
       }
 
       case MSG.IS_CONNECTED: {
@@ -367,7 +463,15 @@ async function handleMessage(
 
       // ============ Signing Request Approval ============
       case MSG.GET_PENDING_SIGNING_REQUESTS: {
-        const requests = connectionManager.getPendingSigningRequests();
+        // Include all pending requests (connect, sign_message, send_transaction)
+        const requests = connectionManager.getAllPendingRequests().map(r => ({
+          id: r.id,
+          type: r.type,
+          origin: r.origin,
+          accountId: r.accountId,
+          data: r.data,
+          createdAt: r.createdAt,
+        }));
         return { success: true, data: { requests } };
       }
 
@@ -377,7 +481,20 @@ async function handleMessage(
           return { success: false, error: 'Request not found' };
         }
 
-        // Authenticate with provided password
+        // Handle connection approval (no password needed)
+        if (request.type === 'connect' || payload.isConnection) {
+          try {
+            await connectionManager.approveConnection(payload.requestId);
+            return { success: true, data: { connected: true } };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to approve connection'
+            };
+          }
+        }
+
+        // Authenticate with provided password for signing requests
         const authSuccess = await signingSession.authenticate(
           request.accountId,
           payload.password
@@ -477,7 +594,7 @@ async function handleMessage(
         return { success: false, error: `Unknown message type: ${type}` };
     }
   } catch (error) {
-    console.error('Message handler error');
+    console.error('Message handler error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -500,10 +617,87 @@ alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   }
 });
 
+// Programmatic content script injection for better compatibility
+// Uses webNavigation.onCommitted which fires reliably when page navigation is committed
+chrome.webNavigation.onCommitted.addListener(async (details) => {
+  // Only inject for main frame (not iframes)
+  if (details.frameId !== 0) return;
+
+  // Only inject on http/https pages
+  try {
+    const url = new URL(details.url);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+    // Allow http only for localhost
+    if (url.protocol === 'http:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return;
+  } catch {
+    return;
+  }
+
+  try {
+    // Inject content script programmatically
+    await chrome.scripting.executeScript({
+      target: { tabId: details.tabId },
+      files: ['content-script.js'],
+      injectImmediately: true,
+    });
+  } catch (error) {
+    // Ignore errors for pages where we can't inject (chrome://, etc.)
+  }
+});
+
+// Also inject when tab is activated (for already-loaded tabs)
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (!tab.url) return;
+
+    const url = new URL(tab.url);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+    if (url.protocol === 'http:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return;
+
+    // Check if provider is already injected
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: activeInfo.tabId },
+      func: () => !!(window as any).pdivi,
+    });
+
+    if (results && results[0] && !results[0].result) {
+      // Provider not injected, inject now
+      await chrome.scripting.executeScript({
+        target: { tabId: activeInfo.tabId },
+        files: ['content-script.js'],
+        injectImmediately: true,
+      });
+    }
+  } catch (error) {
+    // Ignore errors
+  }
+});
+
 // Initialize on startup
 async function initialize() {
   const settings = await getSettings();
   rpcClient.setNetwork(settings.network);
+
+  // Register content scripts programmatically for better compatibility
+  // This ensures content scripts are registered even if declarative ones don't work
+  try {
+    // First, unregister any existing scripts to avoid duplicates
+    await chrome.scripting.unregisterContentScripts({ ids: ['pdivi-provider'] }).catch(() => {});
+
+    // Register the content script
+    await chrome.scripting.registerContentScripts([{
+      id: 'pdivi-provider',
+      matches: ['<all_urls>'],
+      js: ['content-script.js'],
+      runAt: 'document_start',
+      allFrames: false,
+    }]);
+    console.log('Content scripts registered programmatically');
+  } catch (error) {
+    console.log('Content script registration info:', error);
+  }
+
   console.log('PrivateDivi Wallet initialized');
 }
 

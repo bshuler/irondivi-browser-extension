@@ -8,13 +8,13 @@
 import { MSG, sendMessage } from '../shared/constants';
 import { showLoading, hideLoading, showToast, showView, hideView, formatAddress, formatAmount } from './ui-state';
 
-// Type for a pending signing request
+// Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
   id: string;
-  type: 'sign_message' | 'send_transaction';
+  type: 'connect' | 'sign_message' | 'send_transaction';
   origin: string;
   accountId: string;
-  data: {
+  data?: {
     message?: string;
     to?: string;
     amount?: number;
@@ -38,6 +38,7 @@ function getElements() {
     origin: document.getElementById('signing-origin') as HTMLDivElement,
     type: document.getElementById('signing-type') as HTMLDivElement,
     details: document.getElementById('signing-details') as HTMLDivElement,
+    warningText: document.getElementById('signing-warning-text') as HTMLSpanElement,
     password: document.getElementById('signing-password') as HTMLInputElement,
     rejectBtn: document.getElementById('reject-request-btn') as HTMLButtonElement,
     approveBtn: document.getElementById('approve-request-btn') as HTMLButtonElement,
@@ -46,9 +47,10 @@ function getElements() {
 
 /**
  * Check for pending signing requests and show UI if any exist
+ * @param requestId - Optional specific request ID to show
  * Returns true if there are pending requests
  */
-export async function checkPendingRequests(): Promise<boolean> {
+export async function checkPendingRequests(requestId?: string): Promise<boolean> {
   try {
     const response = await sendMessage({
       type: MSG.GET_PENDING_SIGNING_REQUESTS,
@@ -56,7 +58,15 @@ export async function checkPendingRequests(): Promise<boolean> {
 
     const data = response.data as { requests?: SigningRequest[] } | undefined;
     if (response.success && data?.requests && data.requests.length > 0) {
-      const request = data.requests[0];
+      // If a specific requestId is provided, find that request
+      let request: SigningRequest | undefined;
+      if (requestId) {
+        request = data.requests.find(r => r.id === requestId);
+      }
+      // Fallback to first request if specific one not found
+      if (!request) {
+        request = data.requests[0];
+      }
       showSigningRequestView(request);
       return true;
     }
@@ -84,20 +94,33 @@ export function showSigningRequestView(request: SigningRequest): void {
   // Set origin
   elements.origin.textContent = request.origin;
 
-  // Set type label
-  if (request.type === 'sign_message') {
+  // Set type label and warning message based on request type
+  if (request.type === 'connect') {
+    elements.type.textContent = 'Connect Site';
+    elements.type.className = 'signing-type connect';
+    elements.warningText.textContent = 'This will share your wallet address with the site. No funds will be sent.';
+  } else if (request.type === 'sign_message') {
     elements.type.textContent = 'Sign Message';
     elements.type.className = 'signing-type sign-message';
+    elements.warningText.textContent = 'This creates a signature to verify your identity. No funds will be sent.';
   } else {
     elements.type.textContent = 'Send Transaction';
     elements.type.className = 'signing-type send-transaction';
+    elements.warningText.textContent = 'This will send funds from your wallet. Please verify the details carefully.';
   }
 
   // Build details content
   let detailsHtml = '';
 
-  if (request.type === 'sign_message') {
-    const message = request.data.message || '';
+  if (request.type === 'connect') {
+    // Keep it simple - the warning text explains what happens
+    detailsHtml = `
+      <div class="signing-detail-row" style="text-align: center; padding: 8px 0;">
+        <span style="color: var(--text-secondary);">Allow this site to see your address and request approvals?</span>
+      </div>
+    `;
+  } else if (request.type === 'sign_message') {
+    const message = request.data?.message || '';
     // Show truncated message if too long
     const displayMessage = message.length > 200
       ? message.substring(0, 200) + '...'
@@ -109,25 +132,30 @@ export function showSigningRequestView(request: SigningRequest): void {
       </div>
     `;
   } else if (request.type === 'send_transaction') {
-    const to = request.data.to || '';
-    const amount = request.data.amount || 0;
-    const fee = request.data.fee || 0.0001;
+    const to = request.data?.to || '';
+    const amount = request.data?.amount || 0;
+    const fee = request.data?.fee || 0.00005;
+    // Escape all user-provided values to prevent XSS
+    const escapedTo = escapeHtml(formatAddress(to, 12));
+    const escapedAmount = escapeHtml(formatAmount(amount));
+    const escapedFee = escapeHtml(formatAmount(fee));
+    const escapedTotal = escapeHtml(formatAmount(amount + fee));
     detailsHtml = `
       <div class="signing-detail-row">
         <span class="signing-detail-label">To:</span>
-        <span class="signing-detail-value address">${formatAddress(to, 12)}</span>
+        <span class="signing-detail-value address">${escapedTo}</span>
       </div>
       <div class="signing-detail-row">
         <span class="signing-detail-label">Amount:</span>
-        <span class="signing-detail-value amount">${formatAmount(amount)} PDIVI</span>
+        <span class="signing-detail-value amount">${escapedAmount} PDIVI</span>
       </div>
       <div class="signing-detail-row">
         <span class="signing-detail-label">Fee:</span>
-        <span class="signing-detail-value">${formatAmount(fee)} PDIVI</span>
+        <span class="signing-detail-value">${escapedFee} PDIVI</span>
       </div>
       <div class="signing-detail-row total">
         <span class="signing-detail-label">Total:</span>
-        <span class="signing-detail-value amount">${formatAmount(amount + fee)} PDIVI</span>
+        <span class="signing-detail-value amount">${escapedTotal} PDIVI</span>
       </div>
     `;
   }
@@ -136,6 +164,12 @@ export function showSigningRequestView(request: SigningRequest): void {
 
   // Clear password field
   elements.password.value = '';
+
+  // Hide password field for connection requests (they don't need password)
+  const passwordFormGroup = elements.password.closest('.form-group') as HTMLElement | null;
+  if (passwordFormGroup) {
+    passwordFormGroup.style.display = request.type === 'connect' ? 'none' : 'block';
+  }
 
   // Show the view
   showView(elements.view);
@@ -148,6 +182,35 @@ async function handleApprove(): Promise<void> {
   if (!currentRequest) return;
 
   const elements = getElements();
+
+  // Connection requests don't need password
+  if (currentRequest.type === 'connect') {
+    showLoading('Connecting...');
+
+    try {
+      await sendMessage({
+        type: MSG.APPROVE_SIGNING_REQUEST,
+        payload: {
+          requestId: currentRequest.id,
+          isConnection: true,
+        },
+      });
+
+      hideLoading();
+      showToast('Site connected successfully', 'success');
+
+      // Close the approval window after a short delay
+      setTimeout(() => {
+        window.close();
+      }, 500);
+    } catch (error) {
+      hideLoading();
+      showToast(error instanceof Error ? error.message : 'Failed to connect', 'error');
+    }
+    return;
+  }
+
+  // Signing requests need password
   const password = elements.password.value;
 
   if (!password) {
@@ -158,7 +221,7 @@ async function handleApprove(): Promise<void> {
   showLoading(currentRequest.type === 'sign_message' ? 'Signing message...' : 'Sending transaction...');
 
   try {
-    const response = await sendMessage({
+    await sendMessage({
       type: MSG.APPROVE_SIGNING_REQUEST,
       payload: {
         requestId: currentRequest.id,
@@ -168,24 +231,21 @@ async function handleApprove(): Promise<void> {
 
     hideLoading();
 
-    if (response.success) {
-      if (currentRequest.type === 'sign_message') {
-        showToast('Message signed successfully', 'success');
-      } else {
-        showToast('Transaction sent successfully', 'success');
-      }
-
-      // Check for more pending requests
-      const hasMore = await checkPendingRequests();
-      if (!hasMore) {
-        hideSigningRequestView();
-      }
+    if (currentRequest.type === 'sign_message') {
+      showToast('Message signed successfully', 'success');
     } else {
-      showToast(response.error || 'Failed to approve request', 'error');
+      showToast('Transaction sent successfully', 'success');
     }
+
+    // Close the approval window after a short delay
+    setTimeout(() => {
+      window.close();
+    }, 500);
   } catch (error) {
     hideLoading();
-    showToast('Failed to approve request', 'error');
+    // Clear password on failure for security
+    elements.password.value = '';
+    showToast(error instanceof Error ? error.message : 'Failed to approve request', 'error');
   }
 }
 
@@ -208,7 +268,10 @@ async function handleReject(): Promise<void> {
     // Check for more pending requests
     const hasMore = await checkPendingRequests();
     if (!hasMore) {
-      hideSigningRequestView();
+      // Close the approval window
+      setTimeout(() => {
+        window.close();
+      }, 500);
     }
   } catch (error) {
     showToast('Failed to reject request', 'error');
