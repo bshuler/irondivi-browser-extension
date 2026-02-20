@@ -38,17 +38,27 @@ export interface ConnectedSite {
   connectedAt: number;
 }
 
+export interface TransactionLimits {
+  maxAmountAbsolute: number;
+  maxAmountPercent: number;
+  dailyLimitAbsolute: number;
+  dailyLimitPercent: number;
+}
+
 export interface Settings {
   network: NetworkType;
   authTimeoutMinutes: number;
   currency: string;
   hideBalance: boolean;
+  allowedSites: string[];
+  transactionLimits: TransactionLimits;
 }
 
 export interface PendingSendTx {
   to: string;
   amount: number;
   fee: number;
+  fromAddresses?: string[]; // If set, only use UTXOs from these addresses
 }
 
 import { NetworkType } from '../shared/constants';

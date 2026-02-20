@@ -185,26 +185,48 @@ export function updateTransactionList(): void {
 // ============================================================
 
 /**
- * Handle showing the receive view with QR code
+ * Populate the receive address dropdown
  */
-export async function handleReceiveView(): Promise<void> {
-  showView(elements.viewReceive);
-
+function populateReceiveAddressDropdown(): void {
   if (!state.currentAccount) return;
 
-  // Generate QR code
+  const select = document.getElementById('receive-address-select') as HTMLSelectElement;
+  select.innerHTML = '';
+
+  // Add all existing addresses
+  state.currentAccount.addresses.forEach((addr, idx) => {
+    const option = document.createElement('option');
+    option.value = String(idx);
+    const shortAddr = `${addr.address.slice(0, 8)}...${addr.address.slice(-6)}`;
+    option.textContent = `Address ${idx + 1}: ${shortAddr}`;
+    select.appendChild(option);
+  });
+
+  // Add "Generate new address" option
+  const newOption = document.createElement('option');
+  newOption.value = 'new';
+  newOption.textContent = '+ Generate new address';
+  select.appendChild(newOption);
+
+  // Set current selection
+  select.value = String(state.selectedReceiveAddressIndex);
+}
+
+/**
+ * Update the QR code and address display for selected address
+ */
+async function updateReceiveAddressDisplay(): Promise<void> {
+  if (!state.currentAccount) return;
+
+  const addr = state.currentAccount.addresses[state.selectedReceiveAddressIndex];
+  if (!addr) return;
+
   const qrContainer = document.getElementById('qr-code') as HTMLDivElement;
   qrContainer.innerHTML = '';
 
-  const primaryAddress = getPrimaryAddress(state.currentAccount);
-  if (!primaryAddress) {
-    showToast('No address available', 'error');
-    return;
-  }
-
   try {
-    const canvas = await QRCode.toCanvas(primaryAddress, {
-      width: 208,
+    const canvas = await QRCode.toCanvas(addr.address, {
+      width: 124,
       margin: 0,
       color: {
         dark: '#000000',
@@ -217,12 +239,70 @@ export async function handleReceiveView(): Promise<void> {
   }
 
   const addressDisplay = document.getElementById('receive-address') as HTMLDivElement;
-  addressDisplay.textContent = primaryAddress;
+  addressDisplay.textContent = addr.address;
+}
 
-  // Clear faucet status and update visibility based on network
-  const faucetStatus = document.getElementById('faucet-status') as HTMLDivElement;
-  faucetStatus.innerHTML = '';
+/**
+ * Handle receive address selection change
+ */
+async function handleReceiveAddressChange(): Promise<void> {
+  const select = document.getElementById('receive-address-select') as HTMLSelectElement;
+
+  if (select.value === 'new') {
+    // Generate new address - requires password
+    const { showPasswordModal } = await import('./modals');
+    const password = await showPasswordModal('Enter password to generate new address');
+
+    if (!password) {
+      // User cancelled - revert selection
+      select.value = String(state.selectedReceiveAddressIndex);
+      return;
+    }
+
+    try {
+      const response = await sendMessage<{ address: { index: number; address: string; path: string } }>(
+        MSG.GENERATE_NEW_ADDRESS,
+        { accountId: state.currentAccount!.id, password }
+      );
+
+      // Add the new address to the current account
+      state.currentAccount!.addresses.push(response.address);
+      state.selectedReceiveAddressIndex = response.address.index;
+
+      // Refresh dropdown and display
+      populateReceiveAddressDropdown();
+      await updateReceiveAddressDisplay();
+      updateFaucetCooldownState();
+      showToast('New address generated', 'success');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate address';
+      showToast(errorMessage, 'error');
+      select.value = String(state.selectedReceiveAddressIndex);
+    }
+  } else {
+    state.selectedReceiveAddressIndex = parseInt(select.value, 10);
+    await updateReceiveAddressDisplay();
+    updateFaucetCooldownState();
+  }
+}
+
+/**
+ * Handle showing the receive view with QR code
+ */
+export async function handleReceiveView(): Promise<void> {
+  showView(elements.viewReceive);
+
+  if (!state.currentAccount) return;
+
+  // Populate address dropdown
+  populateReceiveAddressDropdown();
+
+  // Display selected address
+  await updateReceiveAddressDisplay();
+
+  // Update faucet visibility and cooldown state
   updateFaucetVisibility();
+  updateFaucetCooldownState();
 }
 
 /**
@@ -245,37 +325,73 @@ export async function handleCopyAddress(): Promise<void> {
   }
 }
 
+const FAUCET_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
+const FAUCET_COOLDOWN_PREFIX = 'pdivi_faucet_'; // Per-address cooldown: pdivi_faucet_{address}
+
 /**
- * Handle faucet request
+ * Get the currently selected receive address
+ */
+function getSelectedReceiveAddress(): string | null {
+  if (!state.currentAccount) return null;
+  const addr = state.currentAccount.addresses[state.selectedReceiveAddressIndex];
+  return addr?.address || null;
+}
+
+/**
+ * Update faucet button state based on cooldown for current address
+ */
+export function updateFaucetCooldownState(): void {
+  const faucetBtn = document.getElementById('request-faucet-btn') as HTMLButtonElement;
+  const faucetStatus = document.getElementById('faucet-status') as HTMLDivElement;
+  if (!faucetBtn || !faucetStatus) return;
+
+  const currentAddress = getSelectedReceiveAddress();
+  if (!currentAddress) return;
+
+  const cooldownKey = FAUCET_COOLDOWN_PREFIX + currentAddress;
+  const lastRequest = localStorage.getItem(cooldownKey);
+  if (lastRequest) {
+    const elapsed = Date.now() - parseInt(lastRequest, 10);
+    if (elapsed < FAUCET_COOLDOWN_MS) {
+      const remainingMs = FAUCET_COOLDOWN_MS - elapsed;
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      faucetBtn.disabled = true;
+      faucetBtn.textContent = 'Requested';
+      faucetStatus.textContent = `You can request more PDIVI in ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+      faucetStatus.style.color = 'var(--text-secondary)';
+      return;
+    }
+  }
+
+  // No cooldown active for this address
+  faucetBtn.disabled = false;
+  faucetBtn.textContent = 'Request from Faucet';
+  faucetStatus.textContent = '';
+}
+
+/**
+ * Handle faucet request for currently selected address
  */
 export async function handleFaucetRequest(): Promise<void> {
   if (!state.currentAccount) return;
 
-  const primaryAddress = getPrimaryAddress(state.currentAccount);
-  if (!primaryAddress) {
+  const currentAddress = getSelectedReceiveAddress();
+  if (!currentAddress) {
     showToast('No address available', 'error');
     return;
   }
 
-  const FAUCET_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
-  const FAUCET_COOLDOWN_KEY = 'pdivi_faucet_last_request';
-
   const faucetBtn = document.getElementById('request-faucet-btn') as HTMLButtonElement;
   const faucetStatus = document.getElementById('faucet-status') as HTMLDivElement;
 
-  // Check rate limiting
-  const lastRequest = localStorage.getItem(FAUCET_COOLDOWN_KEY);
+  const cooldownKey = FAUCET_COOLDOWN_PREFIX + currentAddress;
+
+  // Check rate limiting for this address
+  const lastRequest = localStorage.getItem(cooldownKey);
   if (lastRequest) {
     const elapsed = Date.now() - parseInt(lastRequest, 10);
     if (elapsed < FAUCET_COOLDOWN_MS) {
-      const remainingMinutes = Math.ceil((FAUCET_COOLDOWN_MS - elapsed) / 60000);
-      showToast(`Please wait ${remainingMinutes} minute(s) before requesting again`, 'error');
-      faucetStatus.innerHTML = '';
-      const rateLimitDiv = document.createElement('div');
-      rateLimitDiv.style.color = 'var(--warning)';
-      rateLimitDiv.style.marginTop = '12px';
-      rateLimitDiv.textContent = `Rate limited. Try again in ${remainingMinutes} minute(s).`;
-      faucetStatus.appendChild(rateLimitDiv);
+      updateFaucetCooldownState();
       return;
     }
   }
@@ -283,34 +399,37 @@ export async function handleFaucetRequest(): Promise<void> {
   try {
     faucetBtn.disabled = true;
     faucetBtn.textContent = 'Requesting...';
-    faucetStatus.innerHTML = '';
+    faucetStatus.textContent = '';
 
     const response = await sendMessage<{ success: boolean; txid?: string; error?: string }>(
       MSG.REQUEST_FAUCET,
-      { address: primaryAddress }
+      { address: currentAddress }
     );
 
     if (response.success && response.txid) {
-      // Record successful request for rate limiting
-      localStorage.setItem(FAUCET_COOLDOWN_KEY, String(Date.now()));
+      // Record successful request for this address
+      localStorage.setItem(cooldownKey, String(Date.now()));
 
       const explorerUrl = NETWORKS[state.settings.network].explorerUrl + response.txid;
+      faucetBtn.textContent = 'Requested';
       faucetStatus.innerHTML = '';
       const successDiv = document.createElement('div');
       successDiv.style.color = 'var(--success)';
-      successDiv.style.marginTop = '12px';
-      successDiv.textContent = 'Success! Coins sent.';
-      const br = document.createElement('br');
+      successDiv.textContent = 'Success! Coins sent. ';
       const viewLink = document.createElement('a');
       viewLink.href = explorerUrl;
       viewLink.target = '_blank';
       viewLink.style.color = 'var(--accent)';
       viewLink.style.textDecoration = 'underline';
       viewLink.textContent = 'View transaction';
-      successDiv.appendChild(br);
       successDiv.appendChild(viewLink);
       faucetStatus.appendChild(successDiv);
-      showToast('Faucet request successful!', 'success');
+
+      const cooldownDiv = document.createElement('div');
+      cooldownDiv.style.color = 'var(--text-secondary)';
+      cooldownDiv.style.marginTop = '4px';
+      cooldownDiv.textContent = 'You can request more PDIVI in 60 minutes';
+      faucetStatus.appendChild(cooldownDiv);
 
       // Refresh balance after a delay
       setTimeout(() => {
@@ -318,26 +437,17 @@ export async function handleFaucetRequest(): Promise<void> {
         loadTransactions();
       }, 2000);
     } else {
-      faucetStatus.innerHTML = '';
-      const errorDiv = document.createElement('div');
-      errorDiv.style.color = 'var(--danger)';
-      errorDiv.style.marginTop = '12px';
-      errorDiv.textContent = response.error || 'Request failed. Please try again later.';
-      faucetStatus.appendChild(errorDiv);
-      showToast(response.error || 'Faucet request failed', 'error');
+      faucetBtn.disabled = false;
+      faucetBtn.textContent = 'Request from Faucet';
+      faucetStatus.style.color = 'var(--danger)';
+      faucetStatus.textContent = response.error || 'Request failed. Please try again.';
     }
   } catch (error: unknown) {
-    faucetStatus.innerHTML = '';
-    const catchDiv = document.createElement('div');
-    catchDiv.style.color = 'var(--danger)';
-    catchDiv.style.marginTop = '12px';
-    const errorMessage = error instanceof Error ? error.message : 'Request failed';
-    catchDiv.textContent = errorMessage;
-    faucetStatus.appendChild(catchDiv);
-    showToast(errorMessage, 'error');
-  } finally {
     faucetBtn.disabled = false;
     faucetBtn.textContent = 'Request from Faucet';
+    const errorMessage = error instanceof Error ? error.message : 'Request failed';
+    faucetStatus.style.color = 'var(--danger)';
+    faucetStatus.textContent = errorMessage;
   }
 }
 
@@ -352,4 +462,5 @@ export function setupWalletUIHandlers(): void {
   document.getElementById('receive-back-btn')?.addEventListener('click', hideView);
   document.getElementById('copy-address-btn')?.addEventListener('click', handleCopyAddress);
   document.getElementById('request-faucet-btn')?.addEventListener('click', handleFaucetRequest);
+  document.getElementById('receive-address-select')?.addEventListener('change', handleReceiveAddressChange);
 }

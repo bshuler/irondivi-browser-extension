@@ -95,8 +95,9 @@ export function formatAddress(address: string, length = 8): string {
 /**
  * Format an amount for display (remove trailing zeros)
  */
-export function formatAmount(amount: number): string {
-  return amount.toFixed(8).replace(/\.?0+$/, '');
+export function formatAmount(amount: number | string | undefined | null): string {
+  const num = typeof amount === 'number' ? amount : parseFloat(String(amount)) || 0;
+  return num.toFixed(8).replace(/\.?0+$/, '');
 }
 
 /**

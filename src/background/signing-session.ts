@@ -26,6 +26,7 @@ interface SigningSessionData {
 interface RateLimitEntry {
   count: number;
   lockedUntil: number;
+  lockoutTier: number; // Track which lockout duration tier we're on (0-3)
 }
 
 interface RateLimitState {
@@ -41,7 +42,13 @@ export class SigningSession {
   private currentAccountId: string | null = null;
   private failedAttempts: Map<string, RateLimitEntry> = new Map();
   private readonly MAX_ATTEMPTS = 5;
-  private readonly LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+  // Exponential backoff lockout durations (5 min, 15 min, 1 hour, 24 hours)
+  private readonly LOCKOUT_DURATIONS_MS = [
+    5 * 60 * 1000,      // 5 minutes
+    15 * 60 * 1000,     // 15 minutes
+    60 * 60 * 1000,     // 1 hour
+    24 * 60 * 60 * 1000 // 24 hours
+  ];
   private installationId: string | null = null;
   private rateLimitInitialized = false;
 
@@ -117,9 +124,10 @@ export class SigningSession {
       throw new Error(`Account locked. Try again in ${remainingSeconds} seconds.`);
     }
 
-    // Reset if lockout expired
+    // Reset attempt count if lockout expired (but keep tier for escalation)
     if (state.count >= this.MAX_ATTEMPTS) {
-      this.failedAttempts.delete(accountId);
+      state.count = 0;
+      this.failedAttempts.set(accountId, state);
       await this.saveRateLimitState();
     }
   }
@@ -127,11 +135,17 @@ export class SigningSession {
   private async recordFailedAttempt(accountId: string): Promise<void> {
     await this.loadRateLimitState();
 
-    const state = this.failedAttempts.get(accountId) || { count: 0, lockedUntil: 0 };
+    const state = this.failedAttempts.get(accountId) || { count: 0, lockedUntil: 0, lockoutTier: 0 };
     state.count++;
 
     if (state.count >= this.MAX_ATTEMPTS) {
-      state.lockedUntil = Date.now() + this.LOCKOUT_MS;
+      // Get lockout duration based on current tier (exponential backoff)
+      const lockoutDuration = this.LOCKOUT_DURATIONS_MS[
+        Math.min(state.lockoutTier, this.LOCKOUT_DURATIONS_MS.length - 1)
+      ];
+      state.lockedUntil = Date.now() + lockoutDuration;
+      // Increment tier for next lockout (caps at max tier)
+      state.lockoutTier = Math.min(state.lockoutTier + 1, this.LOCKOUT_DURATIONS_MS.length - 1);
     }
 
     this.failedAttempts.set(accountId, state);
@@ -139,7 +153,16 @@ export class SigningSession {
   }
 
   private async clearFailedAttempts(accountId: string): Promise<void> {
-    this.failedAttempts.delete(accountId);
+    // On successful auth, reset count but keep tier for 24 hours
+    const state = this.failedAttempts.get(accountId);
+    if (state && state.lockoutTier > 0) {
+      // Keep tier active for 24 hours after successful auth to prevent abuse
+      state.count = 0;
+      state.lockedUntil = 0;
+      this.failedAttempts.set(accountId, state);
+    } else {
+      this.failedAttempts.delete(accountId);
+    }
     await this.saveRateLimitState();
   }
 

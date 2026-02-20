@@ -35,11 +35,26 @@ export interface Contact {
   lastUsed?: number;
 }
 
+export interface TransactionLimits {
+  // Absolute limit in PDIVI (0 = no limit)
+  maxAmountAbsolute: number;
+  // Percentage of total balance (0-100, 0 = no limit)
+  maxAmountPercent: number;
+  // Daily limit in PDIVI (0 = no limit)
+  dailyLimitAbsolute: number;
+  // Daily limit as percentage of balance (0 = no limit)
+  dailyLimitPercent: number;
+}
+
 export interface Settings {
   network: NetworkType;
   authTimeoutMinutes: number;
   currency: string;
   hideBalance: boolean;
+  // Site allowlist patterns (glob-style, e.g. "*.divi.domains", "localhost:*")
+  allowedSites: string[];
+  // Transaction limits for security
+  transactionLimits: TransactionLimits;
 }
 
 export interface Connection {
@@ -131,14 +146,26 @@ export async function saveAddressBook(addressBook: Contact[]): Promise<void> {
   await storage.local.set({ addressBook });
 }
 
+export const DEFAULT_SETTINGS: Settings = {
+  network: 'testnet',
+  authTimeoutMinutes: 5,
+  currency: 'USD',
+  hideBalance: false,
+  // Default allowed sites - *.divi.domains and localhost for development
+  allowedSites: ['*.divi.domains', 'localhost', '127.0.0.1'],
+  // Default transaction limits - 10% of balance per transaction
+  transactionLimits: {
+    maxAmountAbsolute: 0, // No absolute limit
+    maxAmountPercent: 10, // 10% of balance
+    dailyLimitAbsolute: 0, // No daily absolute limit
+    dailyLimitPercent: 0, // No daily percentage limit
+  },
+};
+
 export async function getSettings(): Promise<Settings> {
   const { settings } = await storage.local.get<{ settings: Settings }>('settings');
-  return settings || {
-    network: 'testnet',
-    authTimeoutMinutes: 5,
-    currency: 'USD',
-    hideBalance: false,
-  };
+  // Merge with defaults to ensure new fields are present
+  return { ...DEFAULT_SETTINGS, ...settings };
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

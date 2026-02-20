@@ -55,6 +55,47 @@ export class ConnectionManager {
   }
 
   /**
+   * Open a popup window for approval
+   */
+  private async openApprovalWindow(requestId: string, type: 'connect' | 'sign'): Promise<void> {
+    const width = 400;
+    const height = 600;
+
+    // Service workers don't have access to screen object
+    // Use chrome.windows.getAll to find a reference window, or use defaults
+    let left = 100;
+    let top = 100;
+
+    try {
+      const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+      if (windows.length > 0) {
+        const refWindow = windows[0];
+        // Center relative to the first window
+        left = Math.round((refWindow.left || 0) + ((refWindow.width || 800) - width) / 2);
+        top = Math.round((refWindow.top || 0) + ((refWindow.height || 600) - height) / 2);
+      }
+    } catch {
+      // Use default position if we can't get window info
+    }
+
+    const popupUrl = `popup.html?approve=${type}&requestId=${requestId}`;
+
+    try {
+      await chrome.windows.create({
+        url: popupUrl,
+        type: 'popup',
+        width,
+        height,
+        left,
+        top,
+        focused: true,
+      });
+    } catch {
+      // Popup creation failed - request will timeout
+    }
+  }
+
+  /**
    * Check if a site is connected to an account
    */
   async isConnected(origin: string, accountId: string): Promise<boolean> {
@@ -74,46 +115,110 @@ export class ConnectionManager {
   }
 
   /**
-   * Request a connection (creates pending request)
+   * Request a connection (creates pending request and opens approval window)
+   * Returns a Promise that resolves when the user approves/rejects
+   * Deduplicates requests - if there's already a pending request for the same origin, reuse it
    */
   async requestConnection(
     origin: string,
     accountId: string
-  ): Promise<{ requestId: string }> {
-    return this.withLock(async () => {
-      const requestId = crypto.randomUUID();
+  ): Promise<{ connected: boolean }> {
+    // Check for existing pending connection request for this origin
+    const existingRequest = Array.from(this.pendingRequests.values()).find(
+      r => r.type === 'connect' && r.origin === origin && r.accountId === accountId
+    );
 
+    if (existingRequest) {
+      // Return a promise that resolves when the existing request resolves
       return new Promise((resolve, reject) => {
-        const request: PendingRequest = {
-          id: requestId,
-          type: 'connect',
-          origin,
-          accountId,
-          createdAt: Date.now(),
-          resolve: (value) => {
-            this.pendingRequests.delete(requestId);
-            resolve(value as { requestId: string });
-          },
-          reject: (error) => {
-            this.pendingRequests.delete(requestId);
-            reject(error);
-          },
+        const originalResolve = existingRequest.resolve;
+        const originalReject = existingRequest.reject;
+
+        existingRequest.resolve = (value) => {
+          originalResolve(value);
+          resolve(value as { connected: boolean });
         };
-
-        this.pendingRequests.set(requestId, request);
-
-        // Set timeout
-        setTimeout(() => {
-          if (this.pendingRequests.has(requestId)) {
-            this.pendingRequests.delete(requestId);
-            reject(new Error('Connection request timed out'));
-          }
-        }, REQUEST_TIMEOUT);
-
-        // Return request ID immediately so popup can be opened
-        resolve({ requestId });
+        existingRequest.reject = (error) => {
+          originalReject(error);
+          reject(error);
+        };
       });
+    }
+
+    const requestId = crypto.randomUUID();
+
+    return new Promise((resolve, reject) => {
+      const request: PendingRequest = {
+        id: requestId,
+        type: 'connect',
+        origin,
+        accountId,
+        createdAt: Date.now(),
+        resolve: (value) => {
+          this.pendingRequests.delete(requestId);
+          this.updateBadge();
+          resolve(value as { connected: boolean });
+        },
+        reject: (error) => {
+          this.pendingRequests.delete(requestId);
+          this.updateBadge();
+          reject(error);
+        },
+      };
+
+      this.pendingRequests.set(requestId, request);
+      this.updateBadge();
+
+      // Set timeout
+      setTimeout(() => {
+        if (this.pendingRequests.has(requestId)) {
+          this.pendingRequests.delete(requestId);
+          this.updateBadge();
+          reject(new Error('Connection request timed out'));
+        }
+      }, REQUEST_TIMEOUT);
+
+      // Open approval window
+      this.openApprovalWindow(requestId, 'connect');
     });
+  }
+
+  /**
+   * Request signature (creates pending request and opens approval window)
+   */
+  async requestSignature(
+    origin: string,
+    accountId: string,
+    data: { message: string; addressIndex: number }
+  ): Promise<{ requestId: string }> {
+    const requestId = crypto.randomUUID();
+
+    const request: PendingRequest = {
+      id: requestId,
+      type: 'sign_message',
+      origin,
+      accountId,
+      data,
+      createdAt: Date.now(),
+      resolve: () => {},
+      reject: () => {},
+    };
+
+    this.pendingRequests.set(requestId, request);
+    this.updateBadge();
+
+    // Set timeout
+    setTimeout(() => {
+      if (this.pendingRequests.has(requestId)) {
+        this.pendingRequests.delete(requestId);
+        this.updateBadge();
+      }
+    }, REQUEST_TIMEOUT);
+
+    // Open approval window
+    await this.openApprovalWindow(requestId, 'sign');
+
+    return { requestId };
   }
 
   /**
@@ -142,6 +247,10 @@ export class ConnectionManager {
 
       await saveConnections(connections);
 
+      // Clean up the pending request
+      this.pendingRequests.delete(requestId);
+      this.updateBadge();
+
       request.resolve({ connected: true });
     });
   }
@@ -155,6 +264,10 @@ export class ConnectionManager {
       if (!request) {
         throw new Error('Connection request not found');
       }
+
+      // Clean up the pending request
+      this.pendingRequests.delete(requestId);
+      this.updateBadge();
 
       request.reject(new Error('Connection rejected by user'));
     });
@@ -197,17 +310,44 @@ export class ConnectionManager {
 
   /**
    * Create a signing request (message or transaction)
+   * Opens approval window and returns a promise that resolves when approved
+   * Deduplicates requests - if there's already a pending request with the same message, reuse it
    */
   async createSigningRequest(
     type: 'sign_message' | 'send_transaction',
     origin: string,
     accountId: string,
     data: SigningRequestData
-  ): Promise<string> {
+  ): Promise<unknown> {
     // Verify site is connected and has permission
     const hasPermission = await this.hasPermission(origin, accountId, type);
     if (!hasPermission) {
       throw new Error(`Site does not have ${type} permission`);
+    }
+
+    // Check for existing pending request with same parameters (deduplication)
+    const existingRequest = Array.from(this.pendingRequests.values()).find(
+      r => r.type === type &&
+           r.origin === origin &&
+           r.accountId === accountId &&
+           JSON.stringify(r.data) === JSON.stringify(data)
+    );
+
+    if (existingRequest) {
+      // Return a promise that resolves when the existing request resolves
+      return new Promise((resolve, reject) => {
+        const originalResolve = existingRequest.resolve;
+        const originalReject = existingRequest.reject;
+
+        existingRequest.resolve = (value) => {
+          originalResolve(value);
+          resolve(value);
+        };
+        existingRequest.reject = (error) => {
+          originalReject(error);
+          reject(error);
+        };
+      });
     }
 
     const requestId = crypto.randomUUID();
@@ -222,10 +362,12 @@ export class ConnectionManager {
         createdAt: Date.now(),
         resolve: (value) => {
           this.pendingRequests.delete(requestId);
-          resolve(value as string);
+          this.updateBadge();
+          resolve(value);
         },
         reject: (error) => {
           this.pendingRequests.delete(requestId);
+          this.updateBadge();
           reject(error);
         },
       };
@@ -241,6 +383,9 @@ export class ConnectionManager {
           reject(new Error('Request timed out'));
         }
       }, REQUEST_TIMEOUT);
+
+      // Open approval window
+      this.openApprovalWindow(requestId, 'sign');
     });
   }
 

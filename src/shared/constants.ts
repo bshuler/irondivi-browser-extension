@@ -2,14 +2,14 @@ export const NETWORKS = {
   mainnet: {
     name: 'Mainnet',
     rpcUrl: 'https://vps1.divi.domains/api/rpc/',
-    explorerUrl: 'https://chainz.cryptoid.info/divi/tx.dws?',
+    explorerUrl: 'https://vps1.divi.domains/explorer/tx/',
     coinType: 301,
     addressPrefix: 0x1e, // 'D'
   },
   testnet: {
     name: 'Testnet',
     rpcUrl: 'https://vps1.divi.domains/api/testnet/rpc/',
-    explorerUrl: 'https://testnet.divi.domains/tx/',
+    explorerUrl: 'https://vps1.divi.domains/testnet/explorer2/tx/',
     coinType: 1,
     addressPrefix: 0x8b, // 'y'
   },
@@ -22,6 +22,7 @@ export const MSG = {
   // Account operations
   GET_ACCOUNTS: 'GET_ACCOUNTS',
   SELECT_ACCOUNT: 'SELECT_ACCOUNT',
+  GENERATE_MNEMONIC: 'GENERATE_MNEMONIC',
   CREATE_ACCOUNT: 'CREATE_ACCOUNT',
   IMPORT_ACCOUNT: 'IMPORT_ACCOUNT',
   DELETE_ACCOUNT: 'DELETE_ACCOUNT',
@@ -32,6 +33,7 @@ export const MSG = {
   GET_BALANCE: 'GET_BALANCE',
   GET_ADDRESSES: 'GET_ADDRESSES',
   GET_TRANSACTIONS: 'GET_TRANSACTIONS',
+  GENERATE_NEW_ADDRESS: 'GENERATE_NEW_ADDRESS',
 
   // Signing (requires auth)
   AUTHENTICATE: 'AUTHENTICATE',
@@ -77,6 +79,7 @@ export type MessageType = typeof MSG[keyof typeof MSG];
 // Account operations
 export interface GetAccountsPayload {}
 export interface SelectAccountPayload { accountId: string }
+export interface GenerateMnemonicPayload { wordCount?: number; language?: string }
 export interface CreateAccountPayload {
   name: string;
   password: string;
@@ -98,6 +101,7 @@ export interface ExportMnemonicPayload { accountId: string; password: string }
 export interface GetBalancePayload {}
 export interface GetAddressesPayload {}
 export interface GetTransactionsPayload { limit?: number }
+export interface GenerateNewAddressPayload { accountId: string; password: string }
 
 // Signing operations
 export interface AuthenticatePayload { accountId: string; password: string }
@@ -115,6 +119,7 @@ export interface SendTransactionPayload {
   to: string;
   amount: number;
   fee?: number;
+  fromAddresses?: string[];
 }
 
 // Faucet
@@ -169,6 +174,7 @@ export interface RejectSigningRequestPayload { requestId: string }
 export type WalletMessage =
   | { type: typeof MSG.GET_ACCOUNTS; payload?: GetAccountsPayload }
   | { type: typeof MSG.SELECT_ACCOUNT; payload: SelectAccountPayload }
+  | { type: typeof MSG.GENERATE_MNEMONIC; payload?: GenerateMnemonicPayload }
   | { type: typeof MSG.CREATE_ACCOUNT; payload: CreateAccountPayload }
   | { type: typeof MSG.IMPORT_ACCOUNT; payload: ImportAccountPayload }
   | { type: typeof MSG.DELETE_ACCOUNT; payload: DeleteAccountPayload }
@@ -177,6 +183,7 @@ export type WalletMessage =
   | { type: typeof MSG.GET_BALANCE; payload?: GetBalancePayload }
   | { type: typeof MSG.GET_ADDRESSES; payload?: GetAddressesPayload }
   | { type: typeof MSG.GET_TRANSACTIONS; payload?: GetTransactionsPayload }
+  | { type: typeof MSG.GENERATE_NEW_ADDRESS; payload: GenerateNewAddressPayload }
   | { type: typeof MSG.AUTHENTICATE; payload: AuthenticatePayload }
   | { type: typeof MSG.SIGN_MESSAGE; payload: SignMessagePayload }
   | { type: typeof MSG.SIGN_TRANSACTION; payload: SignTransactionPayload }

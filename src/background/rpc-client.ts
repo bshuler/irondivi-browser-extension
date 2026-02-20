@@ -6,12 +6,22 @@ interface RPCResponse<T = any> {
   id: string | number;
 }
 
+// What the RPC actually returns
+interface RPCUTXOResponse {
+  txid: string;
+  outputIndex: number;  // vout
+  address: string;
+  satoshis: number;
+  script: string;       // scriptPubKey
+  height: number;
+}
+
+// Normalized UTXO format used by wallet
 export interface UTXOResponse {
   txid: string;
   vout: number;
   address: string;
-  amount: number;
-  satoshis: number;
+  amount: number;        // In DIVI (not satoshis)
   scriptPubKey: string;
   confirmations: number;
 }
@@ -31,6 +41,11 @@ export interface AddressBalance {
   balance: number;
   received: number;
   sent: number;
+}
+
+interface AddressBalanceResponse {
+  balance: number;  // In satoshis
+  received: number; // In satoshis
 }
 
 export class RPCClient {
@@ -93,21 +108,23 @@ export class RPCClient {
 
   /**
    * Get balance for multiple addresses
+   * Returns balance in DIVI (not satoshis)
    */
   async getBalance(addresses: string[]): Promise<number> {
     const results = await Promise.allSettled(
       addresses.map(address =>
-        this.rpc<number>('getaddressbalance', [address])
+        this.rpc<AddressBalanceResponse>('getaddressbalance', [address])
       )
     );
 
-    let total = 0;
+    let totalSatoshis = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled') {
-        total += result.value;
+        // RPC returns {balance: satoshis, received: satoshis}
+        totalSatoshis += result.value.balance;
       } else {
         const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
         console.warn(`Failed to get balance for ${addresses[i]}`);
@@ -115,20 +132,30 @@ export class RPCClient {
       }
     }
 
-    if (errors.length > 0 && total === 0) {
+    if (errors.length > 0 && totalSatoshis === 0) {
       throw new Error(`Failed to fetch balance: ${errors[0]}`);
     }
 
-    return total;
+    // Convert satoshis to DIVI
+    return totalSatoshis / 100000000;
   }
 
   /**
    * Get UTXOs for multiple addresses
+   * Converts from RPC format to normalized format
    */
   async getUtxos(addresses: string[]): Promise<UTXOResponse[]> {
+    // Get current block height for confirmations calculation
+    let currentHeight = 0;
+    try {
+      currentHeight = await this.getBlockCount();
+    } catch (e) {
+      console.warn('Failed to get block height for confirmations');
+    }
+
     const results = await Promise.allSettled(
       addresses.map(address =>
-        this.rpc<UTXOResponse[]>('getaddressutxos', [address])
+        this.rpc<RPCUTXOResponse[]>('getaddressutxos', [address])
       )
     );
 
@@ -138,7 +165,16 @@ export class RPCClient {
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled') {
-        allUtxos.push(...result.value);
+        // Convert from RPC format to normalized format
+        const normalized = result.value.map(rpcUtxo => ({
+          txid: rpcUtxo.txid,
+          vout: rpcUtxo.outputIndex,
+          address: rpcUtxo.address,
+          amount: rpcUtxo.satoshis / 100000000, // Convert satoshis to DIVI
+          scriptPubKey: rpcUtxo.script,
+          confirmations: currentHeight > 0 ? currentHeight - rpcUtxo.height + 1 : 0,
+        }));
+        allUtxos.push(...normalized);
       } else {
         const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
         console.warn(`Failed to get UTXOs for ${addresses[i]}`);
@@ -169,7 +205,7 @@ export class RPCClient {
       for (let i = 0; i < recentTxids.length; i += BATCH_SIZE) {
         const batch = recentTxids.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
-          batch.map(txid => this.rpc<any>('getrawtransaction', [txid, true]))
+          batch.map(txid => this.rpc<any>('getrawtransaction', [txid, 1]))
         );
         for (let j = 0; j < results.length; j++) {
           const result = results[j];
@@ -247,7 +283,7 @@ export class RPCClient {
    * Get raw transaction
    */
   async getRawTransaction(txid: string, verbose: boolean = true): Promise<any> {
-    return this.rpc('getrawtransaction', [txid, verbose]);
+    return this.rpc('getrawtransaction', [txid, verbose ? 1 : 0]);
   }
 
   /**
@@ -269,14 +305,10 @@ export class RPCClient {
     }
 
     // Sum inputs from our addresses
+    // DIVI RPC returns address and value directly on vin, not in prevout
     for (const vin of tx.vin || []) {
-      if (vin.prevout) {
-        const addresses = vin.prevout.scriptPubKey?.addresses || [];
-        for (const addr of addresses) {
-          if (ourSet.has(addr)) {
-            sent += vin.prevout.value || 0;
-          }
-        }
+      if (vin.address && ourSet.has(vin.address)) {
+        sent += vin.value || 0;
       }
     }
 
@@ -296,12 +328,10 @@ export class RPCClient {
       }
     }
 
+    // DIVI RPC returns address directly on vin
     for (const vin of tx.vin || []) {
-      if (vin.prevout) {
-        const addrs = vin.prevout.scriptPubKey?.addresses || [];
-        for (const addr of addrs) {
-          addresses.add(addr);
-        }
+      if (vin.address) {
+        addresses.add(vin.address);
       }
     }
 

@@ -12,6 +12,32 @@ import { Account } from './types';
 import { loadBalance, loadTransactions } from './wallet-ui';
 
 // ============================================================
+// Pending Account Storage (survives popup close)
+// ============================================================
+
+interface PendingAccount {
+  name: string;
+  password: string;
+  mnemonic: string;
+}
+
+const PENDING_ACCOUNT_KEY = 'pdivi_pending_account';
+
+async function savePendingAccount(data: PendingAccount): Promise<void> {
+  await chrome.storage.session.set({ [PENDING_ACCOUNT_KEY]: data });
+}
+
+async function getPendingAccount(): Promise<PendingAccount | null> {
+  const result = await chrome.storage.session.get(PENDING_ACCOUNT_KEY);
+  const pending = result[PENDING_ACCOUNT_KEY] as PendingAccount | undefined;
+  return pending || null;
+}
+
+async function clearPendingAccount(): Promise<void> {
+  await chrome.storage.session.remove(PENDING_ACCOUNT_KEY);
+}
+
+// ============================================================
 // Data Loading
 // ============================================================
 
@@ -93,21 +119,54 @@ export async function selectAccount(accountId: string): Promise<void> {
 
 /**
  * Create a new account
+ * Flow: Generate mnemonic -> Save pending -> Show to user -> Create account after confirmation
  */
 export async function createAccount(name: string, password: string, wordCount: number): Promise<void> {
   try {
-    showLoading('Creating wallet...');
-    const response = await sendMessage<{ account: Account; mnemonic: string }>(MSG.CREATE_ACCOUNT, {
-      name,
-      password,
+    showLoading('Generating recovery phrase...');
+
+    // Step 1: Generate mnemonic WITHOUT creating account
+    const genResponse = await sendMessage<{ mnemonic: string }>(MSG.GENERATE_MNEMONIC, {
       wordCount,
     });
 
-    hideLoading();
-    showToast(`Wallet created: ${response.account.name}`, 'success');
+    // Step 2: Save pending account data (survives popup close)
+    await savePendingAccount({ name, password, mnemonic: genResponse.mnemonic });
 
-    // Show mnemonic in secure modal
-    await showMnemonicModal(response.mnemonic, 'Save Your Recovery Phrase');
+    hideLoading();
+
+    // Step 3: Show mnemonic to user - must confirm before account is created
+    await showMnemonicModal(genResponse.mnemonic, 'Save Your Recovery Phrase');
+
+    // Step 4: User confirmed - NOW create the account
+    await finalizePendingAccount();
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create wallet';
+    showToast(errorMessage, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * Finalize a pending account after mnemonic confirmation
+ */
+async function finalizePendingAccount(): Promise<void> {
+  const pending = await getPendingAccount();
+  if (!pending) return;
+
+  try {
+    showLoading('Creating wallet...');
+    const importResponse = await sendMessage<{ account: Account }>(MSG.IMPORT_ACCOUNT, {
+      name: pending.name,
+      mnemonic: pending.mnemonic,
+      password: pending.password,
+    });
+
+    // Clear pending data
+    await clearPendingAccount();
+
+    showToast(`Wallet created: ${importResponse.account.name}`, 'success');
 
     await loadAccounts();
     await loadBalance();
@@ -115,9 +174,25 @@ export async function createAccount(name: string, password: string, wordCount: n
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create wallet';
     showToast(errorMessage, 'error');
+    throw error;
   } finally {
     hideLoading();
   }
+}
+
+/**
+ * Check for and resume pending account creation (called on popup open)
+ */
+export async function checkPendingAccountCreation(): Promise<boolean> {
+  const pending = await getPendingAccount();
+  if (!pending) return false;
+
+  // Show the mnemonic modal again
+  await showMnemonicModal(pending.mnemonic, 'Save Your Recovery Phrase');
+
+  // User confirmed - finalize the account
+  await finalizePendingAccount();
+  return true;
 }
 
 /**

@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="edgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00bcf2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <path d="M32 2 Q50 2 58 18 Q64 30 60 42 Q56 54 42 60 Q28 64 16 58 Q6 52 4 40 Q2 28 10 18 Q18 8 32 8 Q42 8 48 14 L38 24 Q34 20 28 20 Q18 20 14 28 Q12 32 12 36 Q12 44 18 50 Q24 56 32 56 Q44 56 52 44 Q56 38 54 32 L32 32 Z" fill="url(#edgeGrad)"/>
+</svg>

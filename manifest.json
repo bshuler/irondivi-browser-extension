@@ -3,13 +3,19 @@
   "name": "PrivateDivi Wallet",
   "version": "0.0.1",
   "description": "Secure cryptocurrency wallet for PrivateDivi",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'self'"
+  },
   "permissions": [
     "storage",
     "alarms",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "tabs",
+    "webNavigation"
   ],
   "host_permissions": [
-    "https://vps1.divi.domains/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",

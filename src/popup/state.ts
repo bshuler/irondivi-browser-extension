@@ -27,6 +27,10 @@ class PopupState {
 
   // Send transaction state
   pendingSendTx: PendingSendTx | null = null;
+  selectedSendFromAddress: string = 'auto'; // 'auto' or specific address
+
+  // Receive address state
+  selectedReceiveAddressIndex: number = 0;
 
   // Mnemonic modal resolver
   mnemonicModalResolver: (() => void) | null = null;

@@ -46,7 +46,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 10px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
@@ -58,12 +58,12 @@ body {
 }
 
 .logo {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
 }
 
 .brand {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   background: linear-gradient(135deg, var(--accent), #c084fc);
   -webkit-background-clip: text;
@@ -79,13 +79,16 @@ body {
 /* Account Selector */
 .account-selector {
   position: relative;
-  padding: 12px 20px;
+  padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .account-dropdown {
-  width: 100%;
+  flex: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -105,8 +108,9 @@ body {
 }
 
 .dropdown-arrow {
-  font-size: 12px;
+  font-size: 10px;
   transition: transform 0.2s;
+  color: var(--text-muted);
 }
 
 .account-dropdown.open .dropdown-arrow {
@@ -156,23 +160,72 @@ body {
 
 /* Network Badge */
 .network-badge {
-  position: absolute;
-  top: 80px;
-  right: 20px;
-  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
   background: var(--accent-light);
   border: 1px solid var(--accent);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--accent);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.network-badge:hover {
+  background: rgba(168, 85, 247, 0.2);
+}
+
+.network-badge .dropdown-arrow {
+  color: var(--accent);
+}
+
+.network-badge.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.network-menu {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 100;
+  min-width: 120px;
+}
+
+.network-menu .menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.network-menu .menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.network-menu .menu-item.active {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* Balance Section */
 .balance-section {
-  padding: 40px 20px 20px;
+  padding: 20px 16px 12px;
   text-align: center;
   background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
 }
@@ -181,12 +234,12 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .balance-amount {
-  font-size: 48px;
+  font-size: 36px;
   font-weight: 700;
   background: linear-gradient(135deg, #ffffff, #c084fc);
   -webkit-background-clip: text;
@@ -196,12 +249,12 @@ body {
 }
 
 .balance-amount.hidden-balance {
-  font-size: 36px;
+  font-size: 28px;
   letter-spacing: 4px;
 }
 
 .balance-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   font-weight: 600;
   letter-spacing: 1px;
@@ -210,8 +263,8 @@ body {
 /* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 12px;
-  padding: 20px 20px;
+  gap: 10px;
+  padding: 12px 16px;
 }
 
 .action-btn {
@@ -219,13 +272,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  gap: 6px;
+  padding: 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -238,9 +291,9 @@ body {
 }
 
 .action-icon {
-  font-size: 24px;
-  width: 40px;
-  height: 40px;
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -252,7 +305,7 @@ body {
 /* Tabs */
 .tabs {
   display: flex;
-  padding: 0 20px;
+  padding: 0 16px;
   gap: 4px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
@@ -260,11 +313,11 @@ body {
 
 .tab {
   flex: 1;
-  padding: 12px;
+  padding: 10px;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   position: relative;
@@ -293,7 +346,7 @@ body {
 .tab-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: none;
 }
 
@@ -302,10 +355,10 @@ body {
 }
 
 .empty-state {
-  padding: 60px 20px;
+  padding: 40px 16px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Transaction List */
@@ -679,23 +732,38 @@ body {
 
 /* Receive View */
 .receive-content {
-  padding: 40px 20px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 10px;
+  flex: 1;
+}
+
+.receive-content .form-group {
+  margin-bottom: 0;
+}
+
+.receive-content .form-group label {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.receive-content .form-group select {
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .qr-code {
-  width: 240px;
-  height: 240px;
+  width: 140px;
+  height: 140px;
   background: white;
-  border-radius: 16px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  box-shadow: 0 8px 32px var(--shadow);
+  padding: 8px;
+  box-shadow: 0 4px 16px var(--shadow);
 }
 
 .qr-code canvas {
@@ -705,12 +773,12 @@ body {
 
 .address-display-full {
   width: 100%;
-  padding: 14px;
+  padding: 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
   word-break: break-all;
   color: var(--text-primary);
@@ -719,24 +787,25 @@ body {
 /* Faucet Section */
 .faucet-section {
   width: 100%;
-  margin-top: 8px;
-  padding: 20px;
+  padding: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   text-align: center;
 }
 
 .faucet-label {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   font-weight: 600;
 }
 
 .faucet-status {
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 8px;
+  color: var(--text-secondary);
 }
 
 .faucet-status a {
@@ -833,6 +902,41 @@ body {
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 12px;
+}
+
+.setting-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.setting-item input[type="number"] {
+  width: 80px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.setting-section textarea {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.setting-section textarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 /* Add Account Options */
@@ -1116,31 +1220,37 @@ body {
 .mnemonic-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 6px;
+  margin-bottom: 16px;
 }
 
 .mnemonic-word {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 4px;
+  padding: 6px 8px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .mnemonic-word .word-num {
   color: var(--text-muted);
-  font-size: 11px;
-  min-width: 16px;
+  font-size: 10px;
+  flex-shrink: 0;
 }
 
 .mnemonic-word .word-text {
   color: var(--text-primary);
   font-family: 'Courier New', monospace;
   font-weight: 600;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mnemonic-grid.blurred .word-text {
@@ -1156,6 +1266,30 @@ body {
 
 .mnemonic-toggle-btn {
   font-size: 14px;
+}
+
+/* Modal inputs */
+.modal .input,
+.modal input[type="text"],
+.modal input[type="password"] {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s;
+  margin-bottom: 16px;
+}
+
+.modal .input:focus,
+.modal input[type="text"]:focus,
+.modal input[type="password"]:focus {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
 }
 
 /* Connected Sites */
@@ -1255,11 +1389,11 @@ body {
 /* Signing Request View */
 .signing-request-content {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  padding: 12px 16px;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .signing-origin-wrapper {
@@ -1267,28 +1401,28 @@ body {
 }
 
 .signing-origin-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   display: block;
 }
 
 .signing-origin {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-all;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .signing-type {
   text-align: center;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1310,17 +1444,21 @@ body {
 .signing-details {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 10px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 180px;
 }
 
 .signing-detail-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 10px 0;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
-  gap: 12px;
+  gap: 8px;
 }
 
 .signing-detail-row:last-child {
@@ -1329,19 +1467,19 @@ body {
 
 .signing-detail-row.total {
   border-top: 2px solid var(--border);
-  margin-top: 4px;
-  padding-top: 14px;
+  margin-top: 2px;
+  padding-top: 8px;
 }
 
 .signing-detail-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .signing-detail-value {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-primary);
   text-align: right;
   word-break: break-all;
@@ -1349,7 +1487,7 @@ body {
 
 .signing-detail-value.address {
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .signing-detail-value.amount {
@@ -1359,34 +1497,36 @@ body {
 
 .signing-message-content {
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 10px;
   color: var(--text-primary);
   background: var(--bg-tertiary);
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  margin-top: 4px;
   word-break: break-all;
   white-space: pre-wrap;
-  max-height: 120px;
+  max-height: 100px;
   overflow-y: auto;
+  line-height: 1.3;
 }
 
 .signing-warning {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--danger);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.3;
+  flex-shrink: 0;
 }
 
 .signing-warning .warning-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   background: var(--danger);
   color: white;
   border-radius: 50%;
@@ -1394,19 +1534,44 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
 .signing-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+  flex-shrink: 0;
 }
 
 .signing-actions .secondary-btn,
 .signing-actions .primary-btn {
   flex: 1;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+/* Compact form for signing request */
+.signing-request-content .form {
+  padding: 0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.signing-request-content .form-group {
+  margin-bottom: 8px;
+}
+
+.signing-request-content .form-group label {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.signing-request-content .form-group input {
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 .signing-actions .secondary-btn {

@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DISPLAY=:99
+      - CI=true
+    network_mode: host
+    volumes:
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report

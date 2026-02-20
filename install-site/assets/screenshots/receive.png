@@ -1,0 +1,21 @@
+<svg width="800" height="500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="recvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a26;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#252538;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#recvGrad)"/>
+  <text x="400" y="100" font-family="Arial, sans-serif" font-size="48" fill="#8b5cf6" text-anchor="middle" font-weight="bold">Receive PDIVI</text>
+
+  <rect x="250" y="150" width="300" height="300" rx="12" fill="#ffffff"/>
+  <rect x="270" y="170" width="260" height="260" rx="8" fill="#1e1e2e"/>
+
+  <text x="400" y="230" font-family="monospace" font-size="14" fill="#6366f1" text-anchor="middle">████████████████</text>
+  <text x="400" y="260" font-family="monospace" font-size="14" fill="#6366f1" text-anchor="middle">██      ██    ██</text>
+  <text x="400" y="290" font-family="monospace" font-size="14" fill="#6366f1" text-anchor="middle">██  ██  ██  ████</text>
+  <text x="400" y="320" font-family="monospace" font-size="14" fill="#6366f1" text-anchor="middle">██      ██    ██</text>
+  <text x="400" y="350" font-family="monospace" font-size="14" fill="#6366f1" text-anchor="middle">████████████████</text>
+
+  <text x="400" y="395" font-family="monospace" font-size="12" fill="#b4b8c5" text-anchor="middle">D1abc...xyz</text>
+</svg>

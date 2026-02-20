@@ -27,8 +27,7 @@ class PrivateDiviProvider {
   readonly isPrivateDivi = true;
   readonly version = '1.0.0';
 
-  private requestId = 0;
-  private pendingRequests = new Map<number, {
+  private pendingRequests = new Map<string, {
     resolve: (value: any) => void;
     reject: (error: Error) => void;
   }>();
@@ -58,7 +57,8 @@ class PrivateDiviProvider {
    * Send a request to the extension
    */
   private async sendRequest(method: string, params?: any): Promise<any> {
-    const id = ++this.requestId;
+    // Use cryptographically random UUID for request ID to prevent prediction attacks
+    const id = crypto.randomUUID();
 
     return new Promise((resolve, reject) => {
       // Set timeout
@@ -102,10 +102,6 @@ class PrivateDiviProvider {
    */
   async connect(): Promise<{ address: string; publicKey?: string }> {
     const result = await this.sendRequest('CONNECT');
-    if (result.pending) {
-      // Connection request pending user approval
-      throw new Error('Connection pending - please approve in wallet popup');
-    }
     this.emit('connect', { address: result.address });
     return result;
   }

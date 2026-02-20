@@ -52,17 +52,21 @@ export const storage = {
   },
 };
 
-// Alarms API
+// Alarms API (only available in background/service worker context)
+// Use lazy initialization to avoid errors in content scripts
 export const alarms = {
   create: (name: string, options: { delayInMinutes?: number; periodInMinutes?: number }) => {
-    browserAPI.alarms.create(name, options);
+    browserAPI.alarms?.create(name, options);
   },
   clear: async (name: string): Promise<boolean> => {
+    if (!browserAPI.alarms) return false;
     return new Promise((resolve) => {
       browserAPI.alarms.clear(name, (wasCleared: boolean) => resolve(wasCleared));
     });
   },
-  onAlarm: browserAPI.alarms.onAlarm,
+  get onAlarm() {
+    return browserAPI.alarms?.onAlarm;
+  },
 };
 
 // Runtime messaging

@@ -14,12 +14,40 @@ import { loadBalance, loadTransactions } from './wallet-ui';
 // ============================================================
 
 /**
+ * Populate the "From" address dropdown
+ */
+export function populateSendFromDropdown(): void {
+  if (!state.currentAccount) return;
+
+  const select = document.getElementById('send-from-address') as HTMLSelectElement;
+  select.innerHTML = '';
+
+  // Add "Auto" option
+  const autoOption = document.createElement('option');
+  autoOption.value = 'auto';
+  autoOption.textContent = 'Auto (uses available addresses)';
+  select.appendChild(autoOption);
+
+  // Add each address
+  state.currentAccount.addresses.forEach((addr, idx) => {
+    const option = document.createElement('option');
+    option.value = addr.address;
+    const shortAddr = `${addr.address.slice(0, 8)}...${addr.address.slice(-6)}`;
+    option.textContent = `Address ${idx + 1}: ${shortAddr}`;
+    select.appendChild(option);
+  });
+
+  // Set current selection
+  select.value = state.selectedSendFromAddress;
+}
+
+/**
  * Handle send max button click
  */
 export function handleSendMax(): void {
   const amountInput = document.getElementById('send-amount') as HTMLInputElement;
   const feeInput = document.getElementById('send-fee') as HTMLInputElement;
-  const fee = parseFloat(feeInput.value) || 0.0001;
+  const fee = parseFloat(feeInput.value) || 0.00005;
   const maxAmount = Math.max(0, state.balance - fee);
   amountInput.value = String(maxAmount);
 }
@@ -58,7 +86,12 @@ export async function handleSendConfirm(): Promise<void> {
     return;
   }
 
-  state.pendingSendTx = { to, amount, fee };
+  // Get selected from address
+  const fromSelect = document.getElementById('send-from-address') as HTMLSelectElement;
+  const fromValue = fromSelect.value;
+  const fromAddresses = fromValue === 'auto' ? undefined : [fromValue];
+
+  state.pendingSendTx = { to, amount, fee, fromAddresses };
 
   // Update confirm view
   (document.getElementById('confirm-to') as HTMLSpanElement).textContent = formatAddress(to);
@@ -110,6 +143,7 @@ async function sendTransaction(password: string): Promise<void> {
       to: toAddress,
       amount: state.pendingSendTx.amount,
       fee: state.pendingSendTx.fee,
+      fromAddresses: state.pendingSendTx.fromAddresses,
     });
 
     showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
@@ -202,12 +236,18 @@ export function setupContactSuggestions(): void {
  */
 export function setupSendUIHandlers(): void {
   elements.sendBtn.addEventListener('click', () => {
+    populateSendFromDropdown();
     showView(elements.viewSend);
   });
 
   document.getElementById('send-back-btn')?.addEventListener('click', hideView);
   document.getElementById('send-max-btn')?.addEventListener('click', handleSendMax);
   document.getElementById('send-confirm-btn')?.addEventListener('click', handleSendConfirm);
+
+  // Track from address selection
+  document.getElementById('send-from-address')?.addEventListener('change', (e) => {
+    state.selectedSendFromAddress = (e.target as HTMLSelectElement).value;
+  });
 
   // Send confirm view
   document.getElementById('send-confirm-back-btn')?.addEventListener('click', () => {

@@ -31,8 +31,9 @@ export interface BuiltTransaction {
   inputIndices: number[]; // Address indices used for signing
 }
 
-const DEFAULT_FEE = 0.0001;
-const DUST_THRESHOLD = 0.00001;
+// DIVI min relay fee: 10,000 sat/KB. Typical tx ~300 bytes = ~3000 sat. Using 5000 sat as safe default.
+const DEFAULT_FEE = 0.00005;
+const DUST_THRESHOLD = 0.0000546; // 3 * fee(182 bytes) per DIVI spec
 const MAX_INPUTS = 250; // Reasonable limit to prevent oversized transactions
 
 const SATOSHIS_PER_COIN = 100000000n; // 1e8 as BigInt

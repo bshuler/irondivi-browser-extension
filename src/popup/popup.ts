@@ -8,12 +8,14 @@
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
+import { sendMessage } from './message-api';
+import { MSG } from '../shared/constants';
 import { setupMnemonicModalHandlers } from './modals';
-import { loadAccounts, setupAccountUIHandlers } from './account-ui';
+import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation } from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
 import { loadContacts, setupContactsUIHandlers } from './contacts-ui';
-import { loadSettings, updateSettings, setupSettingsUIHandlers } from './settings-ui';
+import { loadSettings, setupSettingsUIHandlers } from './settings-ui';
 import { checkPendingRequests, setupSigningRequestUIHandlers } from './signing-request-ui';
 
 // ============================================================
@@ -57,11 +59,25 @@ function setupTabHandlers(): void {
  * Setup balance toggle that syncs with settings
  */
 function setupBalanceToggle(): void {
-  elements.hideBalanceBtn.addEventListener('click', () => {
+  elements.hideBalanceBtn.addEventListener('click', async () => {
     state.balanceHidden = !state.balanceHidden;
+    state.settings.hideBalance = state.balanceHidden;
     updateBalanceDisplay();
-    updateSettings({ hideBalance: state.balanceHidden });
+    updateBalanceButtonIcon();
+    // Save silently without toast
+    try {
+      await sendMessage(MSG.UPDATE_SETTINGS, { hideBalance: state.balanceHidden });
+    } catch {
+      // Ignore errors for balance toggle
+    }
   });
+}
+
+/**
+ * Update balance button icon based on state
+ */
+function updateBalanceButtonIcon(): void {
+  elements.hideBalanceBtn.textContent = state.balanceHidden ? '👁️‍🗨️' : '👁️';
 }
 
 // ============================================================
@@ -93,6 +109,21 @@ function setupEventListeners(): void {
 // ============================================================
 
 /**
+ * Check for approval request URL parameters
+ * Returns true if this is an approval window
+ */
+function checkApprovalParams(): { type: string; requestId: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const approveType = params.get('approve');
+  const requestId = params.get('requestId');
+
+  if (approveType && requestId) {
+    return { type: approveType, requestId };
+  }
+  return null;
+}
+
+/**
  * Initialize the popup
  */
 async function init(): Promise<void> {
@@ -102,9 +133,32 @@ async function init(): Promise<void> {
 
   try {
     await loadSettings();
+    updateBalanceButtonIcon();
+
+    // Check for pending account creation first (user closed popup before confirming mnemonic)
+    const hadPendingAccount = await checkPendingAccountCreation();
+    if (hadPendingAccount) {
+      // Account was just created, loadAccounts was called in finalizePendingAccount
+      hideLoading();
+      return;
+    }
+
     await loadAccounts();
 
-    // Check for pending signing requests first
+    // Check if this is an approval window
+    const approvalParams = checkApprovalParams();
+    if (approvalParams) {
+      // This is an approval popup - check for the specific pending request
+      const hasPendingRequests = await checkPendingRequests(approvalParams.requestId);
+      if (!hasPendingRequests) {
+        // No pending requests found (maybe already handled)
+        window.close();
+      }
+      hideLoading();
+      return;
+    }
+
+    // Check for pending signing requests
     const hasPendingRequests = await checkPendingRequests();
 
     // If no pending requests, load normal wallet view

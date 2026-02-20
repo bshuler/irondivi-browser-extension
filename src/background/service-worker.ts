@@ -285,6 +285,30 @@ async function handleMessage(
         const addresses = account.addresses.map(a => a.address);
         const utxos = await rpcClient.getUtxos(addresses);
 
+        // Enforce transaction limits
+        const settings = await getSettings();
+        const limits = settings.transactionLimits;
+        const totalBalance = walletCore.calculateBalance(utxos);
+
+        // Check absolute limit
+        if (limits.maxAmountAbsolute > 0 && payload.amount > limits.maxAmountAbsolute) {
+          return {
+            success: false,
+            error: `Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} PDIVI`
+          };
+        }
+
+        // Check percentage limit
+        if (limits.maxAmountPercent > 0) {
+          const maxAllowed = (totalBalance * limits.maxAmountPercent) / 100;
+          if (payload.amount > maxAllowed) {
+            return {
+              success: false,
+              error: `Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} PDIVI)`
+            };
+          }
+        }
+
         // Build transaction
         const built = walletCore.buildTransaction(utxos, account.addresses, {
           to: payload.to,
@@ -594,7 +618,6 @@ async function handleMessage(
         return { success: false, error: `Unknown message type: ${type}` };
     }
   } catch (error) {
-    console.error('Message handler error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -693,12 +716,9 @@ async function initialize() {
       runAt: 'document_start',
       allFrames: false,
     }]);
-    console.log('Content scripts registered programmatically');
-  } catch (error) {
-    console.log('Content script registration info:', error);
+  } catch {
+    // Content script registration failed - manifest declaration is the fallback
   }
-
-  console.log('PrivateDivi Wallet initialized');
 }
 
 initialize();

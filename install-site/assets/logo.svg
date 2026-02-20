@@ -1,0 +1,25 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="60" cy="60" r="55" stroke="url(#logoGradient)" stroke-width="3" fill="none" opacity="0.3"/>
+
+  <!-- Inner shield shape -->
+  <path d="M60 15 L90 35 L90 65 Q90 85 60 100 Q30 85 30 65 L30 35 Z"
+        fill="url(#logoGradient)" opacity="0.9"/>
+
+  <!-- Privacy symbol (lock icon) -->
+  <rect x="50" y="55" width="20" height="25" rx="2" fill="white"/>
+  <rect x="52" y="57" width="16" height="21" rx="1" fill="#0a0a0f"/>
+  <circle cx="60" cy="67" r="3" fill="white"/>
+  <rect x="59" y="67" width="2" height="6" fill="white"/>
+
+  <!-- Lock shackle -->
+  <path d="M55 55 L55 48 Q55 43 60 43 Q65 43 65 48 L65 55"
+        stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

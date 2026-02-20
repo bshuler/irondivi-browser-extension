@@ -64,6 +64,7 @@ interface ElementCache {
   mnemonicGrid: HTMLDivElement;
   mnemonicModalTitle: HTMLHeadingElement;
   mnemonicToggleBtn: HTMLButtonElement;
+  mnemonicCopyBtn: HTMLButtonElement;
   mnemonicConfirmBtn: HTMLButtonElement;
 }
 
@@ -132,6 +133,7 @@ function getElements(): ElementCache {
       mnemonicGrid: document.getElementById('mnemonic-grid') as HTMLDivElement,
       mnemonicModalTitle: document.getElementById('mnemonic-modal-title') as HTMLHeadingElement,
       mnemonicToggleBtn: document.getElementById('mnemonic-toggle-blur') as HTMLButtonElement,
+      mnemonicCopyBtn: document.getElementById('mnemonic-copy-btn') as HTMLButtonElement,
       mnemonicConfirmBtn: document.getElementById('mnemonic-confirm-btn') as HTMLButtonElement,
     };
   }

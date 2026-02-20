@@ -25,6 +25,14 @@
         <span class="account-name" id="current-account-name">Loading...</span>
         <span class="dropdown-arrow">▼</span>
       </button>
+      <button class="network-badge" id="network-badge">
+        <span class="network-name">Testnet</span>
+        <span class="dropdown-arrow">▼</span>
+      </button>
+      <div class="network-menu hidden" id="network-menu">
+        <button class="menu-item" data-network="mainnet">Mainnet</button>
+        <button class="menu-item" data-network="testnet">Testnet</button>
+      </div>
       <div class="account-menu hidden" id="account-menu">
         <div class="account-list" id="account-list"></div>
         <button class="menu-item add-account" id="add-account-btn">
@@ -32,9 +40,6 @@
         </button>
       </div>
     </div>
-
-    <!-- Network Badge -->
-    <div class="network-badge" id="network-badge">Testnet</div>
 
     <!-- Main Balance Display -->
     <div class="balance-section" id="balance-section">
@@ -91,6 +96,12 @@
       </div>
       <div class="form">
         <div class="form-group">
+          <label>From</label>
+          <select id="send-from-address">
+            <option value="auto">Auto (uses available addresses)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>To Address</label>
           <input type="text" id="send-to" placeholder="Enter address or select contact" autocomplete="off">
           <div class="contact-suggestions hidden" id="contact-suggestions"></div>
@@ -104,7 +115,7 @@
         </div>
         <div class="form-group">
           <label>Fee</label>
-          <input type="number" id="send-fee" value="0.0001" step="0.00000001">
+          <input type="number" id="send-fee" value="0.00005" step="0.00000001">
         </div>
         <button class="primary-btn" id="send-confirm-btn">Continue</button>
       </div>
@@ -150,6 +161,10 @@
         <h2>Receive PDIVI</h2>
       </div>
       <div class="receive-content">
+        <div class="form-group" style="width: 100%;">
+          <label>Receive to Address</label>
+          <select id="receive-address-select"></select>
+        </div>
         <div class="qr-code" id="qr-code"></div>
         <div class="address-display-full" id="receive-address"></div>
         <button class="secondary-btn copy-btn" id="copy-address-btn">
@@ -190,9 +205,36 @@
             <option value="30">30 minutes</option>
           </select>
         </div>
-        <button class="setting-item danger" id="export-mnemonic-btn">
-          Export Recovery Phrase
-        </button>
+        <div class="setting-section">
+          <h3>Account Management</h3>
+          <button class="setting-item" id="rename-account-btn">
+            Rename Account
+          </button>
+          <button class="setting-item" id="export-mnemonic-btn">
+            Export Recovery Phrase
+          </button>
+          <button class="setting-item danger" id="delete-account-btn">
+            Delete Account
+          </button>
+        </div>
+        <div class="setting-section">
+          <h3>Security</h3>
+          <div class="setting-item">
+            <span>Max Transaction (%)</span>
+            <input type="number" id="setting-tx-limit-percent" min="0" max="100" step="1" placeholder="10">
+          </div>
+          <div class="setting-item">
+            <span>Max Transaction (PDIVI)</span>
+            <input type="number" id="setting-tx-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
+          </div>
+          <p class="setting-hint">Limits apply per transaction. 0 = no limit.</p>
+        </div>
+        <div class="setting-section">
+          <h3>Allowed Sites</h3>
+          <p class="setting-hint">Sites that can connect to your wallet. Use * for wildcards.</p>
+          <textarea id="setting-allowed-sites" rows="4" placeholder="*.divi.domains&#10;localhost&#10;127.0.0.1"></textarea>
+          <button class="secondary-btn" id="save-allowed-sites-btn" style="margin-top:8px;">Save Sites</button>
+        </div>
         <div class="setting-section">
           <h3>Connected Sites</h3>
           <div id="connected-sites-list"></div>
@@ -281,6 +323,7 @@
         <div class="mnemonic-grid blurred" id="mnemonic-grid"></div>
         <div class="modal-actions">
           <button class="secondary-btn mnemonic-toggle-btn" id="mnemonic-toggle-blur">Show Phrase</button>
+          <button class="secondary-btn" id="mnemonic-copy-btn">Copy Words</button>
           <button class="primary-btn" id="mnemonic-confirm-btn">I've Written It Down</button>
         </div>
       </div>
@@ -314,6 +357,20 @@
       </div>
     </div>
 
+    <!-- Input Modal (for rename, etc.) -->
+    <div id="input-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="input-modal-title">Enter Value</h3>
+        </div>
+        <input type="text" id="input-modal-input" class="input" placeholder="Enter value">
+        <div class="modal-actions">
+          <button id="input-modal-cancel" class="secondary-btn">Cancel</button>
+          <button id="input-modal-submit" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Signing Request View -->
     <div class="view hidden" id="view-signing-request">
       <div class="view-header">
@@ -327,9 +384,9 @@
         </div>
         <div id="signing-type" class="signing-type"></div>
         <div id="signing-details" class="signing-details"></div>
-        <div class="signing-warning">
+        <div class="signing-warning" id="signing-warning">
           <span class="warning-icon">!</span>
-          <span>Only approve requests from sites you trust. Approving will sign data or send funds.</span>
+          <span id="signing-warning-text">Only approve requests from sites you trust.</span>
         </div>
         <div class="form">
           <div class="form-group">

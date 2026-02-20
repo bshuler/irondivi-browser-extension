@@ -83,6 +83,49 @@ export function showConfirmModal(title: string, message: string): Promise<boolea
 }
 
 /**
+ * Show a text input modal for general input (e.g., rename)
+ */
+export function showInputModal(title: string, placeholder: string, defaultValue = ''): Promise<string | null> {
+  return new Promise(resolve => {
+    const modal = document.getElementById('input-modal') as HTMLDivElement;
+    const titleEl = document.getElementById('input-modal-title') as HTMLHeadingElement;
+    const input = document.getElementById('input-modal-input') as HTMLInputElement;
+    const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
+    const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
+
+    titleEl.textContent = title;
+    input.placeholder = placeholder;
+    input.value = defaultValue;
+    modal.classList.remove('hidden');
+    input.focus();
+    input.select();
+
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      input.value = '';
+    };
+
+    const handleSubmit = () => {
+      const value = input.value.trim();
+      cleanup();
+      resolve(value || null);
+    };
+
+    const handleCancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    submitBtn.onclick = handleSubmit;
+    cancelBtn.onclick = handleCancel;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') handleSubmit();
+      if (e.key === 'Escape') handleCancel();
+    };
+  });
+}
+
+/**
  * Show a password input modal (replaces browser prompt())
  */
 export function showPasswordModal(title: string): Promise<string | null> {
@@ -135,6 +178,26 @@ export function setupMnemonicModalHandlers(): void {
     } else {
       elements.mnemonicGrid.classList.add('blurred');
       elements.mnemonicToggleBtn.textContent = 'Show Phrase';
+    }
+  });
+
+  elements.mnemonicCopyBtn.addEventListener('click', async () => {
+    const wordElements = elements.mnemonicGrid.querySelectorAll('.word-text');
+    const words = Array.from(wordElements).map(el => el.textContent || '');
+    const mnemonic = words.join(' ');
+
+    try {
+      await navigator.clipboard.writeText(mnemonic);
+      const originalText = elements.mnemonicCopyBtn.textContent;
+      elements.mnemonicCopyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        elements.mnemonicCopyBtn.textContent = originalText;
+      }, 2000);
+    } catch {
+      elements.mnemonicCopyBtn.textContent = 'Failed';
+      setTimeout(() => {
+        elements.mnemonicCopyBtn.textContent = 'Copy Words';
+      }, 2000);
     }
   });
 
