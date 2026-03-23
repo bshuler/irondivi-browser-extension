@@ -164,6 +164,34 @@ class Transaction {
         return hex;
     }
 
+    /**
+     * Add an OP_RETURN output with the given data string.
+     * Used for DNS registration: DNSDIVI:REG:<name>:<owner_address>
+     */
+    addOpReturn(dataString: string): void {
+        const data = new TextEncoder().encode(dataString);
+        const dataHex = bytesToHex(data);
+        const len = data.length;
+
+        // Build scriptPubKey: OP_RETURN <push> <data>
+        let scriptHex = '6a'; // OP_RETURN
+        if (len <= 75) {
+            // Direct push: length byte is the opcode
+            scriptHex += len.toString(16).padStart(2, '0');
+        } else if (len <= 255) {
+            // OP_PUSHDATA1 + 1-byte length
+            scriptHex += '4c' + len.toString(16).padStart(2, '0');
+        } else {
+            throw new Error('OP_RETURN data too large (max 255 bytes)');
+        }
+        scriptHex += dataHex;
+
+        this.outputs.push({
+            value: 0,
+            script: scriptHex
+        });
+    }
+
     // Create signature hash for input
     sigHashForInput(inputIndex: number, pubKeyHash: Uint8Array): Uint8Array {
         // Create copy of transaction

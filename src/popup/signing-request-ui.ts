@@ -20,6 +20,7 @@ export interface SigningRequest {
     amount?: number;
     fee?: number;
     addressIndex?: number;
+    opReturn?: string;
   };
   createdAt: number;
 }
@@ -158,6 +159,9 @@ export function showSigningRequestView(request: SigningRequest): void {
         <span class="signing-detail-value amount">${escapedTotal} PDIVI</span>
       </div>
     `;
+    if (request.data?.opReturn) {
+      detailsHtml += `<div class="signing-detail-row"><span class="signing-detail-label">OP_RETURN</span><span class="signing-detail-value" style="font-size:11px;word-break:break-all">${escapeHtml(request.data.opReturn)}</span></div>`;
+    }
   }
 
   elements.details.innerHTML = detailsHtml;

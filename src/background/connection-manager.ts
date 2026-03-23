@@ -6,6 +6,7 @@ export interface SigningRequestData {
   to?: string;
   amount?: number;
   fee?: number;
+  opReturn?: string;
 }
 
 export interface PendingRequest {

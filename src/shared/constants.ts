@@ -120,6 +120,7 @@ export interface SendTransactionPayload {
   amount: number;
   fee?: number;
   fromAddresses?: string[];
+  opReturn?: string;
 }
 
 // Faucet
