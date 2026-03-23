@@ -15,15 +15,38 @@ const commonConfig = {
   minify: !isWatch,
 };
 
+// esbuild plugin: alias bare Node.js module specifiers to browser shims
+const nodeShimsPlugin = {
+  name: 'node-shims',
+  setup(build) {
+    // Redirect `import "crypto"` / `require("crypto")` to our empty shim
+    build.onResolve({ filter: /^crypto$/ }, () => ({
+      path: join(__dirname, 'crypto-shim.js'),
+    }));
+  },
+};
+
+// WalletConnect SDK needs Node.js globals polyfilled for browser environments
+const serviceWorkerConfig = {
+  ...commonConfig,
+  define: {
+    'global': 'globalThis',
+    'process.env.NODE_ENV': '"production"',
+    'process.env': '{}',
+  },
+  inject: [join(__dirname, 'buffer-shim.js')],
+  plugins: [nodeShimsPlugin],
+};
+
 async function build() {
   const outdir = join(__dirname, 'dist', browser);
 
   // Ensure output directory
   mkdirSync(outdir, { recursive: true });
 
-  // Build background service worker
+  // Build background service worker (with WalletConnect polyfills)
   await esbuild.build({
-    ...commonConfig,
+    ...serviceWorkerConfig,
     entryPoints: [join(__dirname, 'src/background/service-worker.ts')],
     outfile: join(outdir, 'background.js'),
   });
