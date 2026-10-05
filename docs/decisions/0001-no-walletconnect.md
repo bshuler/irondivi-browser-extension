@@ -19,7 +19,7 @@ as an optional or default-off feature, without a new ADR that supersedes this on
   `https://services.divi.domains/wallet/` speaks a `postMessage` protocol:
   `DIVI_SIGN_REQUEST` → `DIVI_SIGN_RESPONSE` / `DIVI_SIGN_CANCEL`, keyed by a
   `requestId` and checked against a strict origin allowlist. It is implemented in
-  `divi-infrastructure/divi-wallet/lib/messaging.js` (first committed 2026-02-16) and
+  `divi-infrastructure/divi-wallet/lib/messaging.js` (added 2026-02-16, before the WalletConnect prototype) and
   used by `divi-infrastructure/nft-marketplace/frontend/src/services/wallet-bridge.ts`.
   The marketplace tries, in order: the browser-extension injected provider, then
   the web-wallet popup bridge, then manual input. No third-party relay is involved.
@@ -47,6 +47,6 @@ DIVI_SIGN bridge and the injected provider cover the same need with code we own.
 
 - dApps integrate with the extension through `window.irondivi` (see `src/injected/provider.ts`).
   For the web wallet, they use the DIVI_SIGN bridge.
-- **Enforcement:** `src/no-walletconnect.test.ts` runs with `npm test`. It fails if
+- **Enforcement:** `src/no-walletconnect.test.ts` runs with `npm run test:unit` and in CI (`.github/workflows/unit.yml`) on every push. It fails if
   `package.json` declares a WalletConnect/Reown dependency or if any file under
   `src/` references one.
