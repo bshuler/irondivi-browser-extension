@@ -26,8 +26,8 @@ as an optional or default-off feature, without a new ADR that supersedes this on
 - **WalletConnect was tried and not shipped.** It was prototyped in
   `divi-wallet` from 2026-03-23 to 2026-03-24 (commits `cb93fa2`, `1683859`,
   `41f0744`, `a66ce91`, `41b308c`, `90b75e6`) and not adopted. A build of it was
-  found still deployed on the services testnet wallet on 2026-10-05. Its removal
-  is tracked in `divi-infrastructure/docs/runbooks/divi-wallet-deploy.md`. The
+  found still deployed on the services testnet wallet and removed on 2026-10-05
+  (see `divi-infrastructure/docs/runbooks/divi-wallet-deploy.md`). The
   mainnet web wallets contain no WalletConnect code.
 - **The Reown project is unused.** Reown Cloud project
   `d76f568633ae643cf0455df1caff8b59` exists with no allowed domains. Nothing
