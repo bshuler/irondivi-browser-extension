@@ -37,7 +37,6 @@ as an optional or default-off feature, without a new ADR that supersedes this on
 
 ## Rationale
 
-<!-- TODO(Bert): confirm or replace this wording. Only the facts above are verified. -->
 WalletConnect's value is its ecosystem of dApps and its relay network. Divi uses
 its own `divi:` chain namespace, so it gets none of the ecosystem, but still takes
 on a third-party relay, a vendor account, an origin allowlist kept on someone
