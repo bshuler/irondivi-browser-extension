@@ -3,6 +3,7 @@
  */
 
 import { Account, Transaction, Contact, Settings, PendingSendTx } from './types';
+import { DEFAULT_SETTINGS } from '../shared/storage';
 
 /**
  * PopupState holds all mutable state for the popup UI.
@@ -13,12 +14,8 @@ class PopupState {
   accounts: Account[] = [];
   transactions: Transaction[] = [];
   contacts: Contact[] = [];
-  settings: Settings = {
-    network: 'testnet',
-    authTimeoutMinutes: 5,
-    currency: 'USD',
-    hideBalance: false,
-  };
+  // Cloned so popup edits never mutate the shared defaults (transactionLimits is nested)
+  settings: Settings = structuredClone(DEFAULT_SETTINGS);
   balance: number = 0;
   balanceHidden: boolean = false;
 

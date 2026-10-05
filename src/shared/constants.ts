@@ -262,10 +262,3 @@ export const FAUCET_URLS = {
   mainnet: 'https://vps1.divi.domains/faucet/api/request',
 };
 
-// Default settings
-export const DEFAULT_SETTINGS = {
-  network: 'testnet' as NetworkType,
-  authTimeoutMinutes: 5,
-  currency: 'USD',
-  hideBalance: false,
-};
