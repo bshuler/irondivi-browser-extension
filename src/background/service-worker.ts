@@ -1,5 +1,3 @@
-// localStorage polyfill must be imported before WalletConnect SDK
-import './localStorage-polyfill';
 
 import { runtime, alarms } from '../shared/browser-polyfill';
 import { MSG, NETWORKS } from '../shared/constants';
@@ -11,16 +9,6 @@ import { walletCore } from './wallet-core';
 import { rpcClient } from './rpc-client';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
-import {
-  initWalletConnect,
-  pair as wcPair,
-  approveSessionProposal,
-  rejectSessionProposal,
-  respondToRequest as wcRespondToRequest,
-  rejectRequest as wcRejectRequest,
-  getActiveSessions,
-  disconnectSession,
-} from './walletconnect';
 
 // Origin validation helper
 function isValidOrigin(origin: string): boolean {
@@ -90,9 +78,6 @@ async function handleMessage(
     MSG.EXPORT_MNEMONIC, MSG.GENERATE_MNEMONIC, MSG.AUTHENTICATE,
     MSG.APPROVE_SIGNING_REQUEST, MSG.REJECT_SIGNING_REQUEST,
     MSG.UPDATE_SETTINGS, MSG.GENERATE_NEW_ADDRESS,
-    // WalletConnect operations
-    'WC_PAIR', 'WC_APPROVE_PROPOSAL', 'WC_REJECT_PROPOSAL',
-    'WC_APPROVE_REQUEST', 'WC_REJECT_REQUEST', 'WC_DISCONNECT_SESSION',
   ];
   if (popupOnlyOperations.includes(type as any)) {
     if (!isExtensionSender(sender)) {
@@ -630,188 +615,6 @@ async function handleMessage(
         }
       }
 
-      // ============ WalletConnect Operations ============
-      case 'WC_PAIR': {
-        try {
-          await wcPair(payload.uri);
-          return { success: true };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to pair'
-          };
-        }
-      }
-
-      case 'WC_APPROVE_PROPOSAL': {
-        try {
-          const account = await accountManager.getSelectedAccount();
-          if (!account) return { success: false, error: 'No account selected' };
-
-          const addresses = account.addresses.map(a => a.address);
-          await approveSessionProposal(payload.proposalId, addresses, account.network);
-          return { success: true };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to approve proposal'
-          };
-        }
-      }
-
-      case 'WC_REJECT_PROPOSAL': {
-        try {
-          await rejectSessionProposal(payload.proposalId);
-          return { success: true };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to reject proposal'
-          };
-        }
-      }
-
-      case 'WC_APPROVE_REQUEST': {
-        try {
-          // Authenticate the user first
-          const account = await accountManager.getSelectedAccount();
-          if (!account) return { success: false, error: 'No account selected' };
-
-          const authSuccess = await signingSession.authenticate(
-            payload.accountId,
-            payload.password,
-          );
-          if (!authSuccess) {
-            return { success: false, error: 'Invalid password' };
-          }
-
-          const { topic, requestId, method, params: reqParams } = payload;
-
-          if (method === 'divi_sendTransaction') {
-            // Build and send transaction
-            const addresses = account.addresses.map(a => a.address);
-            const utxos = await rpcClient.getUtxos(addresses);
-
-            const txReq = reqParams[0] || reqParams;
-            const built = walletCore.buildTransaction(utxos, account.addresses, {
-              to: txReq.to,
-              amount: txReq.amount,
-              fee: txReq.fee,
-            }, account.network);
-
-            const seed = await signingSession.getSeed();
-            if (!seed) return { success: false, error: 'Not authenticated' };
-
-            try {
-              const coinType = NETWORKS[account.network].coinType;
-              const { HDKey } = await import('../lib/hdkey');
-              const hdkey = await HDKey.fromMasterSeed(seed);
-              const privateKeys = await Promise.all(built.inputIndices.map(async index => {
-                const path = `m/44'/${coinType}'/0'/0/${index}`;
-                return (await hdkey.derive(path)).privateKey!;
-              }));
-
-              const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
-              const txid = await rpcClient.broadcastTransaction(signedHex);
-
-              await wcRespondToRequest(topic, requestId, { txid, fee: built.fee });
-              return { success: true, data: { txid, fee: built.fee } };
-            } finally {
-              secureWipe(seed);
-            }
-          } else if (method === 'divi_signMessage') {
-            const message = (reqParams[0] || reqParams).message || reqParams[0];
-            const signature = await signingSession.signMessage(
-              message,
-              0, // default address index
-              account.network,
-            );
-            await wcRespondToRequest(topic, requestId, { signature });
-            return { success: true, data: { signature } };
-          } else {
-            await wcRejectRequest(topic, requestId, `Unsupported method: ${method}`);
-            return { success: false, error: `Unsupported method: ${method}` };
-          }
-        } catch (error) {
-          // If we have topic/requestId, send error back to dApp
-          if (payload.topic && payload.requestId) {
-            try {
-              await wcRejectRequest(
-                payload.topic,
-                payload.requestId,
-                error instanceof Error ? error.message : 'Request failed',
-              );
-            } catch {
-              // ignore secondary error
-            }
-          }
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to process request'
-          };
-        }
-      }
-
-      case 'WC_REJECT_REQUEST': {
-        try {
-          await wcRejectRequest(payload.topic, payload.requestId, payload.message || 'User rejected');
-          return { success: true };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to reject request'
-          };
-        }
-      }
-
-      case 'WC_GET_SESSIONS': {
-        try {
-          const sessions = getActiveSessions();
-          return { success: true, data: { sessions } };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to get sessions'
-          };
-        }
-      }
-
-      case 'WC_DISCONNECT_SESSION': {
-        try {
-          await disconnectSession(payload.topic);
-          return { success: true };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to disconnect session'
-          };
-        }
-      }
-
-      case 'WC_GET_PENDING_PROPOSAL': {
-        try {
-          const result = await chrome.storage.local.get('wcPendingProposal');
-          return { success: true, data: result.wcPendingProposal || null };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to get pending proposal'
-          };
-        }
-      }
-
-      case 'WC_GET_PENDING_REQUEST': {
-        try {
-          const result = await chrome.storage.local.get('wcPendingRequest');
-          return { success: true, data: result.wcPendingRequest || null };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to get pending request'
-          };
-        }
-      }
-
       default:
         return { success: false, error: `Unknown message type: ${type}` };
     }
@@ -831,13 +634,11 @@ runtime.onMessage.addListener((message: Message, sender: chrome.runtime.MessageS
   return true; // Keep channel open for async response
 });
 
-// Set up alarm listener for signing session timeout and WC keep-alive
+// Set up alarm listener for signing session timeout
 alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'signing-session-timeout') {
     await signingSession.handleAlarmTimeout();
   }
-  // WC keep-alive: simply handling the alarm keeps the service worker alive
-  // No action needed; the alarm firing is sufficient
 });
 
 // Programmatic content script injection for better compatibility
@@ -901,9 +702,6 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 async function initialize() {
   const settings = await getSettings();
   rpcClient.setNetwork(settings.network);
-
-  // Initialize WalletConnect in the background (non-blocking)
-  initWalletConnect().catch(err => console.error('[WC] Init failed:', err));
 
   // Register content scripts programmatically for better compatibility
   // This ensures content scripts are registered even if declarative ones don't work

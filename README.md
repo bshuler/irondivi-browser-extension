@@ -86,20 +86,18 @@ can serve as the RPC backend: the wallet calls `getaddressbalance`,
 `getaddressutxos`, `getaddresstxids`, `getrawtransaction`,
 `sendrawtransaction`, `validateaddress`, `getblockcount` and `getnetworkinfo`.
 
-## WalletConnect
+## dApp connections
 
-WalletConnect uses the Reown Cloud project `d76f568633ae643cf0455df1caff8b59`, the
-same one the Divi web wallet (`divi-infrastructure/divi-wallet`) uses. The ID is a
-public client identifier and is built in by default. To build against a different
-project:
+dApps connect through the injected provider, `window.irondivi` (`isIronDivi: true`),
+which this extension's content script adds to every http(s) page. It exposes
+`connect`, `getAccounts`, `signMessage` and the other `irondivi_*` methods, and every
+request is approved in the extension popup.
 
-```bash
-IRONDIVI_WC_PROJECT_ID=<reown-project-id> npm run build:all
-```
-
-The extension is the *wallet* side, so it uses Reown **WalletKit**. The Reown
-dashboard's "AppKit SDK is out of date" banner is about dapps (AppKit), not this
-extension.
+The extension does **not** use WalletConnect or Reown, and must not. Divi's
+connection mechanism is its own: the injected provider first, then the
+`DIVI_SIGN_*` postMessage bridge in the Divi web wallet. See
+[ADR 0001](docs/decisions/0001-no-walletconnect.md). A unit test
+(`src/no-walletconnect.test.ts`) fails the build if WalletConnect comes back.
 
 ## Development
 

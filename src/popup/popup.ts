@@ -17,7 +17,6 @@ import { setupSendUIHandlers } from './send-ui';
 import { loadContacts, setupContactsUIHandlers } from './contacts-ui';
 import { loadSettings, setupSettingsUIHandlers } from './settings-ui';
 import { checkPendingRequests, setupSigningRequestUIHandlers } from './signing-request-ui';
-import { checkWalletConnectParams } from './walletconnect-ui';
 
 // ============================================================
 // Tab Management
@@ -145,13 +144,6 @@ async function init(): Promise<void> {
     }
 
     await loadAccounts();
-
-    // Check for WalletConnect approval flows (wc_proposal / wc_request URL params)
-    const isWcFlow = await checkWalletConnectParams();
-    if (isWcFlow) {
-      hideLoading();
-      return;
-    }
 
     // Check if this is an approval window
     const approvalParams = checkApprovalParams();
