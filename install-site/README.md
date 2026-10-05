@@ -1,6 +1,6 @@
-# PrivateDivi Wallet - Installation Site
+# IronDivi Wallet - Installation Site
 
-Modern, responsive landing page for the PrivateDivi browser extension with automatic browser detection and installation instructions.
+Modern, responsive landing page for the IronDivi browser extension with automatic browser detection and installation instructions.
 
 ## Features
 
@@ -42,7 +42,7 @@ install-site/
 ├── install.js          # Browser detection and tab logic
 ├── README.md           # This file
 └── assets/
-    ├── logo.svg        # PrivateDivi shield logo
+    ├── logo.svg        # IronDivi shield logo
     ├── favicon.svg     # Browser tab icon
     ├── favicon.ico     # Legacy favicon format
     ├── chrome.svg      # Chrome browser icon
@@ -75,7 +75,7 @@ Safari support coming soon.
 Edit `install.js` and update the `RELEASE_BASE_URL`:
 
 ```javascript
-const RELEASE_BASE_URL = 'https://github.com/your-org/divi-testnet/releases/latest/download';
+const RELEASE_BASE_URL = 'https://github.com/bshuler/divi-testnet/releases/latest/download';
 ```
 
 ### Add Real Screenshots
@@ -94,7 +94,7 @@ assets/screenshots/receive.png
 
 Edit `index.html` footer section to update:
 - GitHub repository URL
-- PrivateDivi website URL
+- IronDivi website URL
 - Support email
 
 ### Theme Colors

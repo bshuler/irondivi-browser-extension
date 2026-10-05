@@ -4,7 +4,7 @@ import { hexToBytes, bytesToHex } from '../lib/hex';
 import { Signer } from '../lib/signer';
 import { Hash } from '../lib/hash';
 import { derivePublicKey } from '../lib/secp256k1';
-import type { NetworkType } from '../shared/constants';
+import { NETWORKS, type NetworkType } from '../shared/constants';
 import type { AccountAddress } from '../shared/storage';
 export { deriveAddresses } from '../lib/derivation';
 
@@ -81,7 +81,7 @@ export class WalletCore {
     const { to, amount, fee = DEFAULT_FEE, fromAddresses } = request;
 
     // Validate destination address matches network
-    const expectedPrefix = network === 'mainnet' ? 'D' : 'y';
+    const expectedPrefix = NETWORKS[network].addressFirstChar;
     if (!to.startsWith(expectedPrefix)) {
       throw new Error(`Invalid ${network} address. Expected address starting with '${expectedPrefix}'.`);
     }

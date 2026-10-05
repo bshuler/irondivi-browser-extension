@@ -7,11 +7,11 @@ test('should load extension without errors', async ({ extensionPage }) => {
 
   // Verify header elements are present
   await expect(extensionPage.locator('.header')).toBeVisible();
-  await expect(extensionPage.locator('.brand')).toHaveText('PrivateDivi');
+  await expect(extensionPage.locator('.brand')).toHaveText('IronDivi');
 
   // Verify onboarding screen shows (no wallet yet)
   await expect(extensionPage.locator('#view-onboarding')).toBeVisible();
-  await expect(extensionPage.locator('h1')).toHaveText('Welcome to PrivateDivi');
+  await expect(extensionPage.locator('h1')).toHaveText('Welcome to IronDivi');
 
   // Check for console errors
   const consoleMessages = [];
@@ -145,7 +145,7 @@ test('should show receive view with QR code', async ({ extensionPage }) => {
 
   // Verify receive view is visible
   await expect(extensionPage.locator('#view-receive')).toBeVisible();
-  await expect(extensionPage.locator('#view-receive h2')).toHaveText('Receive PDIVI');
+  await expect(extensionPage.locator('#view-receive h2')).toHaveText('Receive DIVI');
 
   // Verify QR code container exists
   await expect(extensionPage.locator('#qr-code')).toBeVisible();
@@ -192,7 +192,7 @@ test('should navigate through send transaction flow', async ({ extensionPage }) 
 
   // Verify send view is visible
   await expect(extensionPage.locator('#view-send')).toBeVisible();
-  await expect(extensionPage.locator('#view-send h2')).toHaveText('Send PDIVI');
+  await expect(extensionPage.locator('#view-send h2')).toHaveText('Send DIVI');
 
   // Fill in send details
   const testAddress = 'PDVi1234567890abcdefghijklmnopqrstuvwxyz';

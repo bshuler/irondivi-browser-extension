@@ -36,11 +36,11 @@ export interface Contact {
 }
 
 export interface TransactionLimits {
-  // Absolute limit in PDIVI (0 = no limit)
+  // Absolute limit in DIVI (0 = no limit)
   maxAmountAbsolute: number;
   // Percentage of total balance (0-100, 0 = no limit)
   maxAmountPercent: number;
-  // Daily limit in PDIVI (0 = no limit)
+  // Daily limit in DIVI (0 = no limit)
   dailyLimitAbsolute: number;
   // Daily limit as percentage of balance (0 = no limit)
   dailyLimitPercent: number;

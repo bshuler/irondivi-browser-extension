@@ -1,6 +1,6 @@
 // Browser detection and install link generation
 
-const RELEASE_BASE_URL = 'https://vps1.divi.domains/pdivi-wallet/downloads';
+const RELEASE_BASE_URL = 'https://vps1.divi.domains/irondivi-wallet/downloads';
 
 // Detect browser
 function detectBrowser() {
@@ -22,36 +22,36 @@ function getBrowserInfo(browser) {
     chrome: {
       name: 'Chrome',
       icon: '🌐',
-      storeUrl: 'https://chrome.google.com/webstore/detail/privatedivi-wallet/...',
-      downloadUrl: `${RELEASE_BASE_URL}/pdivi-wallet-chrome-v0.0.1.zip`,
+      storeUrl: 'https://chrome.google.com/webstore/detail/irondivi-wallet/...',
+      downloadUrl: `${RELEASE_BASE_URL}/irondivi-wallet-chrome-v0.0.1.zip`,
       supported: true,
     },
     firefox: {
       name: 'Firefox',
       icon: '🦊',
-      storeUrl: 'https://addons.mozilla.org/firefox/addon/privatedivi-wallet/',
-      downloadUrl: `${RELEASE_BASE_URL}/pdivi-wallet-firefox-v0.0.1.xpi`,
+      storeUrl: 'https://addons.mozilla.org/firefox/addon/irondivi-wallet/',
+      downloadUrl: `${RELEASE_BASE_URL}/irondivi-wallet-firefox-v0.0.1.xpi`,
       supported: true,
     },
     edge: {
       name: 'Edge',
       icon: '🌐',
-      storeUrl: 'https://microsoftedge.microsoft.com/addons/detail/privatedivi-wallet/...',
-      downloadUrl: `${RELEASE_BASE_URL}/pdivi-wallet-edge-v0.0.1.zip`,
+      storeUrl: 'https://microsoftedge.microsoft.com/addons/detail/irondivi-wallet/...',
+      downloadUrl: `${RELEASE_BASE_URL}/irondivi-wallet-edge-v0.0.1.zip`,
       supported: true,
     },
     brave: {
       name: 'Brave',
       icon: '🦁',
-      storeUrl: 'https://chrome.google.com/webstore/detail/privatedivi-wallet/...',
-      downloadUrl: `${RELEASE_BASE_URL}/pdivi-wallet-chrome-v0.0.1.zip`,
+      storeUrl: 'https://chrome.google.com/webstore/detail/irondivi-wallet/...',
+      downloadUrl: `${RELEASE_BASE_URL}/irondivi-wallet-chrome-v0.0.1.zip`,
       supported: true,
     },
     opera: {
       name: 'Opera',
       icon: '🔴',
-      storeUrl: 'https://chrome.google.com/webstore/detail/privatedivi-wallet/...',
-      downloadUrl: `${RELEASE_BASE_URL}/pdivi-wallet-chrome-v0.0.1.zip`,
+      storeUrl: 'https://chrome.google.com/webstore/detail/irondivi-wallet/...',
+      downloadUrl: `${RELEASE_BASE_URL}/irondivi-wallet-chrome-v0.0.1.zip`,
       supported: true,
     },
     safari: {

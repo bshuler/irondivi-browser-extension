@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=360, initial-scale=1.0">
-  <title>PrivateDivi Wallet</title>
+  <title>IronDivi Wallet</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <img src="../icons/icon-32.png" alt="PrivateDivi" class="logo">
-        <span class="brand">PrivateDivi</span>
+        <img src="../icons/icon-32.png" alt="IronDivi" class="logo">
+        <span class="brand">IronDivi</span>
       </div>
       <div class="header-right">
         <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
@@ -47,7 +47,7 @@
         <span class="balance-amount" id="balance-amount">0.00</span>
         <button class="icon-btn hide-balance-btn" id="hide-balance-btn" title="Toggle Balance Visibility">👁️</button>
       </div>
-      <span class="balance-label">PDIVI</span>
+      <span class="balance-label">DIVI</span>
     </div>
 
     <!-- Action Buttons -->
@@ -92,7 +92,7 @@
     <div class="view hidden" id="view-send">
       <div class="view-header">
         <button class="back-btn" id="send-back-btn">←</button>
-        <h2>Send PDIVI</h2>
+        <h2>Send DIVI</h2>
       </div>
       <div class="form">
         <div class="form-group">
@@ -158,7 +158,7 @@
     <div class="view hidden" id="view-receive">
       <div class="view-header">
         <button class="back-btn" id="receive-back-btn">←</button>
-        <h2>Receive PDIVI</h2>
+        <h2>Receive DIVI</h2>
       </div>
       <div class="receive-content">
         <div class="form-group" style="width: 100%;">
@@ -224,7 +224,7 @@
             <input type="number" id="setting-tx-limit-percent" min="0" max="100" step="1" placeholder="10">
           </div>
           <div class="setting-item">
-            <span>Max Transaction (PDIVI)</span>
+            <span>Max Transaction (DIVI)</span>
             <input type="number" id="setting-tx-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
           </div>
           <p class="setting-hint">Limits apply per transaction. 0 = no limit.</p>
@@ -414,7 +414,7 @@
         </div>
         <div class="form-group">
           <label>Address</label>
-          <input type="text" id="contact-address" placeholder="PDIVI address">
+          <input type="text" id="contact-address" placeholder="DIVI address">
         </div>
         <div class="form-group">
           <label>Notes (optional)</label>
@@ -428,8 +428,8 @@
     <!-- Onboarding View (shown when no accounts exist) -->
     <div class="view hidden" id="view-onboarding">
       <div class="onboarding-content">
-        <img src="../icons/icon-128.png" alt="PrivateDivi" class="onboarding-logo">
-        <h1>Welcome to PrivateDivi</h1>
+        <img src="../icons/icon-128.png" alt="IronDivi" class="onboarding-logo">
+        <h1>Welcome to IronDivi</h1>
         <p>Your secure cryptocurrency wallet</p>
         <div class="onboarding-buttons">
           <button class="primary-btn" id="onboard-create-btn">Create New Wallet</button>

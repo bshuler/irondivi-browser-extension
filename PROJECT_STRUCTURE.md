@@ -1,15 +1,15 @@
-# PrivateDivi Extension - Project Structure
+# IronDivi Extension - Project Structure
 
 Created: 2026-02-16
 
 ## Overview
 
-This document describes the complete project structure created for the PrivateDivi browser extension.
+This document describes the complete project structure created for the IronDivi browser extension.
 
 ## Directory Structure
 
 ```
-/Users/bshuler/code/divi_testnet/pdivi-extension/
+~/code/irondivi-browser-extension/
 ├── .github/
 │   └── workflows/              # CI/CD workflows (to be created)
 ├── assets/
@@ -52,7 +52,7 @@ This document describes the complete project structure created for the PrivateDi
 ## Configuration Files
 
 ### package.json
-- Project name: `pdivi-extension`
+- Project name: `irondivi-browser-extension`
 - Version: `1.0.0`
 - Type: `module` (ES modules)
 - Scripts:
@@ -76,7 +76,7 @@ This document describes the complete project structure created for the PrivateDi
 
 ### manifest.firefox.json
 - Browser-specific settings for Firefox
-- Add-on ID: `wallet@privatedivi.com`
+- Add-on ID: `irondivi-wallet@divi.domains`
 - Minimum Firefox version: 109.0
 - Background scripts configuration
 
@@ -130,7 +130,7 @@ To complete the extension, the following source files need to be created:
 - [ ] `src/popup/popup.html` - Popup HTML structure
 - [ ] `src/popup/styles.css` - Popup CSS styles
 - [ ] `src/content/content-script.ts` - Content script entry point
-- [ ] `src/injected/provider.ts` - Injected provider (window.pdivi API)
+- [ ] `src/injected/provider.ts` - Injected provider (window.irondivi API)
 
 ### Supporting Files
 - [ ] `scripts/package.js` - ZIP packaging script
@@ -149,7 +149,7 @@ To complete the extension, the following source files need to be created:
 ## Installation
 
 ```bash
-cd /Users/bshuler/code/divi_testnet/pdivi-extension
+cd ~/code/irondivi-browser-extension
 npm install
 ```
 

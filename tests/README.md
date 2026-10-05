@@ -1,6 +1,6 @@
-# PrivateDivi Extension Test Suite
+# IronDivi Extension Test Suite
 
-Playwright-based end-to-end tests for the PrivateDivi browser extension.
+Playwright-based end-to-end tests for the IronDivi browser extension.
 
 ## Setup
 

@@ -1,5 +1,5 @@
 /**
- * WalletConnect WalletKit integration for the pDivi extension.
+ * WalletConnect WalletKit integration for the IronDivi extension.
  *
  * Implements the "responder" side of WalletConnect v2:
  *   - Receives session proposals from dApps and prompts user for approval
@@ -18,12 +18,14 @@ import { WalletKit, type IWalletKit } from '@reown/walletkit';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const PROJECT_ID = 'd76f568633ae643cf0455df1caff8b59'; // TODO: replace with real Reown Cloud project ID
+// Injected by esbuild from the IRONDIVI_WC_PROJECT_ID environment variable
+declare const __IRONDIVI_WC_PROJECT_ID__: string;
+const PROJECT_ID = __IRONDIVI_WC_PROJECT_ID__;
 const RELAY_URL = 'wss://relay.walletconnect.com';
 
 const METADATA = {
-  name: 'pDivi Wallet',
-  description: 'PrivateDivi Browser Extension Wallet',
+  name: 'IronDivi Wallet',
+  description: 'IronDivi Browser Extension Wallet',
   url: 'https://divi.domains',
   icons: ['https://divi.domains/icon.png'],
 };
@@ -54,6 +56,10 @@ let initPromise: Promise<IWalletKit> | null = null;
 export async function initWalletConnect(): Promise<IWalletKit> {
   if (walletKit) return walletKit;
   if (initPromise) return initPromise;
+
+  if (!PROJECT_ID) {
+    throw new Error('WalletConnect is disabled: this build has no IRONDIVI_WC_PROJECT_ID');
+  }
 
   initPromise = (async () => {
     try {

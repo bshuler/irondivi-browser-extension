@@ -1,7 +1,7 @@
 {
-  "name": "pdivi-extension",
+  "name": "irondivi-browser-extension",
   "version": "0.0.1",
-  "description": "PrivateDivi Wallet Browser Extension",
+  "description": "IronDivi Wallet Browser Extension",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.js chrome",

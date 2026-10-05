@@ -209,15 +209,15 @@ async function showRequestApproval(): Promise<boolean> {
         </div>
         <div class="signing-detail-row">
           <span class="signing-detail-label">Amount:</span>
-          <span class="signing-detail-value amount">${escapeHtml(formatAmount(amount))} PDIVI</span>
+          <span class="signing-detail-value amount">${escapeHtml(formatAmount(amount))} DIVI</span>
         </div>
         <div class="signing-detail-row">
           <span class="signing-detail-label">Fee:</span>
-          <span class="signing-detail-value">${escapeHtml(formatAmount(fee))} PDIVI</span>
+          <span class="signing-detail-value">${escapeHtml(formatAmount(fee))} DIVI</span>
         </div>
         <div class="signing-detail-row total">
           <span class="signing-detail-label">Total:</span>
-          <span class="signing-detail-value amount">${escapeHtml(formatAmount(amount + fee))} PDIVI</span>
+          <span class="signing-detail-value amount">${escapeHtml(formatAmount(amount + fee))} DIVI</span>
         </div>
       `;
     } else if (request.method === 'divi_signMessage') {

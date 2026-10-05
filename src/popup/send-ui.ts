@@ -95,12 +95,12 @@ export async function handleSendConfirm(): Promise<void> {
 
   // Update confirm view
   (document.getElementById('confirm-to') as HTMLSpanElement).textContent = formatAddress(to);
-  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} PDIVI`;
-  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} PDIVI`;
+  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} DIVI`;
+  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} DIVI`;
 
   // Calculate and display total
   const total = amount + fee;
-  (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} PDIVI`;
+  (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} DIVI`;
 
   showView(elements.viewSendConfirm);
 }

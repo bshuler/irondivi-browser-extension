@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="800" height="500" fill="url(#recvGrad)"/>
-  <text x="400" y="100" font-family="Arial, sans-serif" font-size="48" fill="#8b5cf6" text-anchor="middle" font-weight="bold">Receive PDIVI</text>
+  <text x="400" y="100" font-family="Arial, sans-serif" font-size="48" fill="#8b5cf6" text-anchor="middle" font-weight="bold">Receive DIVI</text>
 
   <rect x="250" y="150" width="300" height="300" rx="12" fill="#ffffff"/>
   <rect x="270" y="170" width="260" height="260" rx="8" fill="#1e1e2e"/>

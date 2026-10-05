@@ -1,17 +1,27 @@
+/**
+ * Divi chain parameters for each network the wallet can switch between.
+ * These must match IronDivi (crates/divi-wallet/src/address.rs, hd.rs) —
+ * IronDivi in its default `divi` chain mode is consensus-compatible with Divi.
+ * The popup's network switcher selects between these at runtime.
+ */
 export const NETWORKS = {
   mainnet: {
     name: 'Mainnet',
     rpcUrl: 'https://vps1.divi.domains/api/rpc/',
     explorerUrl: 'https://vps1.divi.domains/explorer/tx/',
     coinType: 301,
-    addressPrefix: 0x1e, // 'D'
+    addressPrefix: 0x1e, // pubKeyHash, 'D'
+    scriptPrefix: 0x0d, // scriptHash (13)
+    addressFirstChar: 'D',
   },
   testnet: {
     name: 'Testnet',
     rpcUrl: 'https://vps1.divi.domains/api/testnet/rpc/',
     explorerUrl: 'https://vps1.divi.domains/testnet/explorer2/tx/',
     coinType: 1,
-    addressPrefix: 0x8b, // 'y'
+    addressPrefix: 0x8b, // pubKeyHash, 'x' or 'y'
+    scriptPrefix: 0x13, // scriptHash (19)
+    addressFirstChar: 'y',
   },
 } as const;
 

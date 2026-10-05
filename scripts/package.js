@@ -27,7 +27,7 @@ async function createPackage(browser) {
   mkdirSync(packagesDir, { recursive: true });
 
   const ext = browser === 'firefox' ? 'xpi' : 'zip';
-  const filename = `pdivi-wallet-${browser}-v${version}.${ext}`;
+  const filename = `irondivi-wallet-${browser}-v${version}.${ext}`;
   const outputPath = join(packagesDir, filename);
 
   return new Promise((resolve, reject) => {
@@ -47,7 +47,7 @@ async function createPackage(browser) {
 }
 
 async function main() {
-  console.log(`Packaging PrivateDivi Wallet v${version}...\n`);
+  console.log(`Packaging IronDivi Wallet v${version}...\n`);
 
   for (const browser of browsers) {
     await createPackage(browser);

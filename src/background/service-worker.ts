@@ -2,7 +2,7 @@
 import './localStorage-polyfill';
 
 import { runtime, alarms } from '../shared/browser-polyfill';
-import { MSG } from '../shared/constants';
+import { MSG, NETWORKS } from '../shared/constants';
 import { getSettings, saveSettings, getSelectedAccountId } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
@@ -310,7 +310,7 @@ async function handleMessage(
         if (limits.maxAmountAbsolute > 0 && payload.amount > limits.maxAmountAbsolute) {
           return {
             success: false,
-            error: `Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} PDIVI`
+            error: `Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI`
           };
         }
 
@@ -320,7 +320,7 @@ async function handleMessage(
           if (payload.amount > maxAllowed) {
             return {
               success: false,
-              error: `Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} PDIVI)`
+              error: `Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} DIVI)`
             };
           }
         }
@@ -339,7 +339,7 @@ async function handleMessage(
 
         try {
           // Derive private keys for inputs
-          const coinType = account.network === 'mainnet' ? 301 : 1;
+          const coinType = NETWORKS[account.network].coinType;
           const { HDKey } = await import('../lib/hdkey');
           const hdkey = await HDKey.fromMasterSeed(seed);
           const privateKeys = await Promise.all(built.inputIndices.map(async index => {
@@ -590,7 +590,7 @@ async function handleMessage(
             }
 
             try {
-              const coinType = account.network === 'mainnet' ? 301 : 1;
+              const coinType = NETWORKS[account.network].coinType;
               const { HDKey } = await import('../lib/hdkey');
               const hdkey = await HDKey.fromMasterSeed(seed);
               const privateKeys = await Promise.all(built.inputIndices.map(async index => {
@@ -703,7 +703,7 @@ async function handleMessage(
             if (!seed) return { success: false, error: 'Not authenticated' };
 
             try {
-              const coinType = account.network === 'mainnet' ? 301 : 1;
+              const coinType = NETWORKS[account.network].coinType;
               const { HDKey } = await import('../lib/hdkey');
               const hdkey = await HDKey.fromMasterSeed(seed);
               const privateKeys = await Promise.all(built.inputIndices.map(async index => {
@@ -881,7 +881,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     // Check if provider is already injected
     const results = await chrome.scripting.executeScript({
       target: { tabId: activeInfo.tabId },
-      func: () => !!(window as any).pdivi,
+      func: () => !!(window as any).irondivi,
     });
 
     if (results && results[0] && !results[0].result) {
@@ -909,11 +909,11 @@ async function initialize() {
   // This ensures content scripts are registered even if declarative ones don't work
   try {
     // First, unregister any existing scripts to avoid duplicates
-    await chrome.scripting.unregisterContentScripts({ ids: ['pdivi-provider'] }).catch(() => {});
+    await chrome.scripting.unregisterContentScripts({ ids: ['irondivi-provider'] }).catch(() => {});
 
     // Register the content script
     await chrome.scripting.registerContentScripts([{
-      id: 'pdivi-provider',
+      id: 'irondivi-provider',
       matches: ['<all_urls>'],
       js: ['content-script.js'],
       runAt: 'document_start',

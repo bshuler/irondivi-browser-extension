@@ -1,4 +1,4 @@
-# PDIVI Extension Deployment
+# IronDivi Wallet Extension Deployment
 
 ## Quick Deploy to vps1
 
@@ -7,15 +7,15 @@
 npm run build:all
 
 # 2. Create release packages
-cd dist/chrome && zip -r ../../releases/pdivi-wallet-chrome-v0.0.1.zip .
-cd ../firefox && zip -r ../../releases/pdivi-wallet-firefox-v0.0.1.xpi .
-cd ../edge && zip -r ../../releases/pdivi-wallet-edge-v0.0.1.zip .
+cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.1.zip .
+cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.1.xpi .
+cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.1.zip .
 cd ../..
 
 # 3. Upload to vps1
-scp releases/pdivi-wallet-chrome-v0.0.1.zip \
-    releases/pdivi-wallet-edge-v0.0.1.zip \
-    releases/pdivi-wallet-firefox-v0.0.1.xpi \
+scp releases/irondivi-wallet-chrome-v0.0.1.zip \
+    releases/irondivi-wallet-edge-v0.0.1.zip \
+    releases/irondivi-wallet-firefox-v0.0.1.xpi \
     ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
 ```
 
@@ -23,11 +23,11 @@ scp releases/pdivi-wallet-chrome-v0.0.1.zip \
 
 ```bash
 npm run build:all && \
-cd dist/chrome && zip -r ../../releases/pdivi-wallet-chrome-v0.0.1.zip . && \
-cd ../firefox && zip -r ../../releases/pdivi-wallet-firefox-v0.0.1.xpi . && \
-cd ../edge && zip -r ../../releases/pdivi-wallet-edge-v0.0.1.zip . && \
+cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.1.zip . && \
+cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.1.xpi . && \
+cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.1.zip . && \
 cd ../.. && \
-scp releases/pdivi-wallet-chrome-v0.0.1.zip releases/pdivi-wallet-edge-v0.0.1.zip releases/pdivi-wallet-firefox-v0.0.1.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
+scp releases/irondivi-wallet-chrome-v0.0.1.zip releases/irondivi-wallet-edge-v0.0.1.zip releases/irondivi-wallet-firefox-v0.0.1.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
 ```
 
 ## Server Paths

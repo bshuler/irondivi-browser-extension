@@ -7,7 +7,7 @@
   </defs>
   <rect width="800" height="500" fill="url(#dashGrad)"/>
   <text x="400" y="250" font-family="Arial, sans-serif" font-size="48" fill="#6366f1" text-anchor="middle" font-weight="bold">Dashboard Screenshot</text>
-  <text x="400" y="300" font-family="Arial, sans-serif" font-size="24" fill="#b4b8c5" text-anchor="middle">Balance: 1,234.56 PDIVI</text>
+  <text x="400" y="300" font-family="Arial, sans-serif" font-size="24" fill="#b4b8c5" text-anchor="middle">Balance: 1,234.56 DIVI</text>
   <rect x="50" y="350" width="200" height="60" rx="8" fill="#6366f1" opacity="0.3"/>
   <text x="150" y="385" font-family="Arial, sans-serif" font-size="18" fill="#f8f9fa" text-anchor="middle">Send</text>
   <rect x="300" y="350" width="200" height="60" rx="8" fill="#8b5cf6" opacity="0.3"/>

@@ -2,8 +2,8 @@ import { runtime, storage } from '../shared/browser-polyfill';
 import { DEFAULT_SETTINGS, type Settings } from '../shared/storage';
 
 // Message types for content script bridge
-const PROVIDER_MESSAGE = 'PDIVI_PROVIDER_MESSAGE';
-const PROVIDER_RESPONSE = 'PDIVI_PROVIDER_RESPONSE';
+const PROVIDER_MESSAGE = 'IRONDIVI_PROVIDER_MESSAGE';
+const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
 
 // Capture page origin once at initialization
 const pageOrigin = window.location.origin;

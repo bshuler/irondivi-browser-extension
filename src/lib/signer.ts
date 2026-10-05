@@ -288,7 +288,7 @@ function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
 // Sign a message with Bitcoin-style prefix and return base64 compact signature
 async function signMessage(message: string, privateKey: Uint8Array, publicKey: Uint8Array): Promise<string> {
     // Construct prefixed message
-    // DarkNet Signed Message prefix (PrivateDivi uses this)
+    // DarkNet Signed Message prefix (Divi, and therefore IronDivi, uses this)
     // \x18 = 24 = length of "DarkNet Signed Message:\n"
     const prefix = "\x18DarkNet Signed Message:\n";
     const messageBytes = new TextEncoder().encode(message);

@@ -102,7 +102,7 @@ test.describe('NFT Marketplace dApp Connection', () => {
 
     // Check that provider is injected
     const hasProvider = await marketPage.evaluate(() => {
-      return !!(window as any).pdivi;
+      return !!(window as any).irondivi;
     });
     console.log(`Provider injected: ${hasProvider}`);
 
@@ -341,10 +341,10 @@ test.describe('NFT Marketplace dApp Connection', () => {
 
     // Check if connected (look for address display or different button state)
     const isConnected = await marketPage.evaluate(async () => {
-      const pdivi = (window as any).pdivi;
-      if (!pdivi) return false;
+      const irondivi = (window as any).irondivi;
+      if (!irondivi) return false;
       try {
-        return await pdivi.isConnected();
+        return await irondivi.isConnected();
       } catch (e) {
         console.error('Error checking connection:', e);
         return false;

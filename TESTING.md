@@ -1,4 +1,4 @@
-# Testing the PrivateDivi Extension
+# Testing the IronDivi Extension
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ npm test
 ## Files Created
 
 ```
-pdivi-extension/
+irondivi-browser-extension/
 ├── playwright.config.ts          # Playwright configuration
 ├── tests/
 │   ├── fixtures.ts                # Test fixtures for extension loading

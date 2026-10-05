@@ -21,7 +21,7 @@ interface PendingAccount {
   mnemonic: string;
 }
 
-const PENDING_ACCOUNT_KEY = 'pdivi_pending_account';
+const PENDING_ACCOUNT_KEY = 'irondivi_pending_account';
 
 async function savePendingAccount(data: PendingAccount): Promise<void> {
   await chrome.storage.session.set({ [PENDING_ACCOUNT_KEY]: data });

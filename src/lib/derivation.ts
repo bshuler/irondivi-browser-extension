@@ -1,6 +1,6 @@
 import { HDKey } from './hdkey';
 import { Address } from './address';
-import type { NetworkType } from '../shared/constants';
+import { NETWORKS, type NetworkType } from '../shared/constants';
 import type { AccountAddress } from '../shared/storage';
 
 /**
@@ -13,7 +13,7 @@ export async function deriveAddresses(
   startIndex: number,
   count: number
 ): Promise<AccountAddress[]> {
-  const coinType = network === 'mainnet' ? 301 : 1;
+  const coinType = NETWORKS[network].coinType;
   const addresses: AccountAddress[] = [];
   const hdkey = await HDKey.fromMasterSeed(seed);
 

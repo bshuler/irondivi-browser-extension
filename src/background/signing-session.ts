@@ -11,7 +11,7 @@ import { getDecryptedSecret, getSettings } from '../shared/storage';
 import { Mnemonic } from '../lib/mnemonic';
 import { HDKey } from '../lib/hdkey';
 import { Signer } from '../lib/signer';
-import type { NetworkType } from '../shared/constants';
+import { NETWORKS, type NetworkType } from '../shared/constants';
 
 const SESSION_ALARM_NAME = 'signing-session-timeout';
 
@@ -275,7 +275,7 @@ export class SigningSession {
     }
 
     const seed = await Mnemonic.toSeed(this.decryptedMnemonic!.toString());
-    const coinType = network === 'mainnet' ? 301 : 1;
+    const coinType = NETWORKS[network].coinType;
     const path = `m/44'/${coinType}'/0'/0/${addressIndex}`;
 
     const hdkey = await HDKey.fromMasterSeed(seed);

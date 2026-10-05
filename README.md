@@ -1,11 +1,11 @@
-# PrivateDivi Wallet Browser Extension
+# IronDivi Wallet Browser Extension
 
-Secure cryptocurrency wallet browser extension for PrivateDivi blockchain.
+Secure cryptocurrency wallet browser extension for IronDivi blockchain.
 
 ## Project Structure
 
 ```
-pdivi-extension/
+irondivi-browser-extension/
 ├── src/
 │   ├── background/       # Background service worker
 │   ├── popup/           # Extension popup UI
@@ -64,6 +64,40 @@ npm run watch
 2. Click "Load Temporary Add-on"
 3. Select `dist/firefox/manifest.json`
 
+## Networks: mainnet and testnet in one build
+
+A single build serves both Divi networks. The wallet starts on **testnet**; switch
+at any time from the network badge in the popup header or from
+**Settings → Network**. Each network keeps its own accounts, because the HD
+derivation path differs.
+
+| | Mainnet | Testnet |
+|---|---|---|
+| Address prefix | `D` (0x1e) | `x`/`y` (0x8b) |
+| P2SH version | 0x0d | 0x13 |
+| BIP44 coin type | `m/44'/301'/0'/0/i` | `m/44'/1'/0'/0/i` |
+| RPC | `https://vps1.divi.domains/api/rpc/` | `https://vps1.divi.domains/api/testnet/rpc/` |
+| Explorer | `https://vps1.divi.domains/explorer/` | `https://vps1.divi.domains/testnet/explorer2/` |
+
+All of these live in one place, `NETWORKS` in `src/shared/constants.ts`. They
+match [IronDivi](https://github.com/DiviDomains/IronDivi) in its default `divi`
+chain mode. Any IronDivi (or legacy divid) node with the address index enabled
+can serve as the RPC backend: the wallet calls `getaddressbalance`,
+`getaddressutxos`, `getaddresstxids`, `getrawtransaction`,
+`sendrawtransaction`, `validateaddress`, `getblockcount` and `getnetworkinfo`.
+
+## WalletConnect
+
+WalletConnect needs a Reown Cloud project ID, which is supplied at build time:
+
+```bash
+IRONDIVI_WC_PROJECT_ID=<reown-project-id> npm run build:all
+```
+
+Without it the build still succeeds, but it prints a warning and WalletConnect
+is disabled. The ID is a public client identifier, not a secret, but it belongs
+to IronDivi's own Reown project, so it is not committed.
+
 ## Development
 
 ### Project Features
@@ -105,7 +139,7 @@ Each browser build is output to `dist/{browser}/`:
 - Relays messages between page and background
 
 ### Injected Provider
-- `window.pdivi` API for dApps
+- `window.irondivi` API for dApps
 - EIP-1193 compatible interface
 - Request/response message handling
 
@@ -122,7 +156,7 @@ npm test
 npm run package:release
 ```
 
-Output ZIP files: `packages/pdivi-extension-{browser}-{version}.zip`
+Output ZIP files: `packages/irondivi-browser-extension-{browser}-{version}.zip`
 
 ## License
 

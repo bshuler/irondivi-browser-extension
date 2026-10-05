@@ -1,19 +1,21 @@
-// PrivateDivi Address Generation
+// IronDivi Address Generation
 // Converts public keys to human-readable addresses
 
 import { Base58 } from './base58';
 import { Hash } from './hash';
 import { RIPEMD160 } from './ripemd160';
 
-// Network parameters for PrivateDivi
+import { NETWORKS as CHAIN_PARAMS } from '../shared/constants';
+
+// Address version bytes, taken from the shared network definitions
 const NETWORKS = {
     mainnet: {
-        pubKeyHash: 0x1e,  // 'D' prefix
-        scriptHash: 0x13
+        pubKeyHash: CHAIN_PARAMS.mainnet.addressPrefix,
+        scriptHash: CHAIN_PARAMS.mainnet.scriptPrefix
     },
     testnet: {
-        pubKeyHash: 0x8b,  // 'xy' prefix
-        scriptHash: 0x13
+        pubKeyHash: CHAIN_PARAMS.testnet.addressPrefix,
+        scriptHash: CHAIN_PARAMS.testnet.scriptPrefix
     }
 } as const;
 

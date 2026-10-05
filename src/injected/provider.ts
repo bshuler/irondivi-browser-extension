@@ -1,10 +1,10 @@
 /**
- * PrivateDivi Provider - Injected into web pages
+ * IronDivi Provider - Injected into web pages
  * Similar to window.ethereum for Ethereum dApps
  */
 
-const PROVIDER_MESSAGE = 'PDIVI_PROVIDER_MESSAGE';
-const PROVIDER_RESPONSE = 'PDIVI_PROVIDER_RESPONSE';
+const PROVIDER_MESSAGE = 'IRONDIVI_PROVIDER_MESSAGE';
+const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
 const pageOrigin = window.location.origin;
 
 type EventCallback = (...args: any[]) => void;
@@ -22,9 +22,9 @@ interface ProviderResponse {
   error?: string;
 }
 
-class PrivateDiviProvider {
+class IronDiviProvider {
   // Properties
-  readonly isPrivateDivi = true;
+  readonly isIronDivi = true;
   readonly version = '1.0.0';
 
   private pendingRequests = new Map<string, {
@@ -213,13 +213,13 @@ class PrivateDiviProvider {
    */
   async request(args: { method: string; params?: any }): Promise<any> {
     const methodMap: Record<string, string> = {
-      'pdivi_connect': 'CONNECT',
-      'pdivi_disconnect': 'DISCONNECT',
-      'pdivi_accounts': 'GET_ADDRESSES',
-      'pdivi_getBalance': 'GET_BALANCE',
-      'pdivi_signMessage': 'SIGN_MESSAGE',
-      'pdivi_sendTransaction': 'SEND_TRANSACTION',
-      'pdivi_getNetwork': 'GET_SETTINGS',
+      'irondivi_connect': 'CONNECT',
+      'irondivi_disconnect': 'DISCONNECT',
+      'irondivi_accounts': 'GET_ADDRESSES',
+      'irondivi_getBalance': 'GET_BALANCE',
+      'irondivi_signMessage': 'SIGN_MESSAGE',
+      'irondivi_sendTransaction': 'SEND_TRANSACTION',
+      'irondivi_getNetwork': 'GET_SETTINGS',
     };
 
     const internalMethod = methodMap[args.method];
@@ -232,17 +232,17 @@ class PrivateDiviProvider {
 }
 
 // Create and expose the provider
-const provider = new PrivateDiviProvider();
+const provider = new IronDiviProvider();
 
 // Attach to window
-(window as any).pdivi = provider;
+(window as any).irondivi = provider;
 
 // Dispatch event to notify dApps
-window.dispatchEvent(new CustomEvent('pdivi#initialized'));
+window.dispatchEvent(new CustomEvent('irondivi#initialized'));
 
 // Also dispatch on DOMContentLoaded for late listeners
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    window.dispatchEvent(new CustomEvent('pdivi#initialized'));
+    window.dispatchEvent(new CustomEvent('irondivi#initialized'));
   });
 }

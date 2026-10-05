@@ -165,7 +165,7 @@ export function updateTransactionList(): void {
     // tx-amount
     const txAmount = document.createElement('div');
     txAmount.className = `tx-amount ${tx.type}`;
-    txAmount.textContent = `${tx.type === 'send' ? '-' : '+'}${formatAmount(tx.amount)} PDIVI`;
+    txAmount.textContent = `${tx.type === 'send' ? '-' : '+'}${formatAmount(tx.amount)} DIVI`;
 
     item.appendChild(txIcon);
     item.appendChild(txDetails);
@@ -326,7 +326,7 @@ export async function handleCopyAddress(): Promise<void> {
 }
 
 const FAUCET_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
-const FAUCET_COOLDOWN_PREFIX = 'pdivi_faucet_'; // Per-address cooldown: pdivi_faucet_{address}
+const FAUCET_COOLDOWN_PREFIX = 'irondivi_faucet_'; // Per-address cooldown: irondivi_faucet_{address}
 
 /**
  * Get the currently selected receive address
@@ -357,7 +357,7 @@ export function updateFaucetCooldownState(): void {
       const remainingMinutes = Math.ceil(remainingMs / 60000);
       faucetBtn.disabled = true;
       faucetBtn.textContent = 'Requested';
-      faucetStatus.textContent = `You can request more PDIVI in ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+      faucetStatus.textContent = `You can request more DIVI in ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
       faucetStatus.style.color = 'var(--text-secondary)';
       return;
     }
@@ -428,7 +428,7 @@ export async function handleFaucetRequest(): Promise<void> {
       const cooldownDiv = document.createElement('div');
       cooldownDiv.style.color = 'var(--text-secondary)';
       cooldownDiv.style.marginTop = '4px';
-      cooldownDiv.textContent = 'You can request more PDIVI in 60 minutes';
+      cooldownDiv.textContent = 'You can request more DIVI in 60 minutes';
       faucetStatus.appendChild(cooldownDiv);
 
       // Refresh balance after a delay
