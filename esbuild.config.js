@@ -26,6 +26,8 @@ const nodeShimsPlugin = {
   },
 };
 
+const WC_PROJECT_ID = process.env.IRONDIVI_WC_PROJECT_ID || 'd76f568633ae643cf0455df1caff8b59';
+
 // WalletConnect SDK needs Node.js globals polyfilled for browser environments
 const serviceWorkerConfig = {
   ...commonConfig,
@@ -33,18 +35,15 @@ const serviceWorkerConfig = {
     'global': 'globalThis',
     'process.env.NODE_ENV': '"production"',
     'process.env': '{}',
-    // Reown Cloud (WalletConnect) project ID for IronDivi, supplied at build time.
-    // Empty means WalletConnect is disabled in this build.
-    '__IRONDIVI_WC_PROJECT_ID__': JSON.stringify(process.env.IRONDIVI_WC_PROJECT_ID || ''),
+    // Reown Cloud (WalletConnect) project ID. A public client identifier that ships
+    // in every build; IRONDIVI_WC_PROJECT_ID overrides it.
+    '__IRONDIVI_WC_PROJECT_ID__': JSON.stringify(WC_PROJECT_ID),
   },
   inject: [join(__dirname, 'buffer-shim.js')],
   plugins: [nodeShimsPlugin],
 };
 
 async function build() {
-  if (!process.env.IRONDIVI_WC_PROJECT_ID) {
-    console.warn('WARNING: IRONDIVI_WC_PROJECT_ID is not set; WalletConnect will be disabled in this build.');
-  }
   const outdir = join(__dirname, 'dist', browser);
 
   // Ensure output directory

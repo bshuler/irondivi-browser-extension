@@ -88,15 +88,18 @@ can serve as the RPC backend: the wallet calls `getaddressbalance`,
 
 ## WalletConnect
 
-WalletConnect needs a Reown Cloud project ID, which is supplied at build time:
+WalletConnect uses the Reown Cloud project `d76f568633ae643cf0455df1caff8b59`, the
+same one the Divi web wallet (`divi-infrastructure/divi-wallet`) uses. The ID is a
+public client identifier and is built in by default. To build against a different
+project:
 
 ```bash
 IRONDIVI_WC_PROJECT_ID=<reown-project-id> npm run build:all
 ```
 
-Without it the build still succeeds, but it prints a warning and WalletConnect
-is disabled. The ID is a public client identifier, not a secret, but it belongs
-to IronDivi's own Reown project, so it is not committed.
+The extension is the *wallet* side, so it uses Reown **WalletKit**. The Reown
+dashboard's "AppKit SDK is out of date" banner is about dapps (AppKit), not this
+extension.
 
 ## Development
 
