@@ -7,8 +7,12 @@ Playwright-based end-to-end tests for the IronDivi browser extension.
 1. **Install dependencies:**
    ```bash
    npm install
-   npx playwright install chromium
    ```
+   The tests need a Chromium that honours `--load-extension` (branded Google Chrome
+   137+ does not). `tests/browser.ts` picks, in order: `PW_CHANNEL` (e.g. `msedge`),
+   `PW_CHROMIUM=<binary>`, Playwright's own revision (`npx playwright install chromium`),
+   or the newest `chromium-*` already in `~/Library/Caches/ms-playwright`, so one cached
+   Chrome for Testing serves every Playwright version instead of a 350 MB download each.
 
 2. **Build the extension:**
    ```bash

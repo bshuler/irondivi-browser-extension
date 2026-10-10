@@ -48,8 +48,12 @@ test('should create new wallet with 12-word mnemonic', async ({ extensionPage })
   // Submit the form
   await extensionPage.click('#create-submit-btn');
 
-  // Wait for loading overlay to appear then disappear (wallet creation in progress)
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
+  // The account only exists after the recovery-phrase modal is confirmed
+  await expect(extensionPage.locator('#mnemonic-modal')).toBeVisible({ timeout: 10000 });
+  await expect(extensionPage.locator('#mnemonic-grid > *')).toHaveCount(12);
+  await extensionPage.click('#mnemonic-confirm-btn');
+
+  // Wait for the loading overlay to clear (it can flash too fast to assert visible)
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
 
   // Check for error toast
@@ -97,8 +101,7 @@ test('should import wallet with known mnemonic', async ({ extensionPage }) => {
   // Submit the form
   await extensionPage.click('#import-submit-btn');
 
-  // Wait for loading overlay to appear then disappear (wallet import in progress)
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
+  // Wait for the loading overlay to clear (it can flash too fast to assert visible)
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
 
   // Check for error toast
@@ -135,8 +138,11 @@ test('should show receive view with QR code', async ({ extensionPage }) => {
 
   await extensionPage.click('#create-submit-btn');
 
+  // The account only exists after the recovery-phrase modal is confirmed
+  await expect(extensionPage.locator('#mnemonic-modal')).toBeVisible({ timeout: 10000 });
+  await extensionPage.click('#mnemonic-confirm-btn');
+
   // Wait for wallet creation to complete
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
   await expect(extensionPage.locator('#balance-section')).toBeVisible({ timeout: 5000 });
 
@@ -182,8 +188,11 @@ test('should navigate through send transaction flow', async ({ extensionPage }) 
 
   await extensionPage.click('#create-submit-btn');
 
+  // The account only exists after the recovery-phrase modal is confirmed
+  await expect(extensionPage.locator('#mnemonic-modal')).toBeVisible({ timeout: 10000 });
+  await extensionPage.click('#mnemonic-confirm-btn');
+
   // Wait for wallet creation to complete
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
   await expect(extensionPage.locator('#balance-section')).toBeVisible({ timeout: 5000 });
 
@@ -194,8 +203,8 @@ test('should navigate through send transaction flow', async ({ extensionPage }) 
   await expect(extensionPage.locator('#view-send')).toBeVisible();
   await expect(extensionPage.locator('#view-send h2')).toHaveText('Send DIVI');
 
-  // Fill in send details
-  const testAddress = 'PDVi1234567890abcdefghijklmnopqrstuvwxyz';
+  // Fill in send details (a real testnet address: the popup validates it)
+  const testAddress = 'y5cfytr6dxKHWMar8o7NTjYbP33a7uWtt1';
   await extensionPage.fill('#send-to', testAddress);
   await extensionPage.fill('#send-amount', '1.5');
 
@@ -210,29 +219,12 @@ test('should navigate through send transaction flow', async ({ extensionPage }) 
   // Reset amount for test
   await extensionPage.fill('#send-amount', '1.5');
 
-  // Click continue to confirm screen
+  // A freshly created wallet holds nothing, so Continue must refuse rather than
+  // open the confirmation view. (Reaching #view-send-confirm needs a funded
+  // wallet; the faucet is not exercised here to keep the suite deterministic.)
   await extensionPage.click('#send-confirm-btn');
-
-  // Verify we're on the confirmation view
-  await expect(extensionPage.locator('#view-send-confirm')).toBeVisible();
-  await expect(extensionPage.locator('#view-send-confirm h2')).toHaveText('Confirm Send');
-
-  // Verify transaction details are shown
-  await expect(extensionPage.locator('#confirm-to')).toBeVisible();
-  await expect(extensionPage.locator('#confirm-amount')).toBeVisible();
-  await expect(extensionPage.locator('#confirm-fee')).toBeVisible();
-
-  // Verify details match input (address is truncated in the UI)
-  const confirmTo = await extensionPage.locator('#confirm-to').textContent();
-  // The UI truncates addresses, so check start and end
-  expect(confirmTo).toContain('PDVi1234');
-  expect(confirmTo).toContain('stuvwxyz');
-
-  const confirmAmount = await extensionPage.locator('#confirm-amount').textContent();
-  expect(confirmAmount).toContain('1.5');
-
-  // Test back button
-  await extensionPage.click('#send-confirm-back-btn');
+  await expect(extensionPage.locator('#toast.error')).toBeVisible();
+  await expect(extensionPage.locator('#toast.error')).toHaveText('Insufficient balance');
   await expect(extensionPage.locator('#view-send-confirm')).not.toBeVisible();
   await expect(extensionPage.locator('#view-send')).toBeVisible();
 
@@ -255,8 +247,11 @@ test('should add and manage contacts', async ({ extensionPage }) => {
 
   await extensionPage.click('#create-submit-btn');
 
+  // The account only exists after the recovery-phrase modal is confirmed
+  await expect(extensionPage.locator('#mnemonic-modal')).toBeVisible({ timeout: 10000 });
+  await extensionPage.click('#mnemonic-confirm-btn');
+
   // Wait for wallet creation to complete
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
   await expect(extensionPage.locator('#balance-section')).toBeVisible({ timeout: 5000 });
 
@@ -276,7 +271,8 @@ test('should add and manage contacts', async ({ extensionPage }) => {
 
   // Fill in contact details
   await extensionPage.fill('#contact-name', 'Alice');
-  await extensionPage.fill('#contact-address', 'PDVi_alice_test_address_123456789');
+  // Must be a real address: the popup validates base58check and the testnet version byte
+  await extensionPage.fill('#contact-address', 'y5cfytr6dxKHWMar8o7NTjYbP33a7uWtt1');
   await extensionPage.fill('#contact-notes', 'Friend from work');
 
   // Save contact
@@ -314,8 +310,11 @@ test('should toggle balance visibility', async ({ extensionPage }) => {
 
   await extensionPage.click('#create-submit-btn');
 
+  // The account only exists after the recovery-phrase modal is confirmed
+  await expect(extensionPage.locator('#mnemonic-modal')).toBeVisible({ timeout: 10000 });
+  await extensionPage.click('#mnemonic-confirm-btn');
+
   // Wait for wallet creation to complete
-  await expect(extensionPage.locator('#loading')).toBeVisible({ timeout: 1000 });
   await expect(extensionPage.locator('#loading')).not.toBeVisible({ timeout: 10000 });
   await expect(extensionPage.locator('#balance-section')).toBeVisible({ timeout: 5000 });
 

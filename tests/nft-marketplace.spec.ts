@@ -1,4 +1,5 @@
-import { test as base, chromium, BrowserContext, Page } from '@playwright/test';
+import { test as base, BrowserContext, Page } from '@playwright/test';
+import { launchWithExtension } from './browser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -18,14 +19,7 @@ const test = base.extend<{
   extensionId: string;
 }>({
   context: async ({}, use) => {
-    const context = await chromium.launchPersistentContext('', {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${EXTENSION_PATH}`,
-        `--load-extension=${EXTENSION_PATH}`,
-        '--no-sandbox',
-      ],
-    });
+    const context = await launchWithExtension(EXTENSION_PATH);
     await use(context);
     await context.close();
   },
@@ -48,7 +42,13 @@ async function saveScreenshot(page: Page, name: string) {
   return filename;
 }
 
-test.describe('NFT Marketplace dApp Connection', () => {
+// Skipped 2026-10-10: the URL this test drove (vps1.divi.domains/testnet/nftmarket/)
+// now serves the testnet landing page, and the live marketplace at
+// https://services.divi.domains/testnet/nft/ ships its own in-page browser wallet
+// and contains no injected-provider / DIVI_SIGN_* detection, so there is no
+// "Connect Wallet" flow for the extension to drive. Re-enable once the
+// marketplace consumes the ADR 0001 injected provider.
+test.describe.skip('NFT Marketplace dApp Connection', () => {
   test('should connect wallet to NFT marketplace', async ({ context, extensionId }) => {
     // Step 1: Open extension popup and create wallet
     console.log('Step 1: Opening extension popup...');

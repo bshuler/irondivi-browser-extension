@@ -6,3 +6,4 @@ packages/
 test-results/
 playwright-report/
 safari/
+tests/screenshots/
