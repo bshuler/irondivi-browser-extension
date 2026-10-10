@@ -94,8 +94,8 @@ derivation path differs.
 | Address prefix | `D` (0x1e) | `x`/`y` (0x8b) |
 | P2SH version | 0x0d | 0x13 |
 | BIP44 coin type | `m/44'/301'/0'/0/i` | `m/44'/1'/0'/0/i` |
-| RPC | `https://vps1.divi.domains/api/rpc/` | `https://vps1.divi.domains/api/testnet/rpc/` |
-| Explorer | `https://vps1.divi.domains/explorer/` | `https://vps1.divi.domains/testnet/explorer2/` |
+| RPC | `https://services.divi.domains/api/rpc/` | `https://services.divi.domains/api/testnet/rpc/` |
+| Explorer | `https://services.divi.domains/explorer/` | `https://services.divi.domains/testnet/explorer/` |
 
 All of these live in one place, `NETWORKS` in `src/shared/constants.ts`. They
 match [IronDivi](https://github.com/DiviDomains/IronDivi) in its default `divi`

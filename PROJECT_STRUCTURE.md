@@ -70,7 +70,7 @@ This document describes the complete project structure created for the IronDivi 
 ### manifest.json (Chrome/Edge MV3)
 - Manifest version: 3
 - Permissions: `storage`, `alarms`, `activeTab`
-- Host permissions: `https://vps1.divi.domains/*`
+- Host permissions: `<all_urls>` (RPC and explorer calls go to `https://services.divi.domains/`)
 - Background: Service worker architecture
 - Content scripts: Runs at document_start on all URLs
 - Web accessible resources: `provider.js`
