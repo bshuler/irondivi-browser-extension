@@ -7,8 +7,8 @@
 export const NETWORKS = {
   mainnet: {
     name: 'Mainnet',
-    rpcUrl: 'https://vps1.divi.domains/api/rpc/',
-    explorerUrl: 'https://vps1.divi.domains/explorer/tx/',
+    rpcUrl: 'https://services.divi.domains/api/rpc/',
+    explorerUrl: 'https://services.divi.domains/explorer/tx/',
     coinType: 301,
     addressPrefix: 0x1e, // pubKeyHash, 'D'
     scriptPrefix: 0x0d, // scriptHash (13)
@@ -16,8 +16,8 @@ export const NETWORKS = {
   },
   testnet: {
     name: 'Testnet',
-    rpcUrl: 'https://vps1.divi.domains/api/testnet/rpc/',
-    explorerUrl: 'https://vps1.divi.domains/testnet/explorer2/tx/',
+    rpcUrl: 'https://services.divi.domains/api/testnet/rpc/',
+    explorerUrl: 'https://services.divi.domains/testnet/explorer/tx/',
     coinType: 1,
     addressPrefix: 0x8b, // pubKeyHash, 'x' or 'y'
     scriptPrefix: 0x13, // scriptHash (19)
@@ -258,7 +258,7 @@ export const sendMessage: SendMessageFn = (message) =>
 
 // Faucet URLs
 export const FAUCET_URLS = {
-  testnet: 'https://vps1.divi.domains/testnet/faucet/api/request',
+  testnet: 'https://services.divi.domains/testnet/faucet/api/request',
   mainnet: 'https://vps1.divi.domains/faucet/api/request',
 };
 
