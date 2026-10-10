@@ -47,6 +47,17 @@ currently local-install only (ad-hoc signed, Allow Unsigned Extensions).
 | Extension page | `/var/www/vps1.divi.domains/extension.html` |
 | Public URL | `https://vps1.divi.domains/extension.html` |
 
+## Pre-release Checks
+
+GitHub Actions is not used (removed 2026-10-10). Before packaging, run the checks on hp2:
+
+```bash
+npm run check:remote          # syncs the tree to hp2, runs npm ci, tsc, vitest, build:all
+```
+
+Linux covers the Chrome, Firefox, Edge and Safari web bundles; `npm run build:safari:app`
+still needs this Mac (Xcode).
+
 ## Version Bump
 
 When releasing a new version, update:

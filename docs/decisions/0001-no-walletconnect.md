@@ -49,6 +49,6 @@ DIVI_SIGN bridge and the injected provider cover the same need with code we own.
 
 - dApps integrate with the extension through `window.irondivi` (see `src/injected/provider.ts`).
   For the web wallet, they use the DIVI_SIGN bridge.
-- **Enforcement:** `src/no-walletconnect.test.ts` runs with `npm run test:unit` and in CI (`.github/workflows/unit.yml`) on every push. It fails if
+- **Enforcement:** `src/no-walletconnect.test.ts` runs with `npx vitest run` locally and with `npm run check:remote` on hp2 (`scripts/remote-check.sh`); run it before every push. It fails if
   `package.json` declares a WalletConnect/Reown dependency or if any file under
   `src/` references one.

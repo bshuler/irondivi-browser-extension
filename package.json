@@ -16,7 +16,8 @@
     "lint": "eslint src/",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:unit": "vitest"
+    "test:unit": "vitest",
+    "check:remote": "scripts/remote-check.sh"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

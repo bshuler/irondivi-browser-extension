@@ -10,8 +10,6 @@ This document describes the complete project structure created for the IronDivi 
 
 ```
 ~/code/irondivi-browser-extension/
-├── .github/
-│   └── workflows/              # CI/CD workflows (to be created)
 ├── assets/
 │   └── icons/                  # Extension icons
 │       ├── icon-16.png        ✓ Created (blue "P" logo)
@@ -138,7 +136,7 @@ To complete the extension, the following source files need to be created:
 
 ### Supporting Files
 - [ ] `scripts/package.js` - ZIP packaging script
-- [ ] `.github/workflows/build.yml` - CI/CD workflow
+- [x] `scripts/remote-check.sh` - checks on hp2 (`npm run check:remote`); no GitHub Actions
 - [ ] `install-site/index.html` - Installation landing page
 
 ### Implementation Order
@@ -148,7 +146,7 @@ To complete the extension, the following source files need to be created:
 4. Content script (messaging bridge)
 5. Popup UI (user interface)
 6. Testing infrastructure
-7. CI/CD pipeline
+7. Remote checks on hp2 (`npm run check:remote`)
 
 ## Installation
 
@@ -179,7 +177,7 @@ npm run watch
 - [x] Documentation written
 - [ ] Source code implementation
 - [ ] Testing setup
-- [ ] CI/CD pipeline
+- [x] Remote checks on hp2 (no GitHub Actions)
 - [ ] Production packaging
 
 ## File Counts

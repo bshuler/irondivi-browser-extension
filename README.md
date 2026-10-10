@@ -17,7 +17,7 @@ irondivi-browser-extension/
 │   └── icons/           # Extension icons
 ├── scripts/             # Build and packaging scripts
 ├── install-site/        # Installation landing page
-├── .github/workflows/   # CI/CD workflows
+├── scripts/remote-check.sh # Runs tsc/vitest/build on hp2 (replaces CI)
 ├── manifest.json        # Chrome/Edge manifest (MV3)
 ├── manifest.firefox.json # Firefox-specific overrides
 ├── manifest.safari.json # Safari-specific overrides
