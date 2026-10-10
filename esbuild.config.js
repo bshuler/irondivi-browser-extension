@@ -57,9 +57,10 @@ async function build() {
 
   // Merge manifest for browser
   const baseManifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));
-  if (browser === 'firefox') {
-    const firefoxOverrides = JSON.parse(readFileSync(join(__dirname, 'manifest.firefox.json'), 'utf-8'));
-    Object.assign(baseManifest, firefoxOverrides);
+  // manifest.<browser>.json, when present, shallow-overrides top-level keys.
+  const overridePath = join(__dirname, `manifest.${browser}.json`);
+  if (existsSync(overridePath)) {
+    Object.assign(baseManifest, JSON.parse(readFileSync(overridePath, 'utf-8')));
   }
   writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(baseManifest, null, 2));
 

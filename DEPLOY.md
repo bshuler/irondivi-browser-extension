@@ -11,6 +11,7 @@ cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.1.zip .
 cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.1.xpi .
 cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.1.zip .
 cd ../..
+# Safari is not a zip: see "Safari" below.
 
 # 3. Upload to vps1
 scp releases/irondivi-wallet-chrome-v0.0.1.zip \
@@ -29,6 +30,14 @@ cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.1.zip . && \
 cd ../.. && \
 scp releases/irondivi-wallet-chrome-v0.0.1.zip releases/irondivi-wallet-edge-v0.0.1.zip releases/irondivi-wallet-firefox-v0.0.1.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
 ```
+
+## Safari
+
+Safari does not load a zipped extension. `npm run build:safari:app` produces
+`safari/build/Build/Products/Debug/IronDivi Wallet.app` (see README,
+"Safari (macOS)"). Shipping it to other Macs needs either the Mac App Store or
+a Developer ID signed + notarized app; neither is set up yet, so Safari is
+currently local-install only (ad-hoc signed, Allow Unsigned Extensions).
 
 ## Server Paths
 

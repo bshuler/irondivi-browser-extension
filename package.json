@@ -8,6 +8,8 @@
     "build:all": "node scripts/build.js all",
     "build:firefox": "node scripts/build.js firefox",
     "build:edge": "node scripts/build.js edge",
+    "build:safari": "node scripts/build.js safari",
+    "build:safari:app": "npm run build:safari && scripts/safari.sh",
     "watch": "node scripts/build.js chrome --watch",
     "package": "node scripts/package.js",
     "package:release": "npm run build:all && npm run package",

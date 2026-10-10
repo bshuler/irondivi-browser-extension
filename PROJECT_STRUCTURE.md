@@ -42,6 +42,7 @@ This document describes the complete project structure created for the IronDivi 
 ├── esbuild.config.js          ✓ Created (build configuration)
 ├── manifest.json              ✓ Created (Chrome MV3 manifest)
 ├── manifest.firefox.json      ✓ Created (Firefox-specific overrides)
+├── manifest.safari.json       ✓ Created (Safari-specific overrides)
 ├── package.json               ✓ Created (dependencies & scripts)
 ├── README.md                  ✓ Created (project documentation)
 ├── tsconfig.json              ✓ Created (TypeScript config)
@@ -59,6 +60,8 @@ This document describes the complete project structure created for the IronDivi 
   - `build` - Build for Chrome
   - `build:all` - Build for all browsers
   - `build:firefox` - Build for Firefox
+  - `build:safari` - Build Safari web extension files
+  - `build:safari:app` - Wrap them in the macOS app Safari needs (scripts/safari.sh)
   - `build:edge` - Build for Edge
   - `watch` - Development watch mode
   - `package` - Package builds into ZIP files
@@ -118,6 +121,7 @@ Excludes:
 ### Browser Support
 - **Chrome**: Chromium-based, MV3
 - **Firefox**: Gecko, MV3 with specific overrides
+- **Safari**: MV3, classic (non-module) background script, shipped inside a macOS app
 - **Edge**: Chromium-based, same as Chrome
 
 ## Next Steps

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 
-const allBrowsers = ['chrome', 'firefox', 'edge'];
+const allBrowsers = ['chrome', 'firefox', 'edge', 'safari'];
 const browsers = process.argv[2] === 'all'
   ? allBrowsers
   : [process.argv[2] || 'chrome'];

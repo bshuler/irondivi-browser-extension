@@ -20,6 +20,7 @@ irondivi-browser-extension/
 ├── .github/workflows/   # CI/CD workflows
 ├── manifest.json        # Chrome/Edge manifest (MV3)
 ├── manifest.firefox.json # Firefox-specific overrides
+├── manifest.safari.json # Safari-specific overrides
 ├── esbuild.config.js    # Build configuration
 ├── tsconfig.json        # TypeScript configuration
 └── package.json         # Project dependencies
@@ -46,6 +47,8 @@ npm run build:all
 # Build for specific browser
 npm run build:firefox
 npm run build:edge
+npm run build:safari        # web extension files only
+npm run build:safari:app    # + the macOS app Safari needs (Xcode, macOS only)
 
 # Watch mode for development
 npm run watch
@@ -63,6 +66,21 @@ npm run watch
 1. Navigate to `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
 3. Select `dist/firefox/manifest.json`
+
+#### Safari (macOS)
+Safari only loads web extensions packaged inside a signed macOS app, so the
+Safari build is a two-step: `dist/safari/` holds the extension, and
+`scripts/safari.sh` wraps it with Apple's converter and builds the app.
+1. `npm run build:safari:app` (needs Xcode; ad-hoc signed by default)
+2. `open "safari/build/Build/Products/Debug/IronDivi Wallet.app"` once so
+   macOS registers the extension
+3. In Safari: Develop > Allow Unsigned Extensions (ad-hoc builds only), then
+   Settings > Extensions > enable IronDivi Wallet
+
+`SAFARI_SIGN=<team id> npm run build:safari:app` signs with an Apple team
+instead (the team's account must be added in Xcode > Settings > Accounts).
+Distribution outside the Mac App Store needs Developer ID + notarization;
+that is not wired up yet.
 
 ## Networks: mainnet and testnet in one build
 
@@ -103,7 +121,7 @@ connection mechanism is its own: the injected provider first, then the
 
 ### Project Features
 
-- **Multi-browser support**: Chrome, Firefox, Edge
+- **Multi-browser support**: Chrome, Firefox, Edge, Safari (macOS)
 - **TypeScript**: Type-safe development
 - **ESBuild**: Fast bundling
 - **Manifest V3**: Modern Chrome extension API
