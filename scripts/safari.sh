@@ -48,7 +48,7 @@ fi
 
 xcodebuild -project "$OUT/$APP_NAME/$APP_NAME.xcodeproj" \
   -scheme "$APP_NAME" -configuration Debug \
-  -derivedDataPath "$OUT/build" "${SIGN_ARGS[@]}" build \
+  -derivedDataPath "$OUT/build" "${SIGN_ARGS[@]}" build 2>&1 \
   | grep -E "error:|warning: The following keys|BUILD " || true
 
 APP="$OUT/build/Build/Products/Debug/$APP_NAME.app"
@@ -56,4 +56,6 @@ APP="$OUT/build/Build/Products/Debug/$APP_NAME.app"
 echo
 echo "Built $APP"
 echo "Register with Safari:  open \"$APP\"   (then Safari > Settings > Extensions)"
-[ "$SIGN" = adhoc ] && echo "Ad-hoc signed: enable Safari > Develop > Allow Unsigned Extensions first."
+if [ "$SIGN" = adhoc ]; then
+  echo "Ad-hoc signed: enable Safari > Develop > Allow Unsigned Extensions first."
+fi
