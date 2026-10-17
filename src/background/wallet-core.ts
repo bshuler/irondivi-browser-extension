@@ -3,6 +3,9 @@ import { Transaction } from '../lib/transaction';
 import { hexToBytes, bytesToHex } from '../lib/hex';
 import { Signer } from '../lib/signer';
 import { Hash } from '../lib/hash';
+import { RIPEMD160 } from '../lib/ripemd160';
+import { parseRawTx, serializeRawTx, signatureHash, SIGHASH } from '../lib/rawtx';
+import { isSupportedHashType, p2pkhHash, type SignPrevout } from '../lib/sign-request';
 import { derivePublicKey } from '../lib/secp256k1';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 import type { AccountAddress } from '../shared/storage';
@@ -242,6 +245,50 @@ export class WalletCore {
     }
 
     return tx.toHex();
+  }
+
+  /**
+   * Sign selected P2PKH inputs of a raw transaction with an explicit sighash type.
+   * Only the inputs in `indexes` are touched; every other scriptSig (for example another
+   * party's SINGLE|ANYONECANPAY signature) is preserved byte for byte. Returns hex only;
+   * broadcasting is a separate, explicit step that this method never performs.
+   * `keys` maps input index -> the private key that must own that input.
+   */
+  async signRawTransaction(
+    txHex: string,
+    prevouts: SignPrevout[],
+    indexes: number[],
+    hashType: number,
+    keys: Map<number, Uint8Array>
+  ): Promise<{ hex: string; signedIndexes: number[] }> {
+    if (!isSupportedHashType(hashType)) {
+      throw new Error(`Unsupported hash type 0x${hashType.toString(16)}`);
+    }
+    const tx = parseRawTx(txHex);
+    if (prevouts.length !== tx.inputs.length) throw new Error('Expected one prevout per input');
+
+    const signedIndexes: number[] = [];
+    for (const i of indexes) {
+      if (!Number.isInteger(i) || i < 0 || i >= tx.inputs.length) throw new Error(`Input index ${i} out of range`);
+      if ((hashType & 0x1f) === SIGHASH.SINGLE && i >= tx.outputs.length) {
+        throw new Error(`SIGHASH_SINGLE on input ${i} has no output ${i}; refusing to sign`);
+      }
+      const privateKey = keys.get(i);
+      if (!privateKey) throw new Error(`Private key missing for input ${i}`);
+
+      const script = hexToBytes(prevouts[i].scriptPubKey);
+      const wanted = p2pkhHash(script);
+      if (!wanted) throw new Error(`Input ${i} is not a P2PKH output`);
+      const publicKey = this.derivePublicKeyFromPrivate(privateKey);
+      const have = RIPEMD160.hash(Hash.sha256(publicKey));
+      if (bytesToHex(have) !== bytesToHex(wanted)) throw new Error(`Key does not own input ${i}`);
+
+      const sigHash = signatureHash(tx, i, script, hashType);
+      const signature = await Signer.signHash(sigHash, privateKey);
+      tx.inputs[i].scriptSig = hexToBytes(Signer.createScriptSig(signature, publicKey, hashType));
+      signedIndexes.push(i);
+    }
+    return { hex: serializeRawTx(tx), signedIndexes };
   }
 
   /**

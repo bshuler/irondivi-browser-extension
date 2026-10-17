@@ -9,6 +9,7 @@ import { walletCore } from './wallet-core';
 import { rpcClient } from './rpc-client';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
+import { decodeSignRequest, verifyPrevoutsOnChain, toReview } from '../lib/sign-request';
 
 // Origin validation helper
 function isValidOrigin(origin: string): boolean {
@@ -260,6 +261,54 @@ async function handleMessage(
           payload.network
         );
         return { success: true, data: { signature } };
+      }
+
+      case MSG.SIGN_RAW_TRANSACTION: {
+        // dApp only. Decode and verify BEFORE anything is shown; the result is signed hex and
+        // is never broadcast by the wallet (the dApp decides when and whether to send it).
+        if (!origin || !isValidOrigin(origin)) {
+          return { success: false, error: 'signRawTransaction is only available to connected sites' };
+        }
+        const accountId = await getSelectedAccountId();
+        if (!accountId) return { success: false, error: 'No account selected' };
+        if (!(await connectionManager.isConnected(origin, accountId))) {
+          return { success: false, error: 'Site not connected. Please connect first.' };
+        }
+        const account = await accountManager.getSelectedAccount();
+        if (!account) return { success: false, error: 'No account selected' };
+
+        try {
+          const decoded = decodeSignRequest(
+            {
+              txHex: payload.tx,
+              prevouts: payload.prevouts,
+              indexes: payload.indexes,
+              hashType: payload.hashType,
+            },
+            account.network,
+            account.addresses.map(a => a.address)
+          );
+          await verifyPrevoutsOnChain(payload.prevouts, txid => rpcClient.getRawTransaction(txid, false));
+
+          const result = await connectionManager.createSigningRequest(
+            'sign_raw_transaction',
+            origin,
+            accountId,
+            {
+              txHex: payload.tx,
+              prevouts: payload.prevouts,
+              indexes: payload.indexes,
+              hashType: payload.hashType,
+              review: toReview(decoded),
+            }
+          );
+          return { success: true, data: result };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Signing rejected'
+          };
+        }
       }
 
       case MSG.SEND_TRANSACTION: {
@@ -529,7 +578,7 @@ async function handleMessage(
         }
 
         try {
-          let result: { signature?: string; txid?: string; fee?: number } | undefined;
+          let result: { signature?: string; txid?: string; fee?: number; hex?: string; signedIndexes?: number[] } | undefined;
 
           if (!request.data) {
             return { success: false, error: 'Request data missing' };
@@ -587,6 +636,42 @@ async function handleMessage(
               const txid = await rpcClient.broadcastTransaction(signedHex);
 
               result = { txid, fee: built.fee };
+            } finally {
+              secureWipe(seed);
+            }
+          } else if (request.type === 'sign_raw_transaction') {
+            const account = await accountManager.getSelectedAccount();
+            if (!account) {
+              return { success: false, error: 'No account selected' };
+            }
+            const { txHex, prevouts, indexes, hashType } = request.data;
+            if (!txHex || !prevouts || !indexes || hashType === undefined) {
+              return { success: false, error: 'Incomplete sign_raw_transaction request' };
+            }
+            // Decode again from the stored bytes: what is signed is what was decoded.
+            const decoded = decodeSignRequest(
+              { txHex, prevouts, indexes, hashType },
+              account.network,
+              account.addresses.map(a => a.address)
+            );
+
+            const seed = await signingSession.getSeed();
+            if (!seed) {
+              return { success: false, error: 'Not authenticated' };
+            }
+            try {
+              const coinType = NETWORKS[account.network].coinType;
+              const { HDKey } = await import('../lib/hdkey');
+              const hdkey = await HDKey.fromMasterSeed(seed);
+              const keys = new Map<number, Uint8Array>();
+              for (const input of decoded.inputs.filter(i => i.willSign)) {
+                const owned = account.addresses.find(a => a.address === input.address);
+                if (!owned) throw new Error(`Input ${input.index} is not owned by this account`);
+                const path = `m/44'/${coinType}'/0'/0/${owned.index}`;
+                keys.set(input.index, (await hdkey.derive(path)).privateKey!);
+              }
+              // Signed hex only. Deliberately no rpcClient.broadcastTransaction here.
+              result = await walletCore.signRawTransaction(txHex, prevouts, indexes, hashType, keys);
             } finally {
               secureWipe(seed);
             }

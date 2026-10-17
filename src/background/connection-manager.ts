@@ -1,6 +1,25 @@
 import { getConnections, saveConnections, type Connection } from '../shared/storage';
 
+/** Human-readable decode of a sign_raw_transaction request; strings only so it crosses runtime messaging. */
+export interface SignRawReview {
+  hashTypeName: string;
+  inputs: Array<{ index: number; address: string | null; amount: string; alreadySigned: boolean; willSign: boolean; mine: boolean }>;
+  outputs: Array<{ index: number; kind: string; address: string | null; amount: string; dataHex: string | null; mine: boolean }>;
+  totalIn: string;
+  totalOut: string;
+  fee: string;
+  complete: boolean;
+  warnings: string[];
+}
+
+export type SigningType = 'sign_message' | 'send_transaction' | 'sign_raw_transaction';
+
 export interface SigningRequestData {
+  txHex?: string;
+  prevouts?: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }>;
+  indexes?: number[];
+  hashType?: number;
+  review?: SignRawReview;
   message?: string;
   addressIndex?: number;
   to?: string;
@@ -11,7 +30,7 @@ export interface SigningRequestData {
 
 export interface PendingRequest {
   id: string;
-  type: 'connect' | 'sign_message' | 'send_transaction';
+  type: 'connect' | SigningType;
   origin: string;
   accountId: string;
   data?: SigningRequestData;
@@ -44,7 +63,7 @@ export class ConnectionManager {
    */
   private updateBadge(): void {
     const signingRequests = Array.from(this.pendingRequests.values())
-      .filter(r => r.type === 'sign_message' || r.type === 'send_transaction');
+      .filter(r => r.type !== 'connect');
     const count = signingRequests.length;
 
     if (count > 0) {
@@ -315,14 +334,17 @@ export class ConnectionManager {
    * Deduplicates requests - if there's already a pending request with the same message, reuse it
    */
   async createSigningRequest(
-    type: 'sign_message' | 'send_transaction',
+    type: SigningType,
     origin: string,
     accountId: string,
     data: SigningRequestData
   ): Promise<unknown> {
-    // Verify site is connected and has permission
-    const hasPermission = await this.hasPermission(origin, accountId, type);
-    if (!hasPermission) {
+    // Verify site is connected and has permission. sign_raw_transaction needs no standing
+    // permission: every single request is approved individually with the wallet password.
+    const allowed = type === 'sign_raw_transaction'
+      ? await this.isConnected(origin, accountId)
+      : await this.hasPermission(origin, accountId, type);
+    if (!allowed) {
       throw new Error(`Site does not have ${type} permission`);
     }
 
@@ -395,17 +417,17 @@ export class ConnectionManager {
    */
   getPendingSigningRequests(): Array<{
     id: string;
-    type: 'sign_message' | 'send_transaction';
+    type: SigningType;
     origin: string;
     accountId: string;
     data: SigningRequestData | undefined;
     createdAt: number;
   }> {
     return Array.from(this.pendingRequests.values())
-      .filter(r => r.type === 'sign_message' || r.type === 'send_transaction')
+      .filter(r => r.type !== 'connect')
       .map(r => ({
         id: r.id,
-        type: r.type as 'sign_message' | 'send_transaction',
+        type: r.type as SigningType,
         origin: r.origin,
         accountId: r.accountId,
         data: r.data,

@@ -49,6 +49,7 @@ export const MSG = {
   AUTHENTICATE: 'AUTHENTICATE',
   SIGN_MESSAGE: 'SIGN_MESSAGE',
   SIGN_TRANSACTION: 'SIGN_TRANSACTION',
+  SIGN_RAW_TRANSACTION: 'SIGN_RAW_TRANSACTION',
   SEND_TRANSACTION: 'SEND_TRANSACTION',
 
   // Faucet
@@ -119,6 +120,12 @@ export interface SignMessagePayload {
   message: string;
   addressIndex?: number;
   network?: NetworkType;
+}
+export interface SignRawTransactionPayload {
+  tx: string;
+  prevouts: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }>;
+  indexes: number[];
+  hashType: number;
 }
 export interface SignTransactionPayload {
   to: string;
@@ -198,6 +205,7 @@ export type WalletMessage =
   | { type: typeof MSG.AUTHENTICATE; payload: AuthenticatePayload }
   | { type: typeof MSG.SIGN_MESSAGE; payload: SignMessagePayload }
   | { type: typeof MSG.SIGN_TRANSACTION; payload: SignTransactionPayload }
+  | { type: typeof MSG.SIGN_RAW_TRANSACTION; payload: SignRawTransactionPayload }
   | { type: typeof MSG.SEND_TRANSACTION; payload: SendTransactionPayload }
   | { type: typeof MSG.REQUEST_FAUCET; payload: RequestFaucetPayload }
   | { type: typeof MSG.GET_CONTACTS; payload?: GetContactsPayload }

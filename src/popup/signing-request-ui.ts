@@ -11,7 +11,7 @@ import { showLoading, hideLoading, showToast, showView, hideView, formatAddress,
 // Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
   id: string;
-  type: 'connect' | 'sign_message' | 'send_transaction';
+  type: 'connect' | 'sign_message' | 'send_transaction' | 'sign_raw_transaction';
   origin: string;
   accountId: string;
   data?: {
@@ -21,6 +21,16 @@ export interface SigningRequest {
     fee?: number;
     addressIndex?: number;
     opReturn?: string;
+    review?: {
+      hashTypeName: string;
+      inputs: Array<{ index: number; address: string | null; amount: string; alreadySigned: boolean; willSign: boolean; mine: boolean }>;
+      outputs: Array<{ index: number; kind: string; address: string | null; amount: string; dataHex: string | null; mine: boolean }>;
+      totalIn: string;
+      totalOut: string;
+      fee: string;
+      complete: boolean;
+      warnings: string[];
+    };
   };
   createdAt: number;
 }
@@ -104,6 +114,10 @@ export function showSigningRequestView(request: SigningRequest): void {
     elements.type.textContent = 'Sign Message';
     elements.type.className = 'signing-type sign-message';
     elements.warningText.textContent = 'This creates a signature to verify your identity. No funds will be sent.';
+  } else if (request.type === 'sign_raw_transaction') {
+    elements.type.textContent = 'Sign Transaction (not sent)';
+    elements.type.className = 'signing-type send-transaction';
+    elements.warningText.textContent = 'This signs the inputs listed below and returns the signed transaction to the site. The wallet does NOT broadcast it.';
   } else {
     elements.type.textContent = 'Send Transaction';
     elements.type.className = 'signing-type send-transaction';
@@ -132,6 +146,25 @@ export function showSigningRequestView(request: SigningRequest): void {
         <div class="signing-message-content">${escapeHtml(displayMessage)}</div>
       </div>
     `;
+  } else if (request.type === 'sign_raw_transaction') {
+    const rv = request.data?.review;
+    if (!rv) {
+      detailsHtml = '<div class="signing-detail-row"><span class="signing-detail-label">Transaction details unavailable; reject this request.</span></div>';
+    } else {
+      const row = (label: string, value: string, cls = '') =>
+        `<div class="signing-detail-row"><span class="signing-detail-label">${escapeHtml(label)}</span><span class="signing-detail-value ${cls}" style="word-break:break-all">${value}</span></div>`;
+      detailsHtml = row('Signature type:', escapeHtml(rv.hashTypeName));
+      for (const i of rv.inputs) {
+        const state = i.willSign ? 'WILL SIGN' : i.alreadySigned ? 'signed by another party' : 'not signed here';
+        detailsHtml += row(`Input ${i.index}:`, `${escapeHtml(i.address ?? 'unknown script')}<br>${escapeHtml(i.amount)} DIVI &middot; ${escapeHtml(state)}`);
+      }
+      for (const o of rv.outputs) {
+        const who = o.kind === 'data' ? `data (OP_META) ${escapeHtml(o.dataHex ?? '')}` : escapeHtml(o.address ?? o.kind);
+        detailsHtml += row(`Output ${o.index}:`, `${who}${o.mine ? ' (yours)' : ''}<br>${escapeHtml(o.amount)} DIVI`, 'amount');
+      }
+      detailsHtml += row('Fee:', `${escapeHtml(rv.fee)} DIVI${rv.complete ? '' : ' (incomplete: another party funds the rest)'}`);
+      for (const w of rv.warnings) detailsHtml += row('Note:', escapeHtml(w));
+    }
   } else if (request.type === 'send_transaction') {
     const to = request.data?.to || '';
     const amount = request.data?.amount || 0;
@@ -222,7 +255,7 @@ async function handleApprove(): Promise<void> {
     return;
   }
 
-  showLoading(currentRequest.type === 'sign_message' ? 'Signing message...' : 'Sending transaction...');
+  showLoading(currentRequest.type === 'sign_message' ? 'Signing message...' : currentRequest.type === 'sign_raw_transaction' ? 'Signing transaction...' : 'Sending transaction...');
 
   try {
     await sendMessage({
@@ -237,6 +270,8 @@ async function handleApprove(): Promise<void> {
 
     if (currentRequest.type === 'sign_message') {
       showToast('Message signed successfully', 'success');
+    } else if (currentRequest.type === 'sign_raw_transaction') {
+      showToast('Transaction signed (not sent)', 'success');
     } else {
       showToast('Transaction sent successfully', 'success');
     }

@@ -133,9 +133,9 @@ function derEncode(r: bigint, s: bigint): Uint8Array {
 }
 
 // Create scriptSig from signature and public key
-function createScriptSig(signature: Uint8Array, publicKey: Uint8Array): string {
-    // signature + SIGHASH_ALL byte + public key
-    const sigWithHashType = new Uint8Array([...signature, 0x01]);
+function createScriptSig(signature: Uint8Array, publicKey: Uint8Array, hashType: number = 0x01): string {
+    // signature + sighash-type byte (SIGHASH_ALL unless told otherwise) + public key
+    const sigWithHashType = new Uint8Array([...signature, hashType & 0xff]);
     const sigLen = sigWithHashType.length;
     const pubLen = publicKey.length;
 

@@ -158,6 +158,25 @@ class IronDiviProvider {
   }
 
   /**
+   * Sign selected P2PKH inputs of a raw transaction (hex). Returns the signed hex and the
+   * indexes signed; it never broadcasts. `prevouts` needs one entry per input, each with
+   * { txid, vout, amount (DIVI), scriptPubKey (hex) }. hashType: 0x01 ALL, 0x83
+   * SINGLE|ANYONECANPAY, 0x81 ALL|ANYONECANPAY.
+   */
+  async signRawTransaction(
+    tx: string,
+    prevouts: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }>,
+    indexes: number[],
+    hashType: number = 1
+  ): Promise<{ hex: string; signedIndexes: number[] }> {
+    const connected = await this.isConnected();
+    if (!connected) {
+      throw new Error('Not connected. Call connect() first.');
+    }
+    return this.sendRequest('SIGN_RAW_TRANSACTION', { tx, prevouts, indexes, hashType });
+  }
+
+  /**
    * Send a transaction
    */
   async sendTransaction(tx: TransactionRequest): Promise<string> {
@@ -219,6 +238,7 @@ class IronDiviProvider {
       'irondivi_getBalance': 'GET_BALANCE',
       'irondivi_signMessage': 'SIGN_MESSAGE',
       'irondivi_sendTransaction': 'SEND_TRANSACTION',
+      'irondivi_signRawTransaction': 'SIGN_RAW_TRANSACTION',
       'irondivi_getNetwork': 'GET_SETTINGS',
     };
 
