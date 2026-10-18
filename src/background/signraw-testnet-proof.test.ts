@@ -1,7 +1,7 @@
 // Live PUBLIC TESTNET proof of walletCore.signRawTransaction (the NEW raw signer under test).
 //
 // Gated behind SIGNRAW_TESTNET_PROOF=1 so it never runs in normal unit/CI runs. It:
-//   1. Resolves the "CV tivi (Divi TESTNET) payments wallet" seed EXACTLY ONCE via `secret get`.
+//   1. Resolves the autogen "CV NFT proof (Divi TESTNET) autogen key" seed EXACTLY ONCE via `secret get`.
 //   2. Derives the key IN-PROCESS through the extension's own Mnemonic -> HDKey -> Address path
 //      (m/44'/1'/0'/0/i, testnet coinType 1) -- never a hand-rolled signer.
 //   3. Funds from the wallet's existing testnet UTXOs (faucet only if empty).
@@ -35,13 +35,13 @@ const DUST_SATS = 10_000n; // 0.0001 DIVI
 
 // ---- secret plumbing: resolve exactly once, never echo the value --------------------------------
 
-/** The CV tivi wallet seed note, resolved once. Returns raw token words; never logged. */
+/** The autogen testnet-proof key seed note, resolved once. Returns raw token words; never logged. */
 function resolveSeedWords(): string[] {
   let note: string;
   try {
     note = execFileSync(
       'secret',
-      ['get', '--name', 'cv-tivi-divi-testnet', '--op-ref', 'op://ptah-divi/fzw5xx6jccswuwu5apq4bvfnva/notesPlain'],
+      ['get', '--name', 'cv-nft-proof-testnet-autogen', '--op-ref', 'op://ptah-divi/smwakzwa6zy3ukgekkvywhnsvm/notesPlain'],
       { encoding: 'utf8', timeout: 90_000, stdio: ['ignore', 'pipe', 'ignore'] }
     );
   } catch (err) {
