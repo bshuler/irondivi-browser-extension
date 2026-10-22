@@ -4,7 +4,7 @@ import { hexToBytes, bytesToHex } from '../lib/hex';
 import { Signer } from '../lib/signer';
 import { Hash } from '../lib/hash';
 import { derivePublicKey } from '../lib/secp256k1';
-import { NETWORKS, type NetworkType } from '../shared/constants';
+import { NETWORKS, DUST_THRESHOLD, type NetworkType } from '../shared/constants';
 import type { AccountAddress } from '../shared/storage';
 export { deriveAddresses } from '../lib/derivation';
 
@@ -33,7 +33,6 @@ export interface BuiltTransaction {
 
 // DIVI min relay fee: 10,000 sat/KB. Typical tx ~300 bytes = ~3000 sat. Using 5000 sat as safe default.
 const DEFAULT_FEE = 0.00005;
-const DUST_THRESHOLD = 0.0000546; // 3 * fee(182 bytes) per DIVI spec
 const MAX_INPUTS = 250; // Reasonable limit to prevent oversized transactions
 
 const SATOSHIS_PER_COIN = 100000000n; // 1e8 as BigInt
@@ -79,6 +78,17 @@ export class WalletCore {
     network: NetworkType
   ): BuiltTransaction {
     const { to, amount, fee = DEFAULT_FEE, fromAddresses } = request;
+
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Invalid amount');
+    }
+    if (typeof fee !== 'number' || !Number.isFinite(fee) || fee < 0) {
+      throw new Error('Invalid fee');
+    }
+    // Compare in satoshis: an output below dust is never relayed
+    if (diviToSatoshis(amount) < diviToSatoshis(DUST_THRESHOLD)) {
+      throw new Error(`Amount is below the dust threshold of ${DUST_THRESHOLD} DIVI`);
+    }
 
     // Validate destination address matches network
     const expectedPrefix = NETWORKS[network].addressFirstChar;

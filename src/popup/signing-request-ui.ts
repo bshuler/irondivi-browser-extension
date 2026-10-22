@@ -6,7 +6,7 @@
  */
 
 import { MSG, sendMessage } from '../shared/constants';
-import { showLoading, hideLoading, showToast, showView, hideView, formatAddress, formatAmount } from './ui-state';
+import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
 
 // Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
@@ -16,6 +16,7 @@ export interface SigningRequest {
   accountId: string;
   data?: {
     message?: string;
+    address?: string;
     to?: string;
     amount?: number;
     fee?: number;
@@ -132,12 +133,21 @@ export function showSigningRequestView(request: SigningRequest): void {
         <div class="signing-message-content">${escapeHtml(displayMessage)}</div>
       </div>
     `;
+    if (request.data?.address) {
+      detailsHtml += `
+      <div class="signing-detail-row">
+        <span class="signing-detail-label">Address:</span>
+        <span class="signing-detail-value address">${escapeHtml(request.data.address)}</span>
+      </div>
+    `;
+    }
   } else if (request.type === 'send_transaction') {
     const to = request.data?.to || '';
     const amount = request.data?.amount || 0;
     const fee = request.data?.fee || 0.00005;
-    // Escape all user-provided values to prevent XSS
-    const escapedTo = escapeHtml(formatAddress(to, 12));
+    // Escape all user-provided values to prevent XSS. Show the whole
+    // destination: a shortened one can hide a look-alike address.
+    const escapedTo = escapeHtml(to);
     const escapedAmount = escapeHtml(formatAmount(amount));
     const escapedFee = escapeHtml(formatAmount(fee));
     const escapedTotal = escapeHtml(formatAmount(amount + fee));

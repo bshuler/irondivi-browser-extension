@@ -1,34 +1,108 @@
 
 import { runtime, alarms } from '../shared/browser-polyfill';
-import { MSG, NETWORKS } from '../shared/constants';
-import { getSettings, saveSettings, getSelectedAccountId } from '../shared/storage';
+import { MSG, NETWORKS, DAPP_METHODS } from '../shared/constants';
+import { getSettings, saveSettings, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
 import { addressBook } from './address-book';
-import { walletCore } from './wallet-core';
+import { walletCore, type BuiltTransaction, type TransactionRequest } from './wallet-core';
 import { rpcClient } from './rpc-client';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
+import { isAllowedDappOrigin, isValidDappOrigin } from '../shared/origin';
 
-// Origin validation helper
-function isValidOrigin(origin: string): boolean {
-  try {
-    const url = new URL(origin);
-    // Only allow https (or http for localhost development)
-    if (url.protocol !== 'https:' &&
-        !(url.protocol === 'http:' && url.hostname === 'localhost')) {
-      return false;
+const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
+
+// True only for the extension's own pages (action popup, approval window).
+// A content script's messages carry our extension ID too, so the ID alone
+// cannot tell a web page from the popup. sender.url can: for a content script
+// it is the page's URL, for an extension page it is under our own base URL
+// (chrome-extension://, moz-extension:// or safari-web-extension://).
+// sender.tab cannot be used: the approval window is an extension page in a tab.
+function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
+  return sender.id === chrome.runtime.id &&
+    typeof sender.url === 'string' &&
+    sender.url.startsWith(runtime.getURL(''));
+}
+
+/**
+ * Build (unsigned) a send from the account, enforcing the transaction limits.
+ * Throws with a user-facing message if the send is not allowed.
+ */
+async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction> {
+  const addresses = account.addresses.map(a => a.address);
+  const utxos = await rpcClient.getUtxos(addresses);
+
+  // Enforce transaction limits
+  const settings = await getSettings();
+  const limits = settings.transactionLimits;
+  const totalBalance = walletCore.calculateBalance(utxos);
+
+  // Check absolute limit
+  if (limits.maxAmountAbsolute > 0 && request.amount > limits.maxAmountAbsolute) {
+    throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI`);
+  }
+
+  // Check percentage limit
+  if (limits.maxAmountPercent > 0) {
+    const maxAllowed = (totalBalance * limits.maxAmountPercent) / 100;
+    if (request.amount > maxAllowed) {
+      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} DIVI)`);
     }
-    return true;
-  } catch {
-    return false;
+  }
+
+  return walletCore.buildTransaction(utxos, account.addresses, {
+    to: request.to,
+    amount: request.amount,
+    fee: request.fee,
+    fromAddresses: request.fromAddresses,
+  }, account.network);
+}
+
+/**
+ * Build, sign with the unlocked session and broadcast a send.
+ */
+async function sendFromAccount(account: Account, request: TransactionRequest): Promise<{ txid: string; fee: number }> {
+  const built = await buildSend(account, request);
+
+  // Get seed from signing session
+  const seed = await signingSession.getSeed();
+  if (!seed) throw new Error('Not authenticated');
+
+  try {
+    // Derive private keys for inputs
+    const coinType = NETWORKS[account.network].coinType;
+    const { HDKey } = await import('../lib/hdkey');
+    const hdkey = await HDKey.fromMasterSeed(seed);
+    const privateKeys = await Promise.all(built.inputIndices.map(async index => {
+      const path = `m/44'/${coinType}'/0'/0/${index}`;
+      return (await hdkey.derive(path)).privateKey!;
+    }));
+
+    // Sign and broadcast
+    const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
+    const txid = await rpcClient.broadcastTransaction(signedHex);
+    return { txid, fee: built.fee };
+  } finally {
+    secureWipe(seed);
   }
 }
 
-// Verify sender is from our extension (popup or background)
-function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
-  // Messages from popup/extension pages have sender.id === our extension ID
-  return sender.id === chrome.runtime.id;
+/**
+ * The account address a dApp asked for: by address, else by index, else the
+ * first. Throws if the account does not own it.
+ */
+function resolveAddress(account: Account, address?: unknown, addressIndex?: unknown): AccountAddress {
+  let found: AccountAddress | undefined;
+  if (address !== undefined && address !== null && address !== '') {
+    found = account.addresses.find(a => a.address === address);
+  } else if (addressIndex !== undefined && addressIndex !== null) {
+    found = account.addresses.find(a => a.index === addressIndex);
+  } else {
+    found = account.addresses[0];
+  }
+  if (!found) throw new Error('Address is not in this wallet');
+  return found;
 }
 
 // Message handler type
@@ -52,37 +126,31 @@ async function handleMessage(
 ): Promise<MessageResponse> {
   const { type, payload } = message;
 
-  // Extract origin properly from sender
+  // Only our own pages may send anything but the dApp methods. Everything
+  // else comes from a content script in a tab, i.e. from a web page.
+  const fromExtensionPage = isExtensionPage(sender);
+  if (!fromExtensionPage && (!sender.tab || !DAPP_METHODS.includes(type))) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
+
+  // Origin of the web page; empty for our own pages. A page must pass the
+  // same origin rule the content script uses, for every message.
   let origin = '';
-  if (sender.origin) {
-    origin = sender.origin;
-  } else if (sender.url) {
+  if (!fromExtensionPage) {
     try {
-      origin = new URL(sender.url).origin;
+      origin = sender.origin || new URL(sender.url || '').origin;
     } catch {
       return { success: false, error: 'Invalid sender URL' };
     }
-  }
-
-  // For dApp connection messages, require valid origin
-  if ([MSG.CONNECT, MSG.IS_CONNECTED, MSG.DISCONNECT].includes(type as any)) {
-    if (!origin || !isValidOrigin(origin)) {
+    const { allowedSites } = await getSettings();
+    if (!isAllowedDappOrigin(origin, allowedSites)) {
       return { success: false, error: 'Invalid origin' };
     }
   }
 
-  // For sensitive popup-only operations, verify sender is from our extension
-  // These operations don't have an origin (popup messages) and require extension context
-  const popupOnlyOperations = [
-    MSG.CREATE_ACCOUNT, MSG.IMPORT_ACCOUNT, MSG.DELETE_ACCOUNT,
-    MSG.EXPORT_MNEMONIC, MSG.GENERATE_MNEMONIC, MSG.AUTHENTICATE,
-    MSG.APPROVE_SIGNING_REQUEST, MSG.REJECT_SIGNING_REQUEST,
-    MSG.UPDATE_SETTINGS, MSG.GENERATE_NEW_ADDRESS,
-  ];
-  if (popupOnlyOperations.includes(type as any)) {
-    if (!isExtensionSender(sender)) {
-      return { success: false, error: 'Unauthorized sender' };
-    }
+  // Connection messages only make sense for a web page
+  if ([MSG.CONNECT, MSG.IS_CONNECTED, MSG.DISCONNECT].includes(type as any) && !origin) {
+    return { success: false, error: 'Invalid origin' };
   }
 
   try {
@@ -158,8 +226,12 @@ async function handleMessage(
       case MSG.GET_BALANCE: {
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
+        if (origin && !(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
 
-        const addresses = account.addresses.map(a => a.address);
+        // One address if asked for (it must be ours), else the whole account
+        const addresses = payload?.address
+          ? [resolveAddress(account, payload.address).address]
+          : account.addresses.map(a => a.address);
         const balance = await rpcClient.getBalance(addresses);
         return { success: true, data: { balance } };
       }
@@ -167,6 +239,7 @@ async function handleMessage(
       case MSG.GET_ADDRESSES: {
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
+        if (origin && !(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
         return { success: true, data: account.addresses };
       }
 
@@ -223,25 +296,27 @@ async function handleMessage(
         return { success: authenticated, error: authenticated ? undefined : 'Invalid password' };
 
       case MSG.SIGN_MESSAGE: {
-        // If called from a dApp (has origin), create pending request and wait for approval
-        if (origin && isValidOrigin(origin)) {
-          const accountId = await getSelectedAccountId();
-          if (!accountId) return { success: false, error: 'No account selected' };
+        // From a dApp (has origin): needs a connection, then the user's approval
+        if (origin) {
+          const account = await accountManager.getSelectedAccount();
+          if (!account) return { success: false, error: 'No account selected' };
 
-          const isConnected = await connectionManager.isConnected(origin, accountId);
-          if (!isConnected) {
-            return { success: false, error: 'Site not connected. Please connect first.' };
-          }
+          const isConnected = await connectionManager.isConnected(origin, account.id);
+          if (!isConnected) return NOT_CONNECTED;
+
+          // Sign with the address the site asked for, which must be ours
+          const signer = resolveAddress(account, payload?.address, payload?.addressIndex);
 
           try {
             // Create signing request and wait for user approval
             const result = await connectionManager.createSigningRequest(
               'sign_message',
               origin,
-              accountId,
+              account.id,
               {
                 message: payload.message,
-                addressIndex: payload.addressIndex ?? 0,
+                address: signer.address,
+                addressIndex: signer.index,
               }
             );
             return { success: true, data: result };
@@ -253,7 +328,7 @@ async function handleMessage(
           }
         }
 
-        // Called from popup (no origin) - sign directly
+        // From the popup (no origin), after AUTHENTICATE - sign directly
         const signature = await signingSession.signMessage(
           payload.message,
           payload.addressIndex,
@@ -266,80 +341,45 @@ async function handleMessage(
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
 
-        // If called from a dApp (has origin), verify permission
-        if (origin && isValidOrigin(origin)) {
-          const accountId = await getSelectedAccountId();
-          if (!accountId) return { success: false, error: 'No account selected' };
-
-          const isConnected = await connectionManager.isConnected(origin, accountId);
-          if (!isConnected) {
-            return { success: false, error: 'Site not connected. Please connect first.' };
-          }
-
-          const hasPermission = await connectionManager.hasPermission(origin, accountId, 'send_transaction');
-          if (!hasPermission) {
-            return { success: false, error: 'Site does not have send_transaction permission' };
-          }
-        }
-
-        // Get UTXOs
-        const addresses = account.addresses.map(a => a.address);
-        const utxos = await rpcClient.getUtxos(addresses);
-
-        // Enforce transaction limits
-        const settings = await getSettings();
-        const limits = settings.transactionLimits;
-        const totalBalance = walletCore.calculateBalance(utxos);
-
-        // Check absolute limit
-        if (limits.maxAmountAbsolute > 0 && payload.amount > limits.maxAmountAbsolute) {
-          return {
-            success: false,
-            error: `Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI`
-          };
-        }
-
-        // Check percentage limit
-        if (limits.maxAmountPercent > 0) {
-          const maxAllowed = (totalBalance * limits.maxAmountPercent) / 100;
-          if (payload.amount > maxAllowed) {
-            return {
-              success: false,
-              error: `Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} DIVI)`
-            };
-          }
-        }
-
-        // Build transaction
-        const built = walletCore.buildTransaction(utxos, account.addresses, {
+        const request: TransactionRequest = {
           to: payload.to,
           amount: payload.amount,
           fee: payload.fee,
           fromAddresses: payload.fromAddresses,
-        }, account.network);
+        };
 
-        // Get seed from signing session
-        const seed = await signingSession.getSeed();
-        if (!seed) return { success: false, error: 'Not authenticated' };
+        // From a dApp (has origin): needs a connection, then the user's approval
+        if (origin) {
+          const isConnected = await connectionManager.isConnected(origin, account.id);
+          if (!isConnected) return NOT_CONNECTED;
 
-        try {
-          // Derive private keys for inputs
-          const coinType = NETWORKS[account.network].coinType;
-          const { HDKey } = await import('../lib/hdkey');
-          const hdkey = await HDKey.fromMasterSeed(seed);
-          const privateKeys = await Promise.all(built.inputIndices.map(async index => {
-            const path = `m/44'/${coinType}'/0'/0/${index}`;
-            return (await hdkey.derive(path)).privateKey!;
-          }));
+          const hasPermission = await connectionManager.hasPermission(origin, account.id, 'send_transaction');
+          if (!hasPermission) {
+            return { success: false, error: 'Site does not have send_transaction permission' };
+          }
 
-          // Sign and broadcast
-          const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
-          const txid = await rpcClient.broadcastTransaction(signedHex);
+          // Check the send can be made before asking, and show the real fee
+          const built = await buildSend(account, request);
 
-          return { success: true, data: { txid, fee: built.fee } };
-        } finally {
-          secureWipe(seed);
+          try {
+            const result = await connectionManager.createSigningRequest(
+              'send_transaction',
+              origin,
+              account.id,
+              { ...request, fee: built.fee }
+            );
+            return { success: true, data: result };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Transaction rejected'
+            };
+          }
         }
+
+        // From the popup, after AUTHENTICATE
+        const sent = await sendFromAccount(account, request);
+        return { success: true, data: sent };
       }
 
       // ============ Address Book ============
@@ -391,6 +431,12 @@ async function handleMessage(
       case MSG.GET_SETTINGS: {
         const currentSettings = await getSettings();
         return { success: true, data: { settings: currentSettings } };
+      }
+
+      case MSG.GET_NETWORK: {
+        // The network the wallet is set to; all a dApp needs from the settings
+        const { network } = await getSettings();
+        return { success: true, data: { network } };
       }
 
       case MSG.UPDATE_SETTINGS:
@@ -535,12 +581,18 @@ async function handleMessage(
             return { success: false, error: 'Request data missing' };
           }
 
+          // The site may have been disconnected while the popup was open
+          const stillAllowed = await connectionManager.hasPermission(request.origin, request.accountId, request.type);
+          if (!stillAllowed) {
+            return { success: false, error: 'Site is no longer connected' };
+          }
+
+          const account = (await accountManager.listAccounts()).find(a => a.id === request.accountId);
+          if (!account) {
+            return { success: false, error: 'Account not found' };
+          }
+
           if (request.type === 'sign_message') {
-            // Sign the message
-            const account = await accountManager.getSelectedAccount();
-            if (!account) {
-              return { success: false, error: 'No account selected' };
-            }
             if (!request.data.message) {
               return { success: false, error: 'Message is required for sign_message' };
             }
@@ -551,45 +603,15 @@ async function handleMessage(
             );
             result = { signature };
           } else if (request.type === 'send_transaction') {
-            // Build and send transaction
-            const account = await accountManager.getSelectedAccount();
-            if (!account) {
-              return { success: false, error: 'No account selected' };
-            }
             if (!request.data.to || request.data.amount === undefined) {
               return { success: false, error: 'to and amount are required for send_transaction' };
             }
-
-            const addresses = account.addresses.map(a => a.address);
-            const utxos = await rpcClient.getUtxos(addresses);
-
-            const built = walletCore.buildTransaction(utxos, account.addresses, {
+            result = await sendFromAccount(account, {
               to: request.data.to,
               amount: request.data.amount,
               fee: request.data.fee,
-            }, account.network);
-
-            const seed = await signingSession.getSeed();
-            if (!seed) {
-              return { success: false, error: 'Not authenticated' };
-            }
-
-            try {
-              const coinType = NETWORKS[account.network].coinType;
-              const { HDKey } = await import('../lib/hdkey');
-              const hdkey = await HDKey.fromMasterSeed(seed);
-              const privateKeys = await Promise.all(built.inputIndices.map(async index => {
-                const path = `m/44'/${coinType}'/0'/0/${index}`;
-                return (await hdkey.derive(path)).privateKey!;
-              }));
-
-              const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
-              const txid = await rpcClient.broadcastTransaction(signedHex);
-
-              result = { txid, fee: built.fee };
-            } finally {
-              secureWipe(seed);
-            }
+              fromAddresses: request.data.fromAddresses,
+            });
           }
 
           // Approve the request with the result
@@ -647,12 +669,9 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
   // Only inject for main frame (not iframes)
   if (details.frameId !== 0) return;
 
-  // Only inject on http/https pages
+  // Only inject on pages the wallet serves at all
   try {
-    const url = new URL(details.url);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
-    // Allow http only for localhost
-    if (url.protocol === 'http:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return;
+    if (!isValidDappOrigin(new URL(details.url).origin)) return;
   } catch {
     return;
   }
@@ -675,9 +694,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     if (!tab.url) return;
 
-    const url = new URL(tab.url);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
-    if (url.protocol === 'http:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return;
+    if (!isValidDappOrigin(new URL(tab.url).origin)) return;
 
     // Check if provider is already injected
     const results = await chrome.scripting.executeScript({

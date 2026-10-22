@@ -106,10 +106,43 @@ can serve as the RPC backend: the wallet calls `getaddressbalance`,
 
 ## dApp connections
 
-dApps connect through the injected provider, `window.irondivi` (`isIronDivi: true`),
-which this extension's content script adds to every http(s) page. It exposes
-`connect`, `getAccounts`, `signMessage` and the other `irondivi_*` methods, and every
-request is approved in the extension popup.
+dApps connect through the injected provider, `window.irondivi` (`isIronDivi: true`).
+The content script runs on every page, but it adds the provider, and passes
+messages on to the wallet, only on a page that is
+
+- `https:`, or `http:` on `localhost` or `127.0.0.1`, **and**
+- on a host in **Settings → Allowed Sites**. The default list is
+  `*.divi.domains`, `localhost` and `127.0.0.1`. `*` matches within one name
+  label, so `*.divi.domains` covers `app.divi.domains` but not `divi.domains`
+  itself or `a.b.divi.domains`; `**` matches across labels.
+
+The background applies the same rule to every message from a page. A page can
+use only the provider methods below; every other wallet message (settings,
+accounts, approvals and the rest) is accepted only from the extension's own
+pages.
+
+| Method | `request()` name | Connected site needed | Opens the popup |
+|---|---|---|---|
+| `connect()` | `irondivi_connect` | no | yes, until the site is connected; a connected site gets its address back with no popup |
+| `isConnected()` | | no | no |
+| `disconnect()` | `irondivi_disconnect` | no | no |
+| `getNetwork()` | `irondivi_getNetwork` | no | no; returns `'mainnet'` or `'testnet'`, whichever the wallet is set to |
+| `getAccounts()` | `irondivi_accounts` | yes | no; `getAccounts()` returns the address strings, `irondivi_accounts` the address objects |
+| `getBalance(address?)` | `irondivi_getBalance` | yes | no; the balance of `address`, or of the whole account if none is given |
+| `signMessage(message, address?)` | `irondivi_signMessage` | yes | yes, always |
+| `sendTransaction({ to, amount, fee?, fromAddresses? })` | `irondivi_sendTransaction` | yes | yes, always |
+
+`signMessage` signs with the key of `address` (the account's first address if
+none is given). `getBalance` and `signMessage` refuse an address the wallet does
+not own.
+
+For `signMessage` and `sendTransaction` the approval popup shows the site, and
+the message and signing address, or the full destination, amount and fee. The
+user approves with the wallet password. Reject, closing the popup, or no answer
+within 5 minutes rejects the request; nothing is signed or broadcast before
+approval. A send must also pass the transaction limits in Settings (by default
+at most 10% of the balance per send). A send below 0.0000546 DIVI (dust, which
+nodes do not relay) is refused, from a site or from the popup.
 
 The extension does **not** use WalletConnect or Reown, and must not. Divi's
 connection mechanism is its own: the injected provider first, then the

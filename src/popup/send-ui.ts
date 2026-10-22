@@ -6,7 +6,7 @@ import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { MSG } from '../shared/constants';
+import { MSG, DUST_THRESHOLD } from '../shared/constants';
 import { loadBalance, loadTransactions } from './wallet-ui';
 
 // ============================================================
@@ -66,6 +66,11 @@ export async function handleSendConfirm(): Promise<void> {
 
   if (!to || !amount || amount <= 0) {
     showToast('Please enter a valid address and amount', 'error');
+    return;
+  }
+
+  if (amount < DUST_THRESHOLD) {
+    showToast(`Amount must be at least ${DUST_THRESHOLD} DIVI`, 'error');
     return;
   }
 

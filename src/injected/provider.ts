@@ -128,8 +128,11 @@ class IronDiviProvider {
    * Get current network
    */
   async getNetwork(): Promise<'mainnet' | 'testnet'> {
-    const settings = await this.sendRequest('GET_SETTINGS');
-    return settings?.network || 'testnet';
+    const result = await this.sendRequest('GET_NETWORK');
+    if (result?.network !== 'mainnet' && result?.network !== 'testnet') {
+      throw new Error('Wallet did not report its network');
+    }
+    return result.network;
   }
 
   /**
@@ -150,10 +153,8 @@ class IronDiviProvider {
     if (!connected) {
       throw new Error('Not connected. Call connect() first.');
     }
-    const result = await this.sendRequest('SIGN_MESSAGE', {
-      message,
-      addressIndex: 0, // Use first address by default
-    });
+    // Without an address the wallet signs with the account's first address
+    const result = await this.sendRequest('SIGN_MESSAGE', { message, address });
     return result?.signature;
   }
 
@@ -219,8 +220,11 @@ class IronDiviProvider {
       'irondivi_getBalance': 'GET_BALANCE',
       'irondivi_signMessage': 'SIGN_MESSAGE',
       'irondivi_sendTransaction': 'SEND_TRANSACTION',
-      'irondivi_getNetwork': 'GET_SETTINGS',
     };
+
+    if (args.method === 'irondivi_getNetwork') {
+      return this.getNetwork();
+    }
 
     const internalMethod = methodMap[args.method];
     if (!internalMethod) {

@@ -27,6 +27,10 @@ export const NETWORKS = {
 
 export type NetworkType = keyof typeof NETWORKS;
 
+// Smallest output Divi nodes relay: 3 * fee(182 bytes). A send below it is
+// accepted by a node but never relayed, so the wallet refuses it.
+export const DUST_THRESHOLD = 0.0000546;
+
 // Message types for communication
 export const MSG = {
   // Account operations
@@ -65,6 +69,7 @@ export const MSG = {
 
   // Settings
   GET_SETTINGS: 'GET_SETTINGS',
+  GET_NETWORK: 'GET_NETWORK',
   UPDATE_SETTINGS: 'UPDATE_SETTINGS',
 
   // dApp connection
@@ -81,6 +86,22 @@ export const MSG = {
 } as const;
 
 export type MessageType = typeof MSG[keyof typeof MSG];
+
+/**
+ * The only message types a web page may send (through the content script).
+ * These are the methods window.irondivi uses; every other message type is for
+ * the extension's own pages (popup, approval window) only.
+ */
+export const DAPP_METHODS: readonly string[] = [
+  MSG.CONNECT,
+  MSG.DISCONNECT,
+  MSG.IS_CONNECTED,
+  MSG.GET_ADDRESSES,
+  MSG.GET_BALANCE,
+  MSG.GET_NETWORK,
+  MSG.SIGN_MESSAGE,
+  MSG.SEND_TRANSACTION,
+];
 
 // ============================================================
 // Payload types for each message

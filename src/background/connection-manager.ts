@@ -2,10 +2,12 @@ import { getConnections, saveConnections, type Connection } from '../shared/stor
 
 export interface SigningRequestData {
   message?: string;
+  address?: string;
   addressIndex?: number;
   to?: string;
   amount?: number;
   fee?: number;
+  fromAddresses?: string[];
   opReturn?: string;
 }
 
@@ -24,7 +26,20 @@ const REQUEST_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export class ConnectionManager {
   private pendingRequests: Map<string, PendingRequest> = new Map();
+  // Approval window for each pending request, so closing it rejects the request
+  private requestWindows: Map<string, number> = new Map();
   private operationLock: Promise<void> = Promise.resolve();
+
+  constructor() {
+    // Closing an approval window without answering is a rejection
+    chrome.windows?.onRemoved?.addListener((windowId: number) => {
+      for (const [requestId, id] of this.requestWindows) {
+        if (id !== windowId) continue;
+        this.requestWindows.delete(requestId);
+        this.pendingRequests.get(requestId)?.reject(new Error('Request rejected: approval window closed'));
+      }
+    });
+  }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     const previousLock = this.operationLock;
@@ -82,7 +97,7 @@ export class ConnectionManager {
     const popupUrl = `popup.html?approve=${type}&requestId=${requestId}`;
 
     try {
-      await chrome.windows.create({
+      const win = await chrome.windows.create({
         url: popupUrl,
         type: 'popup',
         width,
@@ -91,6 +106,9 @@ export class ConnectionManager {
         top,
         focused: true,
       });
+      if (win?.id !== undefined && this.pendingRequests.has(requestId)) {
+        this.requestWindows.set(requestId, win.id);
+      }
     } catch {
       // Popup creation failed - request will timeout
     }
