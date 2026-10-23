@@ -2,14 +2,48 @@ import { generateId } from '../shared/crypto-utils';
 import {
   getAccounts, saveAccounts,
   saveSecret, getDecryptedSecret, deleteSecret,
-  getSelectedAccountId, setSelectedAccountId,
-  type Account, type AccountAddress
+  getSelectedAccountId, setSelectedAccountId, getSettings,
+  type Account, type AccountAddress, type NetworkAddresses
 } from '../shared/storage';
 import { Mnemonic, type WordlistLanguage } from '../lib/mnemonic';
-import type { NetworkType } from '../shared/constants';
+import { NETWORKS, type NetworkType } from '../shared/constants';
 import { deriveAddresses } from '../lib/derivation';
 
 const GAP_LIMIT = 20;
+
+/**
+ * An account's addresses on a network. A 0.0.1 account only has addresses
+ * for the network it was created on; on any other it has none yet.
+ */
+function addressesOn(account: Account, network: NetworkType): NetworkAddresses {
+  const entry = account.networks?.[network];
+  if (entry) return entry;
+  if (account.network === network) {
+    return { addresses: account.addresses, addressIndex: account.addressIndex };
+  }
+  return { addresses: [], addressIndex: 0 };
+}
+
+function setAddressesOn(account: Account, network: NetworkType, entry: NetworkAddresses): void {
+  account.networks = { ...account.networks, [network]: entry };
+  if (account.network === network) {
+    account.addresses = entry.addresses;
+    account.addressIndex = entry.addressIndex;
+  }
+}
+
+/**
+ * The account as seen on one network: `network`, `addresses` and
+ * `addressIndex` are that network's. Never save a view back to storage.
+ */
+function viewOn(account: Account, network: NetworkType): Account {
+  const { addresses, addressIndex } = addressesOn(account, network);
+  return { ...account, network, addresses, addressIndex };
+}
+
+async function currentNetwork(): Promise<NetworkType> {
+  return (await getSettings()).network;
+}
 
 export class AccountManager {
   /**
@@ -18,7 +52,7 @@ export class AccountManager {
   async createAccount(
     name: string,
     password: string,
-    network: NetworkType = 'testnet',
+    network?: NetworkType,
     wordCount: number = 12,
     language: WordlistLanguage = 'english'
   ): Promise<Account> {
@@ -27,14 +61,17 @@ export class AccountManager {
   }
 
   /**
-   * Import an existing account from a mnemonic phrase
+   * Import an existing account from a mnemonic phrase. It gets its first
+   * address on every network; `network` (default: the current one) is the
+   * network it is recorded as created on.
    */
   async importAccount(
     name: string,
     mnemonic: string,
     password: string,
-    network: NetworkType = 'testnet'
+    network?: NetworkType
   ): Promise<Account> {
+    network ??= await currentNetwork();
     // Validate mnemonic
     if (!Mnemonic.validate(mnemonic)) {
       throw new Error('Invalid mnemonic phrase');
@@ -43,17 +80,21 @@ export class AccountManager {
     const id = generateId();
     const now = Date.now();
 
-    // Derive initial addresses
+    // Derive the first address on each network
     const seed = await Mnemonic.toSeed(mnemonic);
-    const addresses = await deriveAddresses(seed, network, 0, 1);
+    const networks: Partial<Record<NetworkType, NetworkAddresses>> = {};
+    for (const net of Object.keys(NETWORKS) as NetworkType[]) {
+      networks[net] = { addresses: await deriveAddresses(seed, net, 0, 1), addressIndex: 1 };
+    }
 
     const account: Account = {
       id,
       name,
       createdAt: now,
       network,
-      addresses,
+      addresses: networks[network]!.addresses,
       addressIndex: 1,
+      networks,
     };
 
     // Save account metadata (unencrypted)
@@ -69,7 +110,7 @@ export class AccountManager {
       await setSelectedAccountId(id);
     }
 
-    return account;
+    return viewOn(account, await currentNetwork());
   }
 
   /**
@@ -107,21 +148,51 @@ export class AccountManager {
   }
 
   /**
-   * List all accounts (metadata only, no secrets)
+   * List all accounts (metadata only, no secrets), as seen on the current network
    */
   async listAccounts(): Promise<Account[]> {
-    return getAccounts();
+    const network = await currentNetwork();
+    return (await getAccounts()).map(a => viewOn(a, network));
   }
 
   /**
-   * Get currently selected account
+   * An account as seen on a network (default: the current one)
+   */
+  async getAccount(accountId: string, network?: NetworkType): Promise<Account | null> {
+    const account = (await getAccounts()).find(a => a.id === accountId);
+    if (!account) return null;
+    return viewOn(account, network ?? await currentNetwork());
+  }
+
+  /**
+   * Get currently selected account, as seen on the current network
    */
   async getSelectedAccount(): Promise<Account | null> {
     const selectedId = await getSelectedAccountId();
     if (!selectedId) return null;
+    return this.getAccount(selectedId);
+  }
 
+  /**
+   * Give an account its first address on the current network, if it has
+   * none there yet (an account made by 0.0.1 only has its own network's).
+   */
+  async setUpNetwork(accountId: string, password: string): Promise<Account> {
+    const network = await currentNetwork();
     const accounts = await getAccounts();
-    return accounts.find(a => a.id === selectedId) || null;
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) throw new Error('Account not found');
+
+    if (addressesOn(account, network).addresses.length === 0) {
+      const mnemonic = await getDecryptedSecret(accountId, password);
+      const seed = await Mnemonic.toSeed(mnemonic);
+      setAddressesOn(account, network, {
+        addresses: await deriveAddresses(seed, network, 0, 1),
+        addressIndex: 1,
+      });
+      await saveAccounts(accounts);
+    }
+    return viewOn(account, network);
   }
 
   /**
@@ -143,7 +214,7 @@ export class AccountManager {
   }
 
   /**
-   * Discover more addresses using gap limit scanning
+   * Discover more addresses on the current network using gap limit scanning
    */
   async discoverAddresses(
     accountId: string,
@@ -154,15 +225,17 @@ export class AccountManager {
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
 
+    const network = await currentNetwork();
+    const entry = addressesOn(account, network);
     const mnemonic = await getDecryptedSecret(accountId, password);
     const seed = await Mnemonic.toSeed(mnemonic);
 
     let emptyCount = 0;
-    let currentIndex = account.addressIndex;
+    let currentIndex = entry.addressIndex;
     const newAddresses: AccountAddress[] = [];
 
     while (emptyCount < GAP_LIMIT) {
-      const [addr] = await deriveAddresses(seed, account.network, currentIndex, 1);
+      const [addr] = await deriveAddresses(seed, network, currentIndex, 1);
       const hasTransactions = await checkHasTransactions(addr.address);
 
       newAddresses.push(addr);
@@ -176,28 +249,32 @@ export class AccountManager {
     }
 
     // Update account with new addresses
-    account.addresses = [...account.addresses, ...newAddresses];
-    account.addressIndex = currentIndex;
+    const addresses = [...entry.addresses, ...newAddresses];
+    setAddressesOn(account, network, { addresses, addressIndex: currentIndex });
     await saveAccounts(accounts);
 
-    return account.addresses;
+    return addresses;
   }
 
   /**
-   * Add a new receiving address
+   * Add a new receiving address on the current network
    */
   async generateNewAddress(accountId: string, password: string): Promise<AccountAddress> {
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
 
+    const network = await currentNetwork();
+    const entry = addressesOn(account, network);
     const mnemonic = await getDecryptedSecret(accountId, password);
     const seed = await Mnemonic.toSeed(mnemonic);
 
-    const [newAddr] = await deriveAddresses(seed, account.network, account.addressIndex, 1);
+    const [newAddr] = await deriveAddresses(seed, network, entry.addressIndex, 1);
 
-    account.addresses.push(newAddr);
-    account.addressIndex++;
+    setAddressesOn(account, network, {
+      addresses: [...entry.addresses, newAddr],
+      addressIndex: entry.addressIndex + 1,
+    });
     await saveAccounts(accounts);
 
     return newAddr;

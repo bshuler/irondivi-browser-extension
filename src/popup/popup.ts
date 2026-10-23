@@ -11,7 +11,7 @@ import { showLoading, hideLoading, hideView } from './ui-state';
 import { sendMessage } from './message-api';
 import { MSG } from '../shared/constants';
 import { setupMnemonicModalHandlers } from './modals';
-import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation } from './account-ui';
+import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensureNetworkAddresses } from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
 import { loadContacts, setupContactsUIHandlers } from './contacts-ui';
@@ -163,6 +163,7 @@ async function init(): Promise<void> {
 
     // If no pending requests, load normal wallet view
     if (!hasPendingRequests) {
+      await ensureNetworkAddresses();
       await loadBalance();
       await loadTransactions();
       await loadContacts();

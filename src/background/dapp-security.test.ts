@@ -47,6 +47,7 @@ describe('#2 popup-only messages need an extension page sender', () => {
     ['AUTHENTICATE', { accountId: 'x', password: 'y' }],
     ['EXPORT_MNEMONIC', { accountId: 'x', password: 'y' }],
     ['IMPORT_ACCOUNT', { name: 'n', mnemonic: TEST_MNEMONIC, password: 'p' }],
+    ['ADD_NETWORK_ADDRESSES', { accountId: 'x', password: 'y' }],
   ];
 
   it('refuses every privileged message from a content-script sender', async () => {

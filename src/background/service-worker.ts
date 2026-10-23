@@ -13,6 +13,16 @@ import { isAllowedDappOrigin, isValidDappOrigin } from '../shared/origin';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 
+// A wallet made by 0.0.1 on one network has no addresses on the other until
+// its owner unlocks it there once.
+function noAddressesOn(account: Account) {
+  const name = NETWORKS[account.network].name;
+  return {
+    success: false,
+    error: `This wallet has no ${name} address yet. Open IronDivi Wallet and unlock it once on ${name}.`,
+  };
+}
+
 // True only for the extension's own pages (action popup, approval window).
 // A content script's messages carry our extension ID too, so the ID alone
 // cannot tell a web page from the popup. sender.url can: for a content script
@@ -218,6 +228,11 @@ async function handleMessage(
         await accountManager.renameAccount(payload.accountId, payload.name);
         return { success: true };
 
+      case MSG.ADD_NETWORK_ADDRESSES: {
+        const account = await accountManager.setUpNetwork(payload.accountId, payload.password);
+        return { success: true, data: { account } };
+      }
+
       case MSG.EXPORT_MNEMONIC:
         const mnemonic = await accountManager.exportMnemonic(payload.accountId, payload.password);
         return { success: true, data: { mnemonic } };
@@ -303,6 +318,7 @@ async function handleMessage(
 
           const isConnected = await connectionManager.isConnected(origin, account.id);
           if (!isConnected) return NOT_CONNECTED;
+          if (account.addresses.length === 0) return noAddressesOn(account);
 
           // Sign with the address the site asked for, which must be ours
           const signer = resolveAddress(account, payload?.address, payload?.addressIndex);
@@ -317,6 +333,7 @@ async function handleMessage(
                 message: payload.message,
                 address: signer.address,
                 addressIndex: signer.index,
+                network: account.network,
               }
             );
             return { success: true, data: result };
@@ -340,6 +357,7 @@ async function handleMessage(
       case MSG.SEND_TRANSACTION: {
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
+        if (account.addresses.length === 0) return noAddressesOn(account);
 
         const request: TransactionRequest = {
           to: payload.to,
@@ -366,7 +384,7 @@ async function handleMessage(
               'send_transaction',
               origin,
               account.id,
-              { ...request, fee: built.fee }
+              { ...request, fee: built.fee, network: account.network }
             );
             return { success: true, data: result };
           } catch (error) {
@@ -455,6 +473,8 @@ async function handleMessage(
       case MSG.CONNECT: {
         const accountId = await getSelectedAccountId();
         if (!accountId) return { success: false, error: 'No account selected' };
+        const selected = await accountManager.getAccount(accountId);
+        if (selected && selected.addresses.length === 0) return noAddressesOn(selected);
 
         const isConnected = await connectionManager.isConnected(origin, accountId);
         if (isConnected) {
@@ -587,7 +607,13 @@ async function handleMessage(
             return { success: false, error: 'Site is no longer connected' };
           }
 
-          const account = (await accountManager.listAccounts()).find(a => a.id === request.accountId);
+          // Sign on the network the site asked on, and only while it is still
+          // the wallet's network, so the site gets what it asked for
+          const network = (await getSettings()).network;
+          if (request.data.network && request.data.network !== network) {
+            return { success: false, error: 'The wallet changed network since this request. Ask the site again.' };
+          }
+          const account = await accountManager.getAccount(request.accountId, network);
           if (!account) {
             return { success: false, error: 'Account not found' };
           }

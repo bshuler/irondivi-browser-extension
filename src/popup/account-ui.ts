@@ -6,8 +6,8 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { showMnemonicModal } from './modals';
-import { MSG } from '../shared/constants';
+import { showMnemonicModal, showPasswordModal } from './modals';
+import { MSG, NETWORKS } from '../shared/constants';
 import { Account } from './types';
 import { loadBalance, loadTransactions } from './wallet-ui';
 
@@ -64,6 +64,32 @@ export async function loadAccounts(): Promise<void> {
   }
 }
 
+/**
+ * A wallet made by 0.0.1 only has addresses on the network it was made on.
+ * On any other, ask for its password once and add its first address there.
+ */
+export async function ensureNetworkAddresses(): Promise<void> {
+  const account = state.currentAccount;
+  if (!account || account.addresses.length > 0) return;
+
+  const name = NETWORKS[state.settings.network].name;
+  hideLoading();
+  const password = await showPasswordModal(`Enter your password to set up your ${name} address`);
+  if (!password) {
+    showToast(`No ${name} address yet. Unlock the wallet to add one.`, 'error');
+    return;
+  }
+  try {
+    showLoading(`Setting up ${name}...`);
+    await sendMessage(MSG.ADD_NETWORK_ADDRESSES, { accountId: account.id, password });
+    await loadAccounts();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : `Failed to set up ${name}`, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
 // ============================================================
 // Display Updates
 // ============================================================
@@ -106,6 +132,8 @@ export async function selectAccount(accountId: string): Promise<void> {
     showLoading('Switching account...');
     await sendMessage(MSG.SELECT_ACCOUNT, { accountId });
     await loadAccounts();
+    state.selectedReceiveAddressIndex = 0;
+    await ensureNetworkAddresses();
     await loadBalance();
     await loadTransactions();
     elements.accountMenu.classList.add('hidden');
@@ -161,6 +189,7 @@ async function finalizePendingAccount(): Promise<void> {
       name: pending.name,
       mnemonic: pending.mnemonic,
       password: pending.password,
+      network: state.settings.network,
     });
 
     // Clear pending data
@@ -205,6 +234,7 @@ export async function importAccount(name: string, mnemonic: string, password: st
       name,
       mnemonic: mnemonic.trim(),
       password,
+      network: state.settings.network,
     });
 
     showToast(`Wallet imported: ${response.account.name}`, 'success');

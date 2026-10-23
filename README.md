@@ -62,6 +62,13 @@ npm run watch
 3. Click "Load unpacked"
 4. Select `dist/chrome/` directory
 
+To upgrade, put the new files in the **same folder**, replacing the old ones, then
+press **Reload** (↻) on the extension's card in `chrome://extensions`. Chrome keeps
+running the old background script until you press it. Your wallet is kept, because
+it lives with the extension, not in the folder. Do not remove the extension or load
+the new version from a different folder: either one gives you an empty wallet, and
+only your recovery phrase brings your accounts back.
+
 #### Firefox
 1. Navigate to `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
@@ -86,8 +93,13 @@ that is not wired up yet.
 
 A single build serves both Divi networks. The wallet starts on **testnet**; switch
 at any time from the network badge in the popup header or from
-**Settings → Network**. Each network keeps its own accounts, because the HD
-derivation path differs.
+**Settings → Network**. Every account works on both networks: one recovery
+phrase gives a `D` address on mainnet and a `y` address on testnet, because the
+HD derivation path differs. An account made by 0.0.1 only has addresses on the
+network it was made on; the first time you open it on the other network, the
+wallet asks for its password once to add them. A site's request is signed on
+the network it was made on: if you switch network while a request waits, the
+wallet refuses it and the site has to ask again.
 
 | | Mainnet | Testnet |
 |---|---|---|

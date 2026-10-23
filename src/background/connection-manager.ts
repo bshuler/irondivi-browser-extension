@@ -1,4 +1,5 @@
 import { getConnections, saveConnections, type Connection } from '../shared/storage';
+import type { NetworkType } from '../shared/constants';
 
 export interface SigningRequestData {
   message?: string;
@@ -9,6 +10,8 @@ export interface SigningRequestData {
   fee?: number;
   fromAddresses?: string[];
   opReturn?: string;
+  // The network the request was made on; approval is refused on another
+  network?: NetworkType;
 }
 
 export interface PendingRequest {

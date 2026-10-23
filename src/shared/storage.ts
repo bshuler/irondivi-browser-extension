@@ -7,7 +7,16 @@ export interface Account {
   id: string;
   name: string;
   createdAt: number;
+  // The network the account was created on. Its addresses on that network
+  // are also kept in `addresses` and `addressIndex`, as 0.0.1 stored them.
   network: NetworkType;
+  addresses: AccountAddress[];
+  addressIndex: number;
+  // The account's addresses on each network it has been set up for.
+  networks?: Partial<Record<NetworkType, NetworkAddresses>>;
+}
+
+export interface NetworkAddresses {
   addresses: AccountAddress[];
   addressIndex: number;
 }

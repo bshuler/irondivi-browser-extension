@@ -10,7 +10,7 @@ import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal 
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
-import { loadAccounts, updateAccountDisplay } from './account-ui';
+import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
 
 // ============================================================
 // Data Loading
@@ -142,6 +142,18 @@ export async function updateSettings(updates: Partial<Settings>): Promise<void> 
 }
 
 /**
+ * Switch network and show the wallet's addresses, balance and history there
+ */
+async function switchNetwork(network: NetworkType): Promise<void> {
+  await updateSettings({ network });
+  await loadAccounts();
+  state.selectedReceiveAddressIndex = 0;
+  await ensureNetworkAddresses();
+  await loadBalance();
+  await loadTransactions();
+}
+
+/**
  * Disconnect a site
  */
 export async function disconnectSite(origin: string): Promise<void> {
@@ -214,14 +226,11 @@ export function setupSettingsUIHandlers(): void {
     item.addEventListener('click', async (e) => {
       e.stopPropagation();
       const network = (item as HTMLElement).dataset.network as NetworkType;
-      if (network && network !== state.settings.network) {
-        await updateSettings({ network });
-        // Reload data for new network
-        await loadBalance();
-        await loadTransactions();
-      }
       networkMenu.classList.add('hidden');
       elements.networkBadge.classList.remove('open');
+      if (network && network !== state.settings.network) {
+        await switchNetwork(network);
+      }
     });
   });
 
@@ -234,7 +243,7 @@ export function setupSettingsUIHandlers(): void {
   // Network select in settings view
   document.getElementById('setting-network')?.addEventListener('change', (e) => {
     const network = (e.target as HTMLSelectElement).value as NetworkType;
-    updateSettings({ network });
+    switchNetwork(network);
   });
 
   // Hide balance checkbox
