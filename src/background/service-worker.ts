@@ -446,13 +446,20 @@ async function handleMessage(
           }
         }
 
-        // From the popup (no origin), after AUTHENTICATE - sign directly
-        const signature = await signingSession.signMessage(
-          payload.message,
-          payload.addressIndex,
-          payload.network
-        );
-        return { success: true, data: { signature } };
+        // From the popup (no origin), after AUTHENTICATE - sign directly. The
+        // popup names the account, which must be the one the session unlocked,
+        // and the address and network come from that account
+        const account = typeof payload?.accountId === 'string'
+          ? await accountManager.getAccount(payload.accountId)
+          : null;
+        if (!account) return { success: false, error: 'Name the account to sign with' };
+        if (!(await signingSession.isAuthenticated(account.id))) {
+          return { success: false, error: 'Not authenticated for this account - please enter password' };
+        }
+        if (account.addresses.length === 0) return noAddressesOn(account);
+        const signer = resolveAddress(account, payload.address, payload.addressIndex);
+        const signature = await signingSession.signMessage(payload.message, signer.index, account.network);
+        return { success: true, data: { signature, address: signer.address } };
       }
 
       case MSG.SEND_TRANSACTION: {

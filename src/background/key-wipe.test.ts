@@ -84,7 +84,7 @@ describe('L3 every key and seed is wiped after use', () => {
   });
 
   it('signing a message', async () => {
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', addressIndex: 0, network: 'testnet' });
+    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(true);
     expectAllWiped();
   });

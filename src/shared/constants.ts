@@ -141,8 +141,10 @@ export interface GenerateNewAddressPayload { accountId: string; password: string
 export interface AuthenticatePayload { accountId: string; password: string }
 export interface SignMessagePayload {
   message: string;
+  // From the popup: the account to sign with, which must be the unlocked one
+  accountId?: string;
+  address?: string;
   addressIndex?: number;
-  network?: NetworkType;
 }
 export interface SignTransactionPayload {
   to: string;
