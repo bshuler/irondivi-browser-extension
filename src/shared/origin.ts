@@ -13,8 +13,9 @@ const DEV_BUILD = typeof __IRONDIVI_DEV__ !== 'undefined' && __IRONDIVI_DEV__;
 // *.divi.domains would also admit any other host under that name.
 export const PRODUCTION_SITES = ['games.divi.domains', 'services.divi.domains'];
 
-// Local dApps under development. Only a development build allows them.
-export const DEV_SITES = ['localhost', '127.0.0.1'];
+// Local dApps under development, on any port. Only a development build
+// allows them.
+export const DEV_SITES = ['localhost:*', '127.0.0.1:*'];
 
 // The default list up to 0.0.3. A stored list equal to it was never chosen
 // by the user, so it is replaced by the current default.
@@ -54,24 +55,93 @@ export function isValidDappOrigin(origin: string): boolean {
   }
 }
 
-/**
- * Convert a glob pattern to a RegExp
- * Supports: * (any chars except .), ** (any chars including .), ? (single char)
- */
-function globToRegex(pattern: string): RegExp {
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
-    .replace(/\*\*/g, '.*')               // ** matches anything
-    .replace(/\*/g, '[^.]*')              // * matches anything except dots
-    .replace(/\?/g, '.');                 // ? matches single char
-  return new RegExp(`^${escaped}$`, 'i');
+// A site pattern names a host and, optionally, a port:
+//   games.divi.domains        that host, on the scheme's default port
+//   *.example.com             one label in front of example.com, not example.com
+//   **.example.com            one or more labels in front of example.com
+//   localhost:8080            that port only
+//   localhost:*               any port
+// Matching is done on labels, not with regular expressions, and a pattern
+// that does not fit this form is refused rather than guessed at.
+interface SitePattern {
+  wildcard: 'none' | 'one' | 'any';
+  labels: string[]; // the exact labels, after any wildcard
+  port: string | '*' | ''; // '' means the scheme's default port
+}
+
+const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const MAX_SITE_PATTERNS = 50;
+
+function parseSitePattern(raw: string): SitePattern | null {
+  if (typeof raw !== 'string') return null;
+  const pattern = raw.trim().toLowerCase();
+  if (pattern.length === 0 || pattern.length > 253) return null;
+
+  const colon = pattern.lastIndexOf(':');
+  let host = pattern;
+  let port: SitePattern['port'] = '';
+  if (colon !== -1) {
+    host = pattern.slice(0, colon);
+    const p = pattern.slice(colon + 1);
+    if (p === '*') port = '*';
+    else if (/^[0-9]{1,5}$/.test(p) && Number(p) >= 1 && Number(p) <= 65535) port = String(Number(p));
+    else return null;
+  }
+
+  let wildcard: SitePattern['wildcard'] = 'none';
+  if (host.startsWith('**.')) { wildcard = 'any'; host = host.slice(3); }
+  else if (host.startsWith('*.')) { wildcard = 'one'; host = host.slice(2); }
+
+  const labels = host.split('.');
+  if (!labels.every(l => LABEL.test(l))) return null;
+  // A wildcard needs at least two labels after it, so *.com is refused
+  if (wildcard !== 'none' && labels.length < 2) return null;
+  return { wildcard, labels, port };
 }
 
 /**
- * Check if a hostname matches any pattern in the allowlist
+ * Whether a pattern is one the wallet understands. The popup and the
+ * background both check it before saving.
  */
-export function isHostAllowed(hostname: string, allowedSites: string[]): boolean {
-  return allowedSites.some(pattern => globToRegex(pattern).test(hostname));
+export function isValidSitePattern(pattern: string): boolean {
+  return parseSitePattern(pattern) !== null;
+}
+
+/**
+ * A list of patterns that may be saved: an array of at most 50 valid
+ * patterns, or the reason it may not
+ */
+export function checkSitePatterns(sites: unknown): string | null {
+  if (!Array.isArray(sites)) return 'Allowed sites must be a list';
+  if (sites.length > MAX_SITE_PATTERNS) return `At most ${MAX_SITE_PATTERNS} allowed sites`;
+  const bad = sites.find(s => !isValidSitePattern(s));
+  return bad === undefined ? null : `Not a valid site: ${String(bad).slice(0, 60)}`;
+}
+
+function matchesSitePattern(url: URL, pattern: SitePattern): boolean {
+  if (pattern.port === '' ? url.port !== '' : pattern.port !== '*' && url.port !== pattern.port) {
+    return false;
+  }
+  const host = url.hostname.toLowerCase().split('.');
+  const n = pattern.labels.length;
+  const tail = host.slice(-n);
+  if (tail.length !== n || !tail.every((l, i) => l === pattern.labels[i])) return false;
+  const extra = host.length - n;
+  if (pattern.wildcard === 'none') return extra === 0;
+  if (pattern.wildcard === 'one') return extra === 1;
+  return extra >= 1;
+}
+
+/**
+ * Check if an origin's host and port match any pattern in the allowlist
+ */
+export function isSiteAllowed(origin: string, allowedSites: string[]): boolean {
+  let url: URL;
+  try { url = new URL(origin); } catch { return false; }
+  return allowedSites.some(raw => {
+    const pattern = parseSitePattern(raw);
+    return pattern !== null && matchesSitePattern(url, pattern);
+  });
 }
 
 /**
@@ -79,5 +149,5 @@ export function isHostAllowed(hostname: string, allowedSites: string[]): boolean
  */
 export function isAllowedDappOrigin(origin: string, allowedSites: string[]): boolean {
   if (!isValidDappOrigin(origin)) return false;
-  return isHostAllowed(new URL(origin).hostname, allowedSites);
+  return isSiteAllowed(origin, allowedSites);
 }
