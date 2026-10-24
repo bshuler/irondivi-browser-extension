@@ -63,6 +63,19 @@ describe('H2 a node that lies about what a coin holds', () => {
     expect(r.success).toBe(false);
     expect(h.broadcasts).toHaveLength(0);
   });
+
+  // L11: the script being signed is rebuilt from our own address
+  it('ignores the script the node reports for a coin', async () => {
+    for (const u of h.utxos as any[]) u.script = '6a0464656164';
+    const r = await h.popup('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 1 });
+    expect(r.success).toBe(true);
+    expect(h.broadcasts).toHaveLength(1);
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('./wallet-core.ts', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(src).toMatch(/script: p2pkhScript\(input\.address\)/);
+    expect(src).not.toMatch(/\b(?:utxo|u|input)\.script\b/);
+  });
 });
 
 describe('C1 only the owner chooses the fee', () => {
