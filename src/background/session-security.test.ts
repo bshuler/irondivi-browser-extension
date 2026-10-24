@@ -58,13 +58,13 @@ describe('M2 the unlocked wallet lives only in the background\'s memory', () => 
   it('the session ends at its timeout even if the alarm never fires', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 6 * 60 * 1000); // default timeout is 5 minutes
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', addressIndex: 0, network: 'testnet' });
+    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/not authenticated/i);
   });
 
   it('within the timeout the popup can still sign', async () => {
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', addressIndex: 0, network: 'testnet' });
+    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(true);
     expect(r.data.signature).toBeTruthy();
   });
