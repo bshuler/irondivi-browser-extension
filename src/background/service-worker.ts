@@ -466,11 +466,6 @@ async function handleMessage(
           const isConnected = await connectionManager.isConnected(origin, account.id);
           if (!isConnected) return NOT_CONNECTED;
 
-          const hasPermission = await connectionManager.hasPermission(origin, account.id, 'send_transaction');
-          if (!hasPermission) {
-            return { success: false, error: 'Site does not have send_transaction permission' };
-          }
-
           // Check the send can be made before asking, and show the real fee
           const built = await buildSend(account, request);
 
@@ -682,6 +677,7 @@ async function handleMessage(
           accountId: r.accountId,
           network: r.data?.network ?? network,
           data: r.data,
+          firstUse: r.firstUse,
           createdAt: r.createdAt,
         }));
         return { success: true, data: { requests } };
@@ -723,7 +719,7 @@ async function handleMessage(
           }
 
           // The site may have been disconnected while the popup was open
-          const stillAllowed = await connectionManager.hasPermission(request.origin, request.accountId, request.type);
+          const stillAllowed = await connectionManager.isConnected(request.origin, request.accountId);
           if (!stillAllowed) {
             return { success: false, error: 'Site is no longer connected' };
           }
@@ -765,7 +761,9 @@ async function handleMessage(
             }, diviToSatoshis(request.data.fee));
           }
 
-          // Approve the request with the result
+          // Approve the request with the result; the site has now been
+          // allowed this kind of request
+          await connectionManager.grantPermission(request.origin, request.accountId, request.type);
           connectionManager.approveRequest(payload.requestId, result);
           return { success: true, data: result };
         } catch (error) {

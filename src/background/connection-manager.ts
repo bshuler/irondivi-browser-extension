@@ -21,17 +21,29 @@ export interface PendingRequest {
   accountId: string;
   data?: SigningRequestData;
   createdAt: number;
+  // The site has not had a request of this type approved before
+  firstUse?: boolean;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 }
 
 const REQUEST_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
+// A site may open at most this many approval windows a minute, so it cannot
+// bury the user in windows until one is approved to make them stop
+const MAX_REQUESTS_PER_MINUTE = 5;
+
+// All a connection grants. Signing and sending are granted by the first
+// approval of each, which needs the password
+export const CONNECT_PERMISSIONS = ['view_address'];
+
 export class ConnectionManager {
   private pendingRequests: Map<string, PendingRequest> = new Map();
   // Approval window for each pending request, so closing it rejects the request
   private requestWindows: Map<string, number> = new Map();
   private operationLock: Promise<void> = Promise.resolve();
+  // When each site last opened approval windows, for the rate limit
+  private requestTimes: Map<string, number[]> = new Map();
 
   constructor() {
     // Closing an approval window without answering is a rejection
@@ -55,6 +67,26 @@ export class ConnectionManager {
     } finally {
       releaseLock();
     }
+  }
+
+  /**
+   * Refuse a new request while the site already has one waiting, or when it
+   * has opened too many approval windows in the last minute
+   */
+  private admit(origin: string): void {
+    for (const r of this.pendingRequests.values()) {
+      if (r.origin === origin) {
+        throw new Error('This site already has a request waiting for your approval');
+      }
+    }
+    const now = Date.now();
+    const recent = (this.requestTimes.get(origin) ?? []).filter(t => now - t < 60_000);
+    if (recent.length >= MAX_REQUESTS_PER_MINUTE) {
+      this.requestTimes.set(origin, recent);
+      throw new Error('Too many requests from this site. Try again in a minute.');
+    }
+    recent.push(now);
+    this.requestTimes.set(origin, recent);
   }
 
   /**
@@ -167,6 +199,7 @@ export class ConnectionManager {
       });
     }
 
+    this.admit(origin);
     const requestId = crypto.randomUUID();
 
     return new Promise((resolve, reject) => {
@@ -206,49 +239,11 @@ export class ConnectionManager {
   }
 
   /**
-   * Request signature (creates pending request and opens approval window)
-   */
-  async requestSignature(
-    origin: string,
-    accountId: string,
-    data: { message: string; addressIndex: number }
-  ): Promise<{ requestId: string }> {
-    const requestId = crypto.randomUUID();
-
-    const request: PendingRequest = {
-      id: requestId,
-      type: 'sign_message',
-      origin,
-      accountId,
-      data,
-      createdAt: Date.now(),
-      resolve: () => {},
-      reject: () => {},
-    };
-
-    this.pendingRequests.set(requestId, request);
-    this.updateBadge();
-
-    // Set timeout
-    setTimeout(() => {
-      if (this.pendingRequests.has(requestId)) {
-        this.pendingRequests.delete(requestId);
-        this.updateBadge();
-      }
-    }, REQUEST_TIMEOUT);
-
-    // Open approval window
-    await this.openApprovalWindow(requestId, 'sign');
-
-    return { requestId };
-  }
-
-  /**
    * Approve a connection request
    */
   async approveConnection(
     requestId: string,
-    permissions: string[] = ['sign_message', 'send_transaction']
+    permissions: string[] = CONNECT_PERMISSIONS
   ): Promise<void> {
     return this.withLock(async () => {
       const request = this.pendingRequests.get(requestId);
@@ -292,6 +287,19 @@ export class ConnectionManager {
       this.updateBadge();
 
       request.reject(new Error('Connection rejected by user'));
+    });
+  }
+
+  /**
+   * Record that the owner approved a request of this type from the site
+   */
+  async grantPermission(origin: string, accountId: string, permission: string): Promise<void> {
+    return this.withLock(async () => {
+      const connections = await getConnections();
+      const connection = connections[accountId]?.[origin];
+      if (!connection?.connected || connection.permissions.includes(permission)) return;
+      connection.permissions = [...connection.permissions, permission];
+      await saveConnections(connections);
     });
   }
 
@@ -341,11 +349,12 @@ export class ConnectionManager {
     accountId: string,
     data: SigningRequestData
   ): Promise<unknown> {
-    // Verify site is connected and has permission
-    const hasPermission = await this.hasPermission(origin, accountId, type);
-    if (!hasPermission) {
-      throw new Error(`Site does not have ${type} permission`);
+    // A connected site may ask; the owner's approval, with the password, is
+    // what lets it sign or send
+    if (!(await this.isConnected(origin, accountId))) {
+      throw new Error('Site is not connected');
     }
+    const firstUse = !(await this.hasPermission(origin, accountId, type));
 
     // Check for existing pending request with same parameters (deduplication)
     const existingRequest = Array.from(this.pendingRequests.values()).find(
@@ -372,6 +381,7 @@ export class ConnectionManager {
       });
     }
 
+    this.admit(origin);
     const requestId = crypto.randomUUID();
 
     return new Promise((resolve, reject) => {
@@ -381,6 +391,7 @@ export class ConnectionManager {
         origin,
         accountId,
         data,
+        firstUse,
         createdAt: Date.now(),
         resolve: (value) => {
           this.pendingRequests.delete(requestId);

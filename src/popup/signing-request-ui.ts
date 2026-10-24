@@ -24,6 +24,8 @@ export interface SigningRequest {
     addressIndex?: number;
     opReturn?: string;
   };
+  // The site has not had a request of this type approved before
+  firstUse?: boolean;
   createdAt: number;
 }
 
@@ -52,6 +54,29 @@ function getElements() {
 // Set when this popup is an approval window opened for one request. Such a
 // window shows only that request, never another site's.
 let boundRequestId: string | null = null;
+
+// Approve does nothing until the window has been in front this long, so a
+// site cannot open the window under the user's pointer and have a click or
+// Enter meant for its own page land on Approve
+export const APPROVE_DELAY_MS = 600;
+let armedAt = Infinity;
+let armTimer: ReturnType<typeof setTimeout> | undefined;
+
+function disarmApprove(): void {
+  armedAt = Infinity;
+  clearTimeout(armTimer);
+  const { approveBtn } = getElements();
+  if (approveBtn) approveBtn.disabled = true;
+}
+
+function armApprove(): void {
+  disarmApprove();
+  armedAt = Date.now() + APPROVE_DELAY_MS;
+  armTimer = setTimeout(() => {
+    const { approveBtn } = getElements();
+    if (approveBtn && Date.now() >= armedAt) approveBtn.disabled = false;
+  }, APPROVE_DELAY_MS);
+}
 
 /**
  * Which pending request to show. An approval window gets exactly the request
@@ -116,7 +141,7 @@ export function showSigningRequestView(request: SigningRequest): void {
   if (request.type === 'connect') {
     elements.type.textContent = 'Connect Site';
     elements.type.className = 'signing-type connect';
-    elements.warningText.textContent = 'This will share your wallet address with the site. No funds will be sent.';
+    elements.warningText.textContent = 'This shares your wallet address with the site. It cannot sign or send anything without asking you, with your password, each time.';
   } else if (request.type === 'sign_message') {
     elements.type.textContent = 'Sign Message';
     elements.type.className = 'signing-type sign-message';
@@ -134,7 +159,7 @@ export function showSigningRequestView(request: SigningRequest): void {
     // Keep it simple - the warning text explains what happens
     detailsHtml = `
       <div class="signing-detail-row" style="text-align: center; padding: 8px 0;">
-        <span style="color: var(--text-secondary);">Allow this site to see your address and request approvals?</span>
+        <span style="color: var(--text-secondary);">Allow this site to see your address and ask you to approve signatures and payments?</span>
       </div>
     `;
   } else if (request.type === 'sign_message') {
@@ -190,6 +215,14 @@ export function showSigningRequestView(request: SigningRequest): void {
     }
   }
 
+  if (request.type !== 'connect' && request.firstUse) {
+    detailsHtml += `
+      <div class="signing-detail-row first-use">
+        <span style="color: var(--warning, #f59e0b);">This is the first time this site has asked to ${request.type === 'sign_message' ? 'sign a message' : 'send a payment'}.</span>
+      </div>
+    `;
+  }
+
   elements.details.innerHTML = detailsHtml;
 
   // Clear password field
@@ -203,6 +236,7 @@ export function showSigningRequestView(request: SigningRequest): void {
 
   // Show the view
   showView(elements.view);
+  armApprove();
 }
 
 /**
@@ -210,6 +244,8 @@ export function showSigningRequestView(request: SigningRequest): void {
  */
 async function handleApprove(): Promise<void> {
   if (!currentRequest) return;
+  // The button may be disabled, but Enter in the password field reaches here too
+  if (Date.now() < armedAt) return;
 
   const elements = getElements();
 
@@ -326,6 +362,10 @@ export function setupSigningRequestUIHandlers(): void {
   if (elements.approveBtn) {
     elements.approveBtn.addEventListener('click', handleApprove);
   }
+
+  // Leaving the window disarms Approve; coming back starts the delay again
+  window.addEventListener('blur', () => { if (currentRequest) disarmApprove(); });
+  window.addEventListener('focus', () => { if (currentRequest) armApprove(); });
 
   if (elements.rejectBtn) {
     elements.rejectBtn.addEventListener('click', handleReject);
