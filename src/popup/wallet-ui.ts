@@ -10,6 +10,32 @@ import { MSG, NETWORKS } from '../shared/constants';
 import { Account, Transaction, Contact, ConnectedSite, getPrimaryAddress } from './types';
 import QRCode from 'qrcode';
 
+// A transaction counts as fully accepted at this many confirmations.
+const CONFIRMATIONS_FINAL = 6;
+// How often to re-check while a transaction is still pending.
+const PENDING_REFRESH_MS = 10_000;
+// After a faucet payout, keep checking this long even before it shows up.
+const FAUCET_WATCH_MS = 60_000;
+
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let watchUntil = 0;
+
+/**
+ * Re-load balance and history in a few seconds while anything is short of final
+ * confirmation (or a faucet payout was just requested), so the row counts up by itself.
+ */
+function scheduleRefresh(): void {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = null;
+  const pending = state.transactions.some(tx => tx.confirmations < CONFIRMATIONS_FINAL);
+  if (!state.currentAccount || (!pending && Date.now() > watchUntil)) return;
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    loadBalance();
+    loadTransactions();
+  }, PENDING_REFRESH_MS);
+}
+
 // ============================================================
 // Data Loading
 // ============================================================
@@ -61,6 +87,26 @@ export function updateBalanceDisplay(): void {
     elements.balanceAmount.textContent = formatAmount(state.balance);
     elements.balanceAmount.classList.remove('hidden-balance');
   }
+  updatePendingBalance();
+}
+
+/**
+ * "+X DIVI pending": the net of transactions still in the mempool, which the
+ * confirmed balance does not count yet.
+ */
+function updatePendingBalance(): void {
+  const el = document.getElementById('balance-pending');
+  if (!el) return;
+  const net = state.transactions
+    .filter(tx => tx.confirmations === 0)
+    .reduce((sum, tx) => sum + (tx.type === 'send' ? -tx.amount : tx.amount), 0);
+  if (net === 0 || state.balanceHidden) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = `${net > 0 ? '+' : '\u2212'}${formatAmount(Math.abs(net))} DIVI pending`;
+  el.classList.remove('hidden');
 }
 
 /**
@@ -104,6 +150,8 @@ export function formatTxDate(timestamp: number): string {
  * Update the transaction list display
  */
 export function updateTransactionList(): void {
+  updatePendingBalance();
+  scheduleRefresh();
   if (state.transactions.length === 0) {
     elements.transactionList.innerHTML = '';
     const emptyState = document.createElement('div');
@@ -145,13 +193,33 @@ export function updateTransactionList(): void {
     txAddress.className = 'tx-address';
     txAddress.textContent = contact ? tx.address : displayName;
 
+    // Seen from the mempool at once; not fully accepted until the 6th confirmation.
     const confirmationsEl = document.createElement('span');
-    confirmationsEl.className = tx.confirmations === 0
+    confirmationsEl.className = tx.confirmations < CONFIRMATIONS_FINAL
       ? 'tx-confirmations unconfirmed'
       : 'tx-confirmations';
-    confirmationsEl.textContent = tx.confirmations === 0
-      ? 'Unconfirmed'
-      : `${tx.confirmations} confirmation${tx.confirmations === 1 ? '' : 's'}`;
+    if (tx.confirmations === 0) {
+      confirmationsEl.textContent = `Pending \u00b7 0/${CONFIRMATIONS_FINAL} confirmations`;
+    } else if (tx.confirmations < CONFIRMATIONS_FINAL) {
+      confirmationsEl.textContent = `${tx.confirmations}/${CONFIRMATIONS_FINAL} confirmations`;
+    } else {
+      confirmationsEl.textContent = `${tx.confirmations} confirmations`;
+    }
+
+    const explorerUrl = NETWORKS[state.settings.network].explorerUrl + tx.txid;
+    const explorerLink = document.createElement('a');
+    explorerLink.className = 'tx-explorer-link';
+    explorerLink.href = explorerUrl;
+    explorerLink.target = '_blank';
+    explorerLink.rel = 'noopener';
+    // The explorer only shows a transaction once it is in a block.
+    explorerLink.title = tx.confirmations === 0
+      ? `${tx.txid}\nThe explorer shows it once it is in a block (about a minute).`
+      : tx.txid;
+    explorerLink.textContent = tx.confirmations === 0
+      ? 'View on explorer \u2197 (once in a block)'
+      : 'View on explorer \u2197';
+    explorerLink.addEventListener('click', e => e.stopPropagation());
 
     const txDateEl = document.createElement('span');
     txDateEl.className = 'tx-date';
@@ -161,6 +229,7 @@ export function updateTransactionList(): void {
     txDetails.appendChild(txAddress);
     txDetails.appendChild(confirmationsEl);
     if (tx.timestamp) txDetails.appendChild(txDateEl);
+    txDetails.appendChild(explorerLink);
 
     // tx-amount
     const txAmount = document.createElement('div');
@@ -172,7 +241,6 @@ export function updateTransactionList(): void {
     item.appendChild(txAmount);
 
     item.addEventListener('click', () => {
-      const explorerUrl = NETWORKS[state.settings.network].explorerUrl + tx.txid;
       window.open(explorerUrl, '_blank');
     });
 
@@ -325,7 +393,7 @@ export async function handleCopyAddress(): Promise<void> {
   }
 }
 
-const FAUCET_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
+const FAUCET_COOLDOWN_MS = 24 * 60 * 60 * 1000; // The faucet pays each address once a day
 const FAUCET_COOLDOWN_PREFIX = 'irondivi_faucet_'; // Per-address cooldown: irondivi_faucet_{address}
 
 /**
@@ -355,9 +423,13 @@ export function updateFaucetCooldownState(): void {
     if (elapsed < FAUCET_COOLDOWN_MS) {
       const remainingMs = FAUCET_COOLDOWN_MS - elapsed;
       const remainingMinutes = Math.ceil(remainingMs / 60000);
+      const remainingHours = Math.ceil(remainingMinutes / 60);
+      const wait = remainingMinutes > 60
+        ? `${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`
+        : `${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
       faucetBtn.disabled = true;
       faucetBtn.textContent = 'Requested';
-      faucetStatus.textContent = `You can request more DIVI in ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+      faucetStatus.textContent = `You can request more DIVI in ${wait}`;
       faucetStatus.style.color = 'var(--text-secondary)';
       return;
     }
@@ -428,14 +500,13 @@ export async function handleFaucetRequest(): Promise<void> {
       const cooldownDiv = document.createElement('div');
       cooldownDiv.style.color = 'var(--text-secondary)';
       cooldownDiv.style.marginTop = '4px';
-      cooldownDiv.textContent = 'You can request more DIVI in 60 minutes';
+      cooldownDiv.textContent = 'It shows below as pending now, and is final at 6 confirmations.';
       faucetStatus.appendChild(cooldownDiv);
 
-      // Refresh balance after a delay
-      setTimeout(() => {
-        loadBalance();
-        loadTransactions();
-      }, 2000);
+      // The payout is in the faucet node's mempool already: show it now, then keep watching.
+      watchUntil = Date.now() + FAUCET_WATCH_MS;
+      loadBalance();
+      loadTransactions();
     } else {
       faucetBtn.disabled = false;
       faucetBtn.textContent = 'Request from Faucet';

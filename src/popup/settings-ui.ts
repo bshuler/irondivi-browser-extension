@@ -53,6 +53,9 @@ export async function loadConnectedSites(): Promise<void> {
  * Update the settings display
  */
 export function updateSettingsDisplay(): void {
+  // The stylesheet colours the whole popup by network (red Mainnet, purple Testnet)
+  document.body.dataset.network = state.settings.network;
+
   const networkName = elements.networkBadge.querySelector('.network-name');
   if (networkName) {
     networkName.textContent = NETWORKS[state.settings.network].name;
@@ -145,7 +148,31 @@ export async function updateSettings(updates: Partial<Settings>): Promise<void> 
  * Switch network and show the wallet's addresses, balance and history there
  */
 async function switchNetwork(network: NetworkType): Promise<void> {
-  await updateSettings({ network });
+  const name = NETWORKS[network].name;
+  // Moving a wallet between Mainnet and Testnet needs its password
+  let password: string | null = null;
+  if (state.accounts.length > 0) {
+    password = await showPasswordModal(`Enter your password to switch to ${name}`);
+    if (password === null) {
+      updateSettingsDisplay();
+      return;
+    }
+  }
+  try {
+    showLoading(`Switching to ${name}...`);
+    await sendMessage(MSG.UPDATE_SETTINGS, password === null ? { network } : { network, password });
+  } catch (error: unknown) {
+    hideLoading();
+    showToast(error instanceof Error ? error.message : 'Failed to switch network', 'error');
+    updateSettingsDisplay();
+    return;
+  }
+  state.settings = { ...state.settings, network };
+  updateSettingsDisplay();
+  updateBalanceDisplay();
+  updateFaucetVisibility();
+  hideLoading();
+  showToast(`Switched to ${name}`, 'success');
   await loadAccounts();
   state.selectedReceiveAddressIndex = 0;
   await ensureNetworkAddresses();

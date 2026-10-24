@@ -5,7 +5,7 @@
  * (sign_message and send_transaction).
  */
 
-import { MSG, sendMessage } from '../shared/constants';
+import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constants';
 import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
 
 // Type for a pending request (connection, signing, or transaction)
@@ -14,6 +14,7 @@ export interface SigningRequest {
   type: 'connect' | 'sign_message' | 'send_transaction';
   origin: string;
   accountId: string;
+  network?: NetworkType;
   data?: {
     message?: string;
     address?: string;
@@ -38,6 +39,7 @@ function getElements() {
     view: document.getElementById('view-signing-request') as HTMLDivElement,
     backBtn: document.getElementById('signing-request-back-btn') as HTMLButtonElement,
     origin: document.getElementById('signing-origin') as HTMLDivElement,
+    network: document.getElementById('signing-network') as HTMLSpanElement,
     type: document.getElementById('signing-type') as HTMLDivElement,
     details: document.getElementById('signing-details') as HTMLDivElement,
     warningText: document.getElementById('signing-warning-text') as HTMLSpanElement,
@@ -95,6 +97,13 @@ export function showSigningRequestView(request: SigningRequest): void {
 
   // Set origin
   elements.origin.textContent = request.origin;
+
+  // Which network this request is for, in that network's colour
+  const network = (request.network ?? document.body.dataset.network) as NetworkType | undefined;
+  if (elements.network && network && NETWORKS[network]) {
+    elements.network.textContent = NETWORKS[network].name;
+    elements.network.dataset.network = network;
+  }
 
   // Set type label and warning message based on request type
   if (request.type === 'connect') {

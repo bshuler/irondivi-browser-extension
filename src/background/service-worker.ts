@@ -1,12 +1,13 @@
 
 import { runtime, alarms } from '../shared/browser-polyfill';
 import { MSG, NETWORKS, DAPP_METHODS } from '../shared/constants';
-import { getSettings, saveSettings, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
+import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
 import { addressBook } from './address-book';
 import { walletCore, type BuiltTransaction, type TransactionRequest } from './wallet-core';
 import { rpcClient } from './rpc-client';
+import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin, isValidDappOrigin } from '../shared/origin';
@@ -92,6 +93,7 @@ async function sendFromAccount(account: Account, request: TransactionRequest): P
     // Sign and broadcast
     const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
     const txid = await rpcClient.broadcastTransaction(signedHex);
+    await addPendingTx(account.network, txid);
     return { txid, fee: built.fee };
   } finally {
     secureWipe(seed);
@@ -264,7 +266,9 @@ async function handleMessage(
 
         const ourAddresses = account.addresses.map(a => a.address);
         const ourAddressSet = new Set(ourAddresses);
-        const history = await rpcClient.getTransactionHistory(ourAddresses, payload?.limit || 50);
+        const pendingTxids = await getPendingTxids(account.network);
+        const history = await rpcClient.getTransactionHistory(ourAddresses, payload?.limit || 50, pendingTxids);
+        await prunePendingTxs(account.network, new Set(history.filter(tx => tx.confirmations > 0).map(tx => tx.txid)));
 
         // Map to UI Transaction format
         const transactions = history.map(tx => {
@@ -457,17 +461,39 @@ async function handleMessage(
         return { success: true, data: { network } };
       }
 
-      case MSG.UPDATE_SETTINGS:
+      case MSG.UPDATE_SETTINGS: {
+        // The password is only a check for a network switch; never saved
+        const { password, ...updates } = payload ?? {};
         const currentSettings = await getSettings();
-        const newSettings = { ...currentSettings, ...payload };
+        const switching = !!updates.network && updates.network !== currentSettings.network;
+        // Moving a wallet between Mainnet and Testnet needs its password;
+        // before there is a wallet there is nothing to protect
+        const accounts = switching ? await getAccounts() : [];
+        const accountId = accounts.length > 0 ? (await getSelectedAccountId()) ?? accounts[0].id : null;
+        if (accountId) {
+          if (!password) return { success: false, error: 'Enter your password to switch network' };
+          if (!(await signingSession.verifyPassword(accountId, password))) {
+            return { success: false, error: 'Invalid password' };
+          }
+        }
+
+        const newSettings = { ...currentSettings, ...updates };
         await saveSettings(newSettings);
 
         // Update RPC client network if changed
-        if (payload.network) {
-          rpcClient.setNetwork(payload.network);
+        if (updates.network) {
+          rpcClient.setNetwork(updates.network);
+        }
+
+        if (switching) {
+          // Nothing unlocked on one network carries over to the other
+          await signingSession.clearSession();
+          // and the wallet has an address on the network it moved to
+          if (accountId && password) await accountManager.setUpNetwork(accountId, password);
         }
 
         return { success: true, data: newSettings };
+      }
 
       // ============ dApp Connection ============
       case MSG.CONNECT: {
@@ -540,6 +566,7 @@ async function handleMessage(
 
         const settings = await getSettings();
         const result = await rpcClient.requestFaucet(payload.address, settings.network);
+        if (result.success && result.txid) await addPendingTx(settings.network, result.txid);
         return { success: result.success, data: result };
       }
 
@@ -554,12 +581,15 @@ async function handleMessage(
 
       // ============ Signing Request Approval ============
       case MSG.GET_PENDING_SIGNING_REQUESTS: {
-        // Include all pending requests (connect, sign_message, send_transaction)
+        // Include all pending requests (connect, sign_message, send_transaction).
+        // Each shows the network the site asked on (a connect asks on the current one).
+        const { network } = await getSettings();
         const requests = connectionManager.getAllPendingRequests().map(r => ({
           id: r.id,
           type: r.type,
           origin: r.origin,
           accountId: r.accountId,
+          network: r.data?.network ?? network,
           data: r.data,
           createdAt: r.createdAt,
         }));

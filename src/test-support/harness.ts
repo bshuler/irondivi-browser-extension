@@ -38,6 +38,15 @@ export interface Harness {
   closeWindow: (id: number) => void;
   broadcasts: string[];
   utxos: Utxo[];
+  /** Txids the fake node's address index lists (mined), for getaddresstxids. */
+  addressTxids: string[];
+  /** Txids in the fake node's mempool, for getrawmempool. */
+  mempool: string[];
+  /** Verbose transactions by txid, for getrawtransaction. */
+  rawTxs: Record<string, any>;
+  /** What the fake faucet answers; the address it was asked to pay is pushed to faucetRequests. */
+  faucetReply: { success: boolean; txid?: string; error?: string };
+  faucetRequests: string[];
   storage: Record<string, any>;
   /** Import TEST_MNEMONIC on testnet and unlock a signing session. Returns the account. */
   setupWallet: () => Promise<any>;
@@ -105,6 +114,10 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
   const createdWindows: Array<{ id: number; url: string }> = [];
   const broadcasts: string[] = [];
   const utxos: Utxo[] = [];
+  const addressTxids: string[] = [];
+  const mempool: string[] = [];
+  const rawTxs: Record<string, any> = {};
+  const faucetRequests: string[] = [];
   let nextWindowId = 100;
 
   const dispatch = (msg: any, sender: any): Promise<any> => new Promise((resolve) => {
@@ -164,7 +177,11 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
   delete (globalThis as any).browser;
 
   // Fake Divi RPC
-  const rpcFetch = vi.fn(async (_url: string, init: { body: string }) => {
+  const rpcFetch = vi.fn(async (url: string, init: { body: string }) => {
+    if (url.includes('/faucet/')) {
+      faucetRequests.push(JSON.parse(init.body).address);
+      return { ok: true, status: 200, statusText: 'OK', json: async () => structuredClone(h.faucetReply) };
+    }
     const { method, params, id } = JSON.parse(init.body);
     let result: unknown;
     switch (method) {
@@ -185,7 +202,9 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
         result = 'ab'.repeat(32);
         break;
       case 'validateaddress': result = { isvalid: true }; break;
-      case 'getaddresstxids': result = []; break;
+      case 'getaddresstxids': result = [...addressTxids]; break;
+      case 'getrawmempool': result = [...mempool]; break;
+      case 'getrawtransaction': result = rawTxs[params[0]] ? structuredClone(rawTxs[params[0]]) : null; break;
       default: result = null;
     }
     return { ok: true, status: 200, statusText: 'OK', json: async () => ({ jsonrpc: '2.0', id, result }) };
@@ -250,6 +269,11 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
     broadcasts,
     utxos,
+    addressTxids,
+    mempool,
+    rawTxs,
+    faucetReply: { success: false, error: 'faucet not set up in this test' },
+    faucetRequests,
     storage: local,
     setupWallet: async () => {
       const r = await h.popup('IMPORT_ACCOUNT', { name: 'Test', mnemonic: TEST_MNEMONIC, password: TEST_PASSWORD, network: 'testnet' });

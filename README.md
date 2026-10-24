@@ -101,6 +101,24 @@ wallet asks for its password once to add them. A site's request is signed on
 the network it was made on: if you switch network while a request waits, the
 wallet refuses it and the site has to ask again.
 
+Switching network asks for the wallet password (the one you unlock it with, not
+the recovery phrase), so a stray click cannot move you onto real DIVI. The two
+networks look different at a glance, in the same colours as
+services.divi.domains: mainnet is Divi red, testnet is purple. The approval
+window for a site names the network the site asked on in the same colours.
+
+## Transaction history and confirmations
+
+A payment shows in the history as soon as it reaches the node's mempool: a
+faucet payout, a send from the popup, or any incoming payment to your address.
+It reads **Pending · 0/6 confirmations** until it is mined, then counts up, and
+is final at **6/6**. Until then its amount shows on a separate *+X pending* line
+under the balance. Every row links to the transaction on the block explorer for
+the network it is on. The explorer itself only shows a transaction once it is in
+a block (about a minute), so a pending row's link says *(once in a block)*; before
+that the explorer opens its home page. While anything is below 6 confirmations the popup checks
+again every 10 seconds.
+
 | | Mainnet | Testnet |
 |---|---|---|
 | Address prefix | `D` (0x1e) | `x`/`y` (0x8b) |

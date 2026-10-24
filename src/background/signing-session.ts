@@ -226,6 +226,23 @@ export class SigningSession {
   }
 
   /**
+   * Check an account's password without starting a signing session. Wrong
+   * passwords count towards the same lockout as authenticate().
+   */
+  async verifyPassword(accountId: string, password: string): Promise<boolean> {
+    await this.checkRateLimit(accountId);
+    try {
+      const mnemonic = new SecureString(await getDecryptedSecret(accountId, password));
+      mnemonic.wipe();
+    } catch {
+      await this.recordFailedAttempt(accountId);
+      return false;
+    }
+    await this.clearFailedAttempts(accountId);
+    return true;
+  }
+
+  /**
    * Check if there's an active signing session for an account
    */
   async isAuthenticated(accountId?: string): Promise<boolean> {

@@ -11,8 +11,13 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <img src="../icons/icon-32.png" alt="IronDivi" class="logo">
-        <span class="brand">IronDivi</span>
+        <!-- The services.divi.domains logo: a white shield on a tile in the network colour -->
+        <span class="logo" role="img" aria-label="IronDivi">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 18.5c-3.86-.95-6.5-4.95-6.5-8.5V8.3l6.5-3.25 6.5 3.25V12c0 3.55-2.64 7.55-6.5 8.5z"/>
+          </svg>
+        </span>
+        <span class="brand">Iron<span>Divi</span></span>
       </div>
       <div class="header-right">
         <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
@@ -48,6 +53,7 @@
         <button class="icon-btn hide-balance-btn" id="hide-balance-btn" title="Toggle Balance Visibility">👁️</button>
       </div>
       <span class="balance-label">DIVI</span>
+      <span class="balance-pending hidden" id="balance-pending"></span>
     </div>
 
     <!-- Action Buttons -->
@@ -376,6 +382,7 @@
       <div class="view-header">
         <button class="back-btn" id="signing-request-back-btn">←</button>
         <h2>Signing Request</h2>
+        <span id="signing-network" class="network-pill"></span>
       </div>
       <div class="signing-request-content">
         <div class="signing-origin-wrapper">

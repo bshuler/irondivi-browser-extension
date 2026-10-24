@@ -1,5 +1,8 @@
 import { NETWORKS, FAUCET_URLS, type NetworkType } from '../shared/constants';
 
+// Most mempool transactions to look through for ours on each history load.
+const MEMPOOL_SCAN_LIMIT = 200;
+
 interface RPCResponse<T = any> {
   result?: T;
   error?: { code: number; message: string };
@@ -190,20 +193,36 @@ export class RPCClient {
   }
 
   /**
-   * Get transaction history for addresses
+   * Get transaction history for addresses. The address index only lists mined
+   * transactions, so unconfirmed ones come from the node's mempool and from
+   * `extraTxids` (ones this wallet sent or asked the faucet for); those are kept
+   * only if they pay or spend one of our addresses. Unconfirmed come first.
    */
-  async getTransactionHistory(addresses: string[], limit: number = 50): Promise<TransactionHistoryItem[]> {
+  async getTransactionHistory(addresses: string[], limit: number = 50, extraTxids: string[] = []): Promise<TransactionHistoryItem[]> {
     try {
       // Get transaction IDs for addresses
       const txids = await this.rpc<string[]>('getaddresstxids', [{ addresses }]);
+      const confirmed = new Set(txids);
+
+      let mempool: string[] = [];
+      try {
+        mempool = (await this.rpc<string[]>('getrawmempool', [])) || [];
+      } catch {
+        console.warn('Failed to read the mempool');
+      }
+      const unconfirmed = [...new Set([...extraTxids, ...mempool.slice(0, MEMPOOL_SCAN_LIMIT)])]
+        .filter(txid => !confirmed.has(txid));
 
       // Get details for each transaction (limit to most recent)
       const recentTxids = txids.slice(-limit).reverse();
+      const candidates = [...unconfirmed, ...recentTxids];
+      const maybeOurs = new Set(unconfirmed);
+      const pending: TransactionHistoryItem[] = [];
       const transactions: TransactionHistoryItem[] = [];
 
       const BATCH_SIZE = 10;
-      for (let i = 0; i < recentTxids.length; i += BATCH_SIZE) {
-        const batch = recentTxids.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+        const batch = candidates.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(txid => this.rpc<any>('getrawtransaction', [txid, 1]))
         );
@@ -211,8 +230,9 @@ export class RPCClient {
           const result = results[j];
           if (result.status === 'fulfilled' && result.value) {
             const tx = result.value;
+            if (maybeOurs.has(batch[j]) && !this.touchesAddresses(tx, addresses)) continue;
             const netAmount = this.calculateTxAmount(tx, addresses);
-            transactions.push({
+            const item: TransactionHistoryItem = {
               txid: tx.txid,
               time: tx.time || tx.blocktime || Date.now() / 1000,
               confirmations: tx.confirmations || 0,
@@ -220,14 +240,15 @@ export class RPCClient {
               fee: tx.fee || 0,
               addresses: this.extractTxAddresses(tx),
               type: netAmount >= 0 ? 'receive' : 'send',
-            });
-          } else if (result.status === 'rejected') {
+            };
+            (item.confirmations === 0 ? pending : transactions).push(item);
+          } else if (result.status === 'rejected' && !maybeOurs.has(batch[j])) {
             console.warn(`Failed to get transaction ${batch[j]}`);
           }
         }
       }
 
-      return transactions;
+      return [...pending, ...transactions];
     } catch (e) {
       console.error('Failed to get transaction history');
       throw new Error(`Failed to fetch transaction history: ${e instanceof Error ? e.message : String(e)}`);
@@ -284,6 +305,15 @@ export class RPCClient {
    */
   async getRawTransaction(txid: string, verbose: boolean = true): Promise<any> {
     return this.rpc('getrawtransaction', [txid, verbose ? 1 : 0]);
+  }
+
+  /**
+   * Whether a transaction pays or spends any of the given addresses
+   */
+  private touchesAddresses(tx: any, ourAddresses: string[]): boolean {
+    const ourSet = new Set(ourAddresses);
+    return (tx.vout || []).some((v: any) => (v.scriptPubKey?.addresses || []).some((a: string) => ourSet.has(a)))
+      || (tx.vin || []).some((v: any) => v.address && ourSet.has(v.address));
   }
 
   /**

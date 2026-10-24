@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 async function switchTo(network: 'mainnet' | 'testnet') {
-  const r = await h.popup('UPDATE_SETTINGS', { network });
+  const r = await h.popup('UPDATE_SETTINGS', { network, password: TEST_PASSWORD });
   expect(r?.success).toBe(true);
 }
 
@@ -48,7 +48,8 @@ describe('each network has its own addresses', () => {
     // Make the stored account look like one saved by 0.0.1: no per-network entries.
     for (const a of h.storage.accounts) delete a.networks;
 
-    await switchTo('mainnet');
+    // 0.0.1 could switch network without the password, so it may start up already on mainnet.
+    h.storage.settings = { ...h.storage.settings, network: 'mainnet' };
     expect((await selected()).addresses).toEqual([]);
 
     // A site asking to connect is told to set the wallet up on mainnet first.
@@ -78,5 +79,39 @@ describe('each network has its own addresses', () => {
     const r = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
     expect(r).toEqual({ success: false, error: expect.stringContaining('changed network') });
     void pending;
+  });
+});
+
+describe('switching network needs the password', () => {
+  it('refuses a switch without the password, and with a wrong one', async () => {
+    h = await createHarness();
+    await h.setupWallet();
+
+    const none = await h.popup('UPDATE_SETTINGS', { network: 'mainnet' });
+    expect(none).toEqual({ success: false, error: 'Enter your password to switch network' });
+    const wrong = await h.popup('UPDATE_SETTINGS', { network: 'mainnet', password: 'wrong password' });
+    expect(wrong).toEqual({ success: false, error: 'Invalid password' });
+
+    const settings = await h.popup('GET_SETTINGS');
+    expect(settings.data.settings.network).toBe('testnet');
+  });
+
+  it('never stores the password, and sets up the new network\'s addresses on the way', async () => {
+    h = await createHarness();
+    const account = await h.setupWallet();
+    for (const a of h.storage.accounts) delete a.networks;
+
+    await switchTo('mainnet');
+    expect(h.storage.settings).not.toHaveProperty('password');
+    expect(JSON.stringify(h.storage)).not.toContain(TEST_PASSWORD);
+    expect((await selected()).addresses[0].address).toMatch(/^D/);
+    void account;
+  });
+
+  it('other settings change without the password', async () => {
+    h = await createHarness();
+    await h.setupWallet();
+    const r = await h.popup('UPDATE_SETTINGS', { authTimeoutMinutes: 30 });
+    expect(r?.success).toBe(true);
   });
 });
