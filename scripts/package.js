@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import archiver from 'archiver';
@@ -73,8 +74,23 @@ async function main() {
     await createPackage(browser);
   }
   packageSafari();
+  writeChecksums();
 
   console.log(`\nAll packages created in ${packagesDir}`);
+}
+
+// SHA256SUMS lists every package of this version, in the format sha256sum -c
+// reads, so a download can be checked against the sums published with it
+function writeChecksums() {
+  const prefix = 'irondivi-wallet-';
+  const suffix = `-v${version}.`;
+  const lines = readdirSync(packagesDir)
+    .filter(name => name.startsWith(prefix) && name.includes(suffix))
+    .sort()
+    .map(name => `${createHash('sha256').update(readFileSync(join(packagesDir, name))).digest('hex')}  ${name}`);
+  const sumsPath = join(packagesDir, `SHA256SUMS-v${version}`);
+  writeFileSync(sumsPath, lines.join('\n') + '\n');
+  console.log(`\nWrote ${sumsPath}:\n${lines.join('\n')}`);
 }
 
 main().catch(err => {
