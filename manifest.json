@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IronDivi Wallet",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Secure cryptocurrency wallet for IronDivi",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'self'"

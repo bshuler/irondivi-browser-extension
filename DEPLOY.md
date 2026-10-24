@@ -7,16 +7,16 @@
 npm run build:all
 
 # 2. Create release packages
-cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.3.zip .
-cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.3.xpi .
-cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.3.zip .
+cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.4.zip .
+cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.4.xpi .
+cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.4.zip .
 cd ../..
 # Safari is not a zip: see "Safari" below.
 
 # 3. Upload to vps1
-scp releases/irondivi-wallet-chrome-v0.0.3.zip \
-    releases/irondivi-wallet-edge-v0.0.3.zip \
-    releases/irondivi-wallet-firefox-v0.0.3.xpi \
+scp releases/irondivi-wallet-chrome-v0.0.4.zip \
+    releases/irondivi-wallet-edge-v0.0.4.zip \
+    releases/irondivi-wallet-firefox-v0.0.4.xpi \
     ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
 ```
 
@@ -24,11 +24,11 @@ scp releases/irondivi-wallet-chrome-v0.0.3.zip \
 
 ```bash
 npm run build:all && \
-cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.3.zip . && \
-cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.3.xpi . && \
-cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.3.zip . && \
+cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.4.zip . && \
+cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.4.xpi . && \
+cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.4.zip . && \
 cd ../.. && \
-scp releases/irondivi-wallet-chrome-v0.0.3.zip releases/irondivi-wallet-edge-v0.0.3.zip releases/irondivi-wallet-firefox-v0.0.3.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
+scp releases/irondivi-wallet-chrome-v0.0.4.zip releases/irondivi-wallet-edge-v0.0.4.zip releases/irondivi-wallet-firefox-v0.0.4.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
 ```
 
 ## Safari
