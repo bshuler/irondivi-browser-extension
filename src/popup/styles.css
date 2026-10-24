@@ -775,6 +775,55 @@ body {
   max-width: 200px;
 }
 
+/* Send confirm: the whole recipient address, in groups of four */
+.detail-row.recipient-row {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row.recipient-row span:last-child {
+  text-align: left;
+}
+
+.address-chunks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.address-chunk {
+  letter-spacing: 0.5px;
+}
+
+.recipient-note {
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+  border-radius: 8px;
+}
+
+.recipient-note.ok {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary, transparent);
+}
+
+.recipient-note.warn {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.recipient-note.danger {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--danger);
+  font-weight: 600;
+}
+
 /* Receive View */
 .receive-content {
   padding: 12px 16px;

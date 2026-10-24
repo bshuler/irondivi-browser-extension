@@ -8,6 +8,7 @@ import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showV
 import { sendMessage } from './message-api';
 import { MSG, DUST_THRESHOLD } from '../shared/constants';
 import { loadBalance, loadTransactions } from './wallet-ui';
+import { checkRecipient, chunkAddress, recipientNote, type KnownContact } from './recipient-check';
 
 // ============================================================
 // Send Transaction Handlers
@@ -99,7 +100,7 @@ export async function handleSendConfirm(): Promise<void> {
   state.pendingSendTx = { to, amount, fee, fromAddresses };
 
   // Update confirm view
-  (document.getElementById('confirm-to') as HTMLSpanElement).textContent = formatAddress(to);
+  showRecipient(to, await loadRecipientContacts());
   (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} DIVI`;
   (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} DIVI`;
 
@@ -108,6 +109,37 @@ export async function handleSendConfirm(): Promise<void> {
   (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} DIVI`;
 
   showView(elements.viewSendConfirm);
+}
+
+/**
+ * This account's network's contacts, for the recipient check. On failure the
+ * recipient is treated as new, which only makes the warning stronger.
+ */
+async function loadRecipientContacts(): Promise<KnownContact[]> {
+  try {
+    const response = await sendMessage<{ contacts: KnownContact[] }>(MSG.GET_CONTACTS, { network: state.currentAccount?.network });
+    return response.contacts || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The whole recipient address in groups of four, and what is known about it
+ */
+function showRecipient(to: string, contacts: KnownContact[]): void {
+  const toEl = document.getElementById('confirm-to') as HTMLSpanElement;
+  toEl.replaceChildren(...chunkAddress(to).map(chunk => {
+    const span = document.createElement('span');
+    span.className = 'address-chunk';
+    span.textContent = chunk;
+    return span;
+  }));
+  const own = state.currentAccount?.addresses.map(a => a.address) ?? [];
+  const note = recipientNote(checkRecipient(to, contacts, own));
+  const noteEl = document.getElementById('confirm-recipient-note') as HTMLDivElement;
+  noteEl.textContent = note.text;
+  noteEl.className = `recipient-note ${note.level}`;
 }
 
 /**
