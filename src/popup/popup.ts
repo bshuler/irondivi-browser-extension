@@ -135,18 +135,22 @@ async function init(): Promise<void> {
     await loadSettings();
     updateBalanceButtonIcon();
 
-    // Check for pending account creation first (user closed popup before confirming mnemonic)
-    const hadPendingAccount = await checkPendingAccountCreation();
-    if (hadPendingAccount) {
-      // Account was just created, loadAccounts was called in finalizePendingAccount
-      hideLoading();
-      return;
+    // An approval window only ever shows the request it was opened for; a
+    // site can open one, so it must never resume a half-made wallet
+    const approvalParams = checkApprovalParams();
+
+    if (!approvalParams) {
+      // Resume a wallet setup the user left before confirming the phrase
+      const hadPendingAccount = await checkPendingAccountCreation();
+      if (hadPendingAccount) {
+        // Account was just created, loadAccounts was called in finalizePendingAccount
+        hideLoading();
+        return;
+      }
     }
 
     await loadAccounts();
 
-    // Check if this is an approval window
-    const approvalParams = checkApprovalParams();
     if (approvalParams) {
       // This is an approval popup - check for the specific pending request
       const hasPendingRequests = await checkPendingRequests(approvalParams.requestId);

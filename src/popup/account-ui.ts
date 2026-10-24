@@ -10,32 +10,7 @@ import { showMnemonicModal, showPasswordModal } from './modals';
 import { MSG, NETWORKS } from '../shared/constants';
 import { Account } from './types';
 import { loadBalance, loadTransactions } from './wallet-ui';
-
-// ============================================================
-// Pending Account Storage (survives popup close)
-// ============================================================
-
-interface PendingAccount {
-  name: string;
-  password: string;
-  mnemonic: string;
-}
-
-const PENDING_ACCOUNT_KEY = 'irondivi_pending_account';
-
-async function savePendingAccount(data: PendingAccount): Promise<void> {
-  await chrome.storage.session.set({ [PENDING_ACCOUNT_KEY]: data });
-}
-
-async function getPendingAccount(): Promise<PendingAccount | null> {
-  const result = await chrome.storage.session.get(PENDING_ACCOUNT_KEY);
-  const pending = result[PENDING_ACCOUNT_KEY] as PendingAccount | undefined;
-  return pending || null;
-}
-
-async function clearPendingAccount(): Promise<void> {
-  await chrome.storage.session.remove(PENDING_ACCOUNT_KEY);
-}
+import { savePending, pendingState, unlockPending, clearPending } from './pending-account';
 
 // ============================================================
 // Data Loading
@@ -147,7 +122,7 @@ export async function selectAccount(accountId: string): Promise<void> {
 
 /**
  * Create a new account
- * Flow: Generate mnemonic -> Save pending -> Show to user -> Create account after confirmation
+ * Flow: Generate mnemonic -> Save it encrypted -> Show to user -> Create account after confirmation
  */
 export async function createAccount(name: string, password: string, wordCount: number): Promise<void> {
   try {
@@ -158,8 +133,8 @@ export async function createAccount(name: string, password: string, wordCount: n
       wordCount,
     });
 
-    // Step 2: Save pending account data (survives popup close)
-    await savePendingAccount({ name, password, mnemonic: genResponse.mnemonic });
+    // Step 2: Keep the phrase, encrypted with the chosen password, in case the popup closes
+    await savePending(name, genResponse.mnemonic, password);
 
     hideLoading();
 
@@ -167,7 +142,7 @@ export async function createAccount(name: string, password: string, wordCount: n
     await showMnemonicModal(genResponse.mnemonic, 'Save Your Recovery Phrase');
 
     // Step 4: User confirmed - NOW create the account
-    await finalizePendingAccount();
+    await finalizePendingAccount(name, genResponse.mnemonic, password);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create wallet';
     showToast(errorMessage, 'error');
@@ -179,21 +154,17 @@ export async function createAccount(name: string, password: string, wordCount: n
 /**
  * Finalize a pending account after mnemonic confirmation
  */
-async function finalizePendingAccount(): Promise<void> {
-  const pending = await getPendingAccount();
-  if (!pending) return;
-
+async function finalizePendingAccount(name: string, mnemonic: string, password: string): Promise<void> {
   try {
     showLoading('Creating wallet...');
     const importResponse = await sendMessage<{ account: Account }>(MSG.IMPORT_ACCOUNT, {
-      name: pending.name,
-      mnemonic: pending.mnemonic,
-      password: pending.password,
+      name,
+      mnemonic,
+      password,
       network: state.settings.network,
     });
 
-    // Clear pending data
-    await clearPendingAccount();
+    await clearPending();
 
     showToast(`Wallet created: ${importResponse.account.name}`, 'success');
 
@@ -210,17 +181,41 @@ async function finalizePendingAccount(): Promise<void> {
 }
 
 /**
- * Check for and resume pending account creation (called on popup open)
+ * Resume a wallet whose phrase was shown but not confirmed before the popup
+ * closed (called on popup open, never in an approval window). Returns true if
+ * the wallet was created.
  */
 export async function checkPendingAccountCreation(): Promise<boolean> {
-  const pending = await getPendingAccount();
-  if (!pending) return false;
+  const pending = await pendingState();
+  if (pending.kind === 'none') return false;
 
-  // Show the mnemonic modal again
-  await showMnemonicModal(pending.mnemonic, 'Save Your Recovery Phrase');
+  if (pending.kind === 'legacy') {
+    // An earlier version kept the phrase and password here in plain text
+    await clearPending();
+    showToast('An unfinished wallet setup was discarded. Create the wallet again.', 'error');
+    return false;
+  }
 
-  // User confirmed - finalize the account
-  await finalizePendingAccount();
+  hideLoading();
+  const password = await showPasswordModal(`Enter the password you chose to finish setting up ${pending.name}`);
+  if (password === null) {
+    await clearPending();
+    showToast('Wallet setup cancelled', 'error');
+    return false;
+  }
+
+  const unlocked = await unlockPending(password);
+  if (!unlocked) {
+    showToast('Wrong password. Open the wallet again to retry.', 'error');
+    return false;
+  }
+
+  await showMnemonicModal(unlocked.mnemonic, 'Save Your Recovery Phrase');
+  try {
+    await finalizePendingAccount(unlocked.name, unlocked.mnemonic, password);
+  } catch {
+    return false;
+  }
   return true;
 }
 
