@@ -181,26 +181,6 @@ export function setupMnemonicModalHandlers(): void {
     }
   });
 
-  elements.mnemonicCopyBtn.addEventListener('click', async () => {
-    const wordElements = elements.mnemonicGrid.querySelectorAll('.word-text');
-    const words = Array.from(wordElements).map(el => el.textContent || '');
-    const mnemonic = words.join(' ');
-
-    try {
-      await navigator.clipboard.writeText(mnemonic);
-      const originalText = elements.mnemonicCopyBtn.textContent;
-      elements.mnemonicCopyBtn.textContent = 'Copied!';
-      setTimeout(() => {
-        elements.mnemonicCopyBtn.textContent = originalText;
-      }, 2000);
-    } catch {
-      elements.mnemonicCopyBtn.textContent = 'Failed';
-      setTimeout(() => {
-        elements.mnemonicCopyBtn.textContent = 'Copy Words';
-      }, 2000);
-    }
-  });
-
   elements.mnemonicConfirmBtn.addEventListener('click', () => {
     hideMnemonicModal();
   });
