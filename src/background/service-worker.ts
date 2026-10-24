@@ -12,7 +12,7 @@ import { rpcClient } from './rpc-client';
 import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
-import { isAllowedDappOrigin, isValidDappOrigin } from '../shared/origin';
+import { isAllowedDappOrigin } from '../shared/origin';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 
@@ -218,6 +218,19 @@ async function handleMessage(
   // Only our own pages may send anything but the dApp methods. Everything
   // else comes from a content script in a tab, i.e. from a web page.
   const fromExtensionPage = isExtensionPage(sender);
+
+  // The content script asks whether its own page may use the wallet before it
+  // injects window.irondivi. The answer is about the sender's origin only.
+  if (!fromExtensionPage && sender.tab && type === MSG.SITE_ALLOWED) {
+    try {
+      const pageOrigin = sender.origin || new URL(sender.url || '').origin;
+      const { allowedSites } = await getSettings();
+      return { success: true, data: { allowed: isAllowedDappOrigin(pageOrigin, allowedSites) } };
+    } catch {
+      return { success: true, data: { allowed: false } };
+    }
+  }
+
   if (!fromExtensionPage && (!sender.tab || !DAPP_METHODS.includes(type))) {
     return { success: false, error: 'Unauthorized sender' };
   }
@@ -805,80 +818,19 @@ alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   }
 });
 
-// Programmatic content script injection for better compatibility
-// Uses webNavigation.onCommitted which fires reliably when page navigation is committed
-chrome.webNavigation.onCommitted.addListener(async (details) => {
-  // Only inject for main frame (not iframes)
-  if (details.frameId !== 0) return;
-
-  // Only inject on pages the wallet serves at all
-  try {
-    if (!isValidDappOrigin(new URL(details.url).origin)) return;
-  } catch {
-    return;
-  }
-
-  try {
-    // Inject content script programmatically
-    await chrome.scripting.executeScript({
-      target: { tabId: details.tabId },
-      files: ['content-script.js'],
-      injectImmediately: true,
-    });
-  } catch (error) {
-    // Ignore errors for pages where we can't inject (chrome://, etc.)
-  }
-});
-
-// Also inject when tab is activated (for already-loaded tabs)
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  try {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (!tab.url) return;
-
-    if (!isValidDappOrigin(new URL(tab.url).origin)) return;
-
-    // Check if provider is already injected
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: activeInfo.tabId },
-      func: () => !!(window as any).irondivi,
-    });
-
-    if (results && results[0] && !results[0].result) {
-      // Provider not injected, inject now
-      await chrome.scripting.executeScript({
-        target: { tabId: activeInfo.tabId },
-        files: ['content-script.js'],
-        injectImmediately: true,
-      });
-    }
-  } catch (error) {
-    // Ignore errors
-  }
-});
-
 // Initialize on startup
 async function initialize() {
   const settings = await getSettings();
   rpcClient.setNetwork(settings.network);
+}
 
-  // Register content scripts programmatically for better compatibility
-  // This ensures content scripts are registered even if declarative ones don't work
-  try {
-    // First, unregister any existing scripts to avoid duplicates
-    await chrome.scripting.unregisterContentScripts({ ids: ['irondivi-provider'] }).catch(() => {});
-
-    // Register the content script
-    await chrome.scripting.registerContentScripts([{
-      id: 'irondivi-provider',
-      matches: ['<all_urls>'],
-      js: ['content-script.js'],
-      runAt: 'document_start',
-      allFrames: false,
-    }]);
-  } catch {
-    // Content script registration failed - manifest declaration is the fallback
-  }
+// Keep web pages' content scripts out of local storage, where the encrypted
+// vault lives. They ask SITE_ALLOWED instead. Not every browser supports this
+// for local storage; where it does not, the content script still never reads it.
+try {
+  (chrome.storage.local as any).setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' })?.catch?.(() => {});
+} catch {
+  // Unsupported
 }
 
 initialize();

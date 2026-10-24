@@ -1,7 +1,5 @@
-import { runtime, storage } from '../shared/browser-polyfill';
-import { DEFAULT_SETTINGS, type Settings } from '../shared/storage';
-import { DAPP_METHODS } from '../shared/constants';
-import { isAllowedDappOrigin } from '../shared/origin';
+import { runtime } from '../shared/browser-polyfill';
+import { DAPP_METHODS, MSG } from '../shared/constants';
 
 // Message types for content script bridge
 const PROVIDER_MESSAGE = 'IRONDIVI_PROVIDER_MESSAGE';
@@ -10,21 +8,16 @@ const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
 // Capture page origin once at initialization
 const pageOrigin = window.location.origin;
 
-/**
- * Get settings from storage with defaults
- */
-async function getSettings(): Promise<Settings> {
-  try {
-    const { settings } = await storage.local.get<{ settings: Settings }>('settings');
-    return { ...DEFAULT_SETTINGS, ...settings };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
+// Run once per page. This window is the content script's own isolated world,
+// so the page cannot see or set the flag; a second copy (an extension reload)
+// must not add a second relay or inject a second provider.
+const firstCopy = !(window as any).__irondiviBridge;
+(window as any).__irondiviBridge = true;
 
-// Whether this page may use the wallet at all: same rule as the background
-const siteAllowed: Promise<boolean> = getSettings()
-  .then(settings => isAllowedDappOrigin(pageOrigin, settings.allowedSites))
+// Whether this page may use the wallet at all. The background decides from
+// this tab's origin; a content script never reads extension storage.
+const siteAllowed: Promise<boolean> = (runtime.sendMessage({ type: MSG.SITE_ALLOWED }) as Promise<any>)
+  .then(r => r?.success === true && r.data?.allowed === true)
   .catch(() => false);
 
 /**
@@ -43,7 +36,7 @@ function injectProvider() {
 /**
  * Listen for messages from the injected provider
  */
-window.addEventListener('message', async (event) => {
+async function onPageMessage(event: MessageEvent) {
   // Only accept messages from the same window
   if (event.source !== window) return;
 
@@ -91,9 +84,11 @@ window.addEventListener('message', async (event) => {
       },
     }, pageOrigin);
   }
-});
+}
+
+if (firstCopy) window.addEventListener('message', onPageMessage);
 
 // Inject the provider only on allowed sites
 siteAllowed.then(allowed => {
-  if (allowed) injectProvider();
+  if (allowed && firstCopy) injectProvider();
 });

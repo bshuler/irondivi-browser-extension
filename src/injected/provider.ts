@@ -235,18 +235,27 @@ class IronDiviProvider {
   }
 }
 
-// Create and expose the provider
-const provider = new IronDiviProvider();
+// Create and expose the provider, once. A second copy of this script (an
+// extension reload, a page that loads it again) must not add a second message
+// listener or replace the provider a dApp already holds.
+if (!(window as any).irondivi?.isIronDivi) {
+  const provider = new IronDiviProvider();
 
-// Attach to window
-(window as any).irondivi = provider;
-
-// Dispatch event to notify dApps
-window.dispatchEvent(new CustomEvent('irondivi#initialized'));
-
-// Also dispatch on DOMContentLoaded for late listeners
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    window.dispatchEvent(new CustomEvent('irondivi#initialized'));
+  // Not writable or configurable: a later script cannot swap in a fake
+  Object.defineProperty(window, 'irondivi', {
+    value: provider,
+    writable: false,
+    configurable: false,
+    enumerable: true,
   });
+
+  // Dispatch event to notify dApps
+  window.dispatchEvent(new CustomEvent('irondivi#initialized'));
+
+  // Also dispatch on DOMContentLoaded for late listeners
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.dispatchEvent(new CustomEvent('irondivi#initialized'));
+    });
+  }
 }

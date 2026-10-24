@@ -79,6 +79,8 @@ export const MSG = {
   IS_CONNECTED: 'IS_CONNECTED',
   GET_CONNECTED_SITES: 'GET_CONNECTED_SITES',
   REVOKE_SITE: 'REVOKE_SITE',
+  // Content script only: may this page use the wallet at all?
+  SITE_ALLOWED: 'SITE_ALLOWED',
 
   // Signing request approval
   GET_PENDING_SIGNING_REQUESTS: 'GET_PENDING_SIGNING_REQUESTS',

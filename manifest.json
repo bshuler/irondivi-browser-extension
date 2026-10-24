@@ -8,14 +8,11 @@
   },
   "permissions": [
     "storage",
-    "alarms",
-    "activeTab",
-    "scripting",
-    "tabs",
-    "webNavigation"
+    "alarms"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://services.divi.domains/*",
+    "https://vps1.divi.domains/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -31,15 +28,23 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["provider.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "provider.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "icons": {
