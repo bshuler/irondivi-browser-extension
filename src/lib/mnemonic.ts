@@ -90,6 +90,14 @@ function validateMnemonic(mnemonic: string, language?: WordlistLanguage): boolea
     return checksumBits === expectedChecksum;
 }
 
+/**
+ * The canonical form of a phrase as typed or pasted: capitals, extra spaces
+ * and line breaks change the seed, so import must derive from this form
+ */
+function normalizePhrase(phrase: string): string {
+    return phrase.normalize('NFKD').trim().toLowerCase().split(/\s+/).join(' ');
+}
+
 // Convert mnemonic to seed
 async function toSeed(phrase: string, passphrase: string = ''): Promise<Uint8Array> {
     return await PBKDF2.mnemonicToSeed(phrase, passphrase);
@@ -113,5 +121,6 @@ export const Mnemonic = {
     generate: generateMnemonic,
     validate: validateMnemonic,
     toSeed,
+    normalize: normalizePhrase,
     detectLanguage
 };

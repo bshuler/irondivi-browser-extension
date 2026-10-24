@@ -72,7 +72,10 @@ export class AccountManager {
     network?: NetworkType
   ): Promise<Account> {
     network ??= await currentNetwork();
-    // Validate mnemonic
+    if (typeof mnemonic !== 'string') {
+      throw new Error('Invalid mnemonic phrase');
+    }
+    mnemonic = Mnemonic.normalize(mnemonic);
     if (!Mnemonic.validate(mnemonic)) {
       throw new Error('Invalid mnemonic phrase');
     }
