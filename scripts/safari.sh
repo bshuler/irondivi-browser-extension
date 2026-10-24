@@ -46,9 +46,11 @@ else
   SIGN_ARGS=(CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$SIGN" -allowProvisioningUpdates)
 fi
 
+# Universal, so the download runs on Intel Macs as well as Apple silicon
 xcodebuild -project "$OUT/$APP_NAME/$APP_NAME.xcodeproj" \
   -scheme "$APP_NAME" -configuration Debug \
-  -derivedDataPath "$OUT/build" "${SIGN_ARGS[@]}" build 2>&1 \
+  -derivedDataPath "$OUT/build" "${SIGN_ARGS[@]}" \
+  ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO build 2>&1 \
   | grep -E "error:|warning: The following keys|BUILD " || true
 
 APP="$OUT/build/Build/Products/Debug/$APP_NAME.app"

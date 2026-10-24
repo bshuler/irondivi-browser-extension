@@ -16,7 +16,7 @@ irondivi-browser-extension/
 ├── assets/
 │   └── icons/           # Extension icons
 ├── scripts/             # Build and packaging scripts
-├── install-site/        # Installation landing page
+├── site/                # browser.divi.domains page; site/deploy/ publishes it (see DEPLOY.md)
 ├── scripts/remote-check.sh # Runs tsc/vitest/build on hp2 (replaces CI)
 ├── manifest.json        # Chrome/Edge manifest (MV3)
 ├── manifest.firefox.json # Firefox-specific overrides
@@ -241,7 +241,9 @@ npm test
 npm run package:release
 ```
 
-Output ZIP files: `packages/irondivi-browser-extension-{browser}-{version}.zip`
+Output in `packages/`: `irondivi-wallet-{chrome,edge,opera,safari}-v{version}.zip`,
+`irondivi-wallet-firefox-v{version}.xpi`, `SHA256SUMS-v{version}` and `releases.json`.
+The Safari zip needs `npm run build:safari:app` first. Publishing is in DEPLOY.md.
 
 ## License
 

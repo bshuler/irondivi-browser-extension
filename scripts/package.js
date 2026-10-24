@@ -74,7 +74,7 @@ async function main() {
     await createPackage(browser);
   }
   packageSafari();
-  writeChecksums();
+  writeReleases(writeChecksums());
 
   console.log(`\nAll packages created in ${packagesDir}`);
 }
@@ -87,10 +87,29 @@ function writeChecksums() {
   const lines = readdirSync(packagesDir)
     .filter(name => name.startsWith(prefix) && name.includes(suffix))
     .sort()
-    .map(name => `${createHash('sha256').update(readFileSync(join(packagesDir, name))).digest('hex')}  ${name}`);
+    .map(name => {
+      const data = readFileSync(join(packagesDir, name));
+      return { name, sha256: createHash('sha256').update(data).digest('hex'), bytes: data.length };
+    });
+  const text = lines.map(l => `${l.sha256}  ${l.name}`).join('\n');
   const sumsPath = join(packagesDir, `SHA256SUMS-v${version}`);
-  writeFileSync(sumsPath, lines.join('\n') + '\n');
-  console.log(`\nWrote ${sumsPath}:\n${lines.join('\n')}`);
+  writeFileSync(sumsPath, text + '\n');
+  console.log(`\nWrote ${sumsPath}:\n${text}`);
+  return lines;
+}
+
+// releases.json is what browser.divi.domains reads to offer each browser its
+// download, with the same sha256 as SHA256SUMS
+function writeReleases(lines) {
+  const files = {};
+  for (const l of lines) {
+    const browser = l.name.slice('irondivi-wallet-'.length, l.name.indexOf(`-v${version}.`));
+    files[browser] = { file: l.name, sha256: l.sha256, bytes: l.bytes };
+  }
+  const release = { version, date: new Date().toISOString().slice(0, 10), sums: `SHA256SUMS-v${version}`, files };
+  const releasesPath = join(packagesDir, 'releases.json');
+  writeFileSync(releasesPath, JSON.stringify(release, null, 2) + '\n');
+  console.log(`Wrote ${releasesPath}`);
 }
 
 main().catch(err => {

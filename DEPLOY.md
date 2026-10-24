@@ -1,51 +1,49 @@
 # IronDivi Wallet Extension Deployment
 
-## Quick Deploy to vps1
+## Release to browser.divi.domains
+
+The extension is published at https://browser.divi.domains: the page in `site/`, and every
+version's packages under `/downloads/`. Packages are built on this Mac, because the Safari app
+needs Xcode.
 
 ```bash
-# 1. Build all browsers
-npm run build:all
-
-# 2. Create release packages
-cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.4.zip .
-cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.4.xpi .
-cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.4.zip .
-cd ../..
-# Safari is not a zip: see "Safari" below.
-
-# 3. Upload to vps1
-scp releases/irondivi-wallet-chrome-v0.0.4.zip \
-    releases/irondivi-wallet-edge-v0.0.4.zip \
-    releases/irondivi-wallet-firefox-v0.0.4.xpi \
-    ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
+npm run build:all            # dist/{chrome,firefox,edge,safari}
+npm run build:safari:app     # universal (arm64 + x86_64) Safari app, ad-hoc signed
+npm run package              # packages/: zips, .xpi, SHA256SUMS-v<version>, releases.json
+site/deploy/deploy.sh        # page, this version's packages, nginx vhost, TLS
 ```
 
-## One-liner
+`site/deploy/deploy.sh --dry-run` shows what would be uploaded and changes nothing.
 
-```bash
-npm run build:all && \
-cd dist/chrome && zip -r ../../releases/irondivi-wallet-chrome-v0.0.4.zip . && \
-cd ../firefox && zip -r ../../releases/irondivi-wallet-firefox-v0.0.4.xpi . && \
-cd ../edge && zip -r ../../releases/irondivi-wallet-edge-v0.0.4.zip . && \
-cd ../.. && \
-scp releases/irondivi-wallet-chrome-v0.0.4.zip releases/irondivi-wallet-edge-v0.0.4.zip releases/irondivi-wallet-firefox-v0.0.4.xpi ubuntu@vps1.divi.domains:/var/www/vps1.divi.domains/downloads/
-```
+`scripts/package.js` writes `packages/releases.json` with the same SHA-256 values as
+`SHA256SUMS-v<version>`. The page reads it to offer each browser its download and print its
+checksum, so the page never needs editing for a release. The Chrome, Edge and Opera zips are one
+build under three names, so they share a checksum.
+
+The deploy script refuses to run if the packages don't match their checksum file or
+`releases.json` is for another version. On vps1 it backs up the current site to
+`/var/www/.backups/browser.divi.domains-<stamp>`, replaces the page, adds the new packages next to
+the old ones (older versions stay downloadable), checks them against the checksum file again, and
+installs the vhost from `site/deploy/nginx/browser.divi.domains.conf` only when it changed. If
+nginx rejects the vhost, the previous one is put back.
 
 ## Safari
 
-Safari does not load a zipped extension. `npm run build:safari:app` produces
-`safari/build/Build/Products/Debug/IronDivi Wallet.app` (see README,
-"Safari (macOS)"). Shipping it to other Macs needs either the Mac App Store or
-a Developer ID signed + notarized app; neither is set up yet, so Safari is
-currently local-install only (ad-hoc signed, Allow Unsigned Extensions).
+Safari does not load a zipped extension. The Safari download is a zip of
+`safari/build/Build/Products/Debug/IronDivi Wallet.app` (see README, "Safari (macOS)").
+The app is ad-hoc signed, so users enable "Allow unsigned extensions" in Safari's Developer
+settings, which Safari resets each time it quits. Signing it properly needs either the Mac App
+Store or a Developer ID signed and notarized app; neither is set up yet.
 
 ## Server Paths
 
 | Item | Path |
 |------|------|
-| Downloads | `/var/www/vps1.divi.domains/downloads/` |
-| Extension page | `/var/www/vps1.divi.domains/extension.html` |
-| Public URL | `https://vps1.divi.domains/extension.html` |
+| Site | `/var/www/browser.divi.domains/` |
+| Downloads | `/var/www/browser.divi.domains/downloads/` |
+| Vhost | `/etc/nginx/sites-enabled/browser.divi.domains` (source copy in `/etc/nginx/browser.divi.domains.conf.src`) |
+| Logs | `/var/log/nginx/browser.divi.domains.{access,error}.log` |
+| Public URL | `https://browser.divi.domains/` |
 
 ## Pre-release Checks
 
@@ -62,11 +60,15 @@ still needs this Mac (Xcode).
 
 When releasing a new version, update:
 1. `package.json` - version field
-2. `src/background/manifest.json` (all browser variants)
-3. Release filenames in this deploy script
+2. `manifest.json` (the Firefox and Safari manifests are built from it)
+
+The page in `site/` reads the version and file names from `releases.json`, so it needs no edit.
 
 ## Verify Deployment
 
 ```bash
-ssh ubuntu@vps1.divi.domains "ls -la /var/www/vps1.divi.domains/downloads/"
+cd "$(mktemp -d)" && v=0.0.4 && b=https://browser.divi.domains/downloads
+curl -sSfO "$b/SHA256SUMS-v$v"
+for f in chrome-v$v.zip edge-v$v.zip opera-v$v.zip firefox-v$v.xpi safari-v$v.zip; do curl -sSfO "$b/irondivi-wallet-$f"; done
+shasum -a 256 -c "SHA256SUMS-v$v"
 ```

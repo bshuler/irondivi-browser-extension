@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>IronDivi Wallet: a browser wallet for Divi</title>
+  <meta name="description" content="IronDivi Wallet is a browser extension for the Divi blockchain: an HD wallet with mainnet and testnet, multiple accounts, and an approval window for every site request. Beta, open source, desktop browsers.">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="IronDivi Wallet">
+  <meta property="og:title" content="IronDivi Wallet: a browser wallet for Divi">
+  <meta property="og:description" content="A Divi wallet in your browser. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Beta: testnet first.">
+  <meta property="og:url" content="https://browser.divi.domains/">
+  <meta property="og:image" content="https://browser.divi.domains/assets/icon-512.png">
+  <meta property="og:image:alt" content="IronDivi shield logo">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://browser.divi.domains/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="beta-banner" role="note">
+    <div class="container beta-banner__inner">
+      <span class="pill pill--beta">Beta</span>
+      <p><strong>Testnet first.</strong> The wallet is open source and has had an internal adversarial security review, and every critical, high, medium and low finding it raised has been fixed. It has not had an external audit. Don't keep significant mainnet funds in it yet. <a href="#security">Status and security</a></p>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a class="brand" href="/" aria-label="IronDivi Wallet home">
+        <span class="brand__tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+        </span>
+        <span class="brand__word">Iron<span>Divi</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#networks">Networks</a>
+        <a href="#install">Install</a>
+        <a href="#verify">Verify</a>
+        <a href="#security">Security</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn btn--ghost btn--sm" href="https://github.com/bshuler/irondivi-browser-extension" rel="noopener">Source</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero__grid">
+        <div class="hero__copy">
+          <p class="eyebrow">Browser extension for the Divi blockchain</p>
+          <h1 id="hero-title">IronDivi Wallet</h1>
+          <p class="hero__lead">Keep DIVI in your browser, switch between mainnet and testnet, and approve what Divi sites ask for, one request at a time. Your keys are made and kept encrypted on your own computer.</p>
+
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" id="hero-download" href="/downloads/">
+              <img class="btn__icon" id="hero-browser-icon" src="/assets/browsers/chrome.svg" alt="" width="24" height="24">
+              <span id="hero-download-label">Download</span>
+            </a>
+            <a class="btn btn--ghost btn--lg" id="hero-steps" href="#install">Install steps</a>
+          </div>
+          <p class="hero__meta" id="hero-meta">Chrome, Brave, Edge, Opera, Firefox and Safari on desktop. Not in the browser stores yet: store listings are coming.</p>
+          <p class="notice notice--info" id="mobile-notice" hidden></p>
+
+          <p class="works-with">Works with <a href="https://games.divi.domains/" rel="noopener">Divi Games</a> and the <a href="https://services.divi.domains/" rel="noopener">IronDivi web wallet</a>.</p>
+        </div>
+
+        <figure class="hero__visual">
+          <div class="mock mock--testnet" role="img" aria-label="Illustration of the IronDivi Wallet popup on testnet: a purple header, a 1,250 DIVI balance, Send and Receive buttons, and recent activity with confirmation counts.">
+            <div class="mock__header" aria-hidden="true">
+              <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+              <span class="mock__brand">Iron<span>Divi</span></span>
+              <span class="mock__gear"></span>
+            </div>
+            <div class="mock__account" aria-hidden="true">
+              <span class="mock__acct">Main account <span class="mock__caret"></span></span>
+              <span class="mock__net">Testnet</span>
+            </div>
+            <div class="mock__balance" aria-hidden="true">
+              <span class="mock__amount">1,250.00</span>
+              <span class="mock__unit">DIVI</span>
+            </div>
+            <div class="mock__actions" aria-hidden="true">
+              <span class="mock__action"><span class="mock__arrow">&uarr;</span>Send</span>
+              <span class="mock__action"><span class="mock__arrow">&darr;</span>Receive</span>
+            </div>
+            <div class="mock__tabs" aria-hidden="true">
+              <span class="is-on">Activity</span><span>Contacts</span>
+            </div>
+            <ul class="mock__tx" aria-hidden="true">
+              <li><span class="mock__txname">Received<small>Faucet</small></span><span class="mock__txamt is-in">+100.00<small>6/6</small></span></li>
+              <li><span class="mock__txname">Sent<small>Divi Games table</small></span><span class="mock__txamt">&minus;1.00<small>Pending 0/6</small></span></li>
+              <li><span class="mock__txname">Received<small>yHq3…8kPz</small></span><span class="mock__txamt is-in">+25.00<small>6/6</small></span></li>
+            </ul>
+          </div>
+          <figcaption>Illustration of the wallet popup on testnet.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <h2 id="features-title">What it does</h2>
+        <p class="section__lead">A small wallet that does the Divi basics well and asks you before anything leaves it.</p>
+        <ul class="feature-grid">
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3"/></svg>
+            <h3>One recovery phrase</h3>
+            <p>An HD wallet from a 12 or 24 word recovery phrase. The same phrase gives you a <code>D</code> address on mainnet and a <code>y</code> address on testnet.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 19a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.5M18 19a6 6 0 0 0-2.5-4.9"/></svg>
+            <h3>Several accounts</h3>
+            <p>Create a new wallet or import an existing recovery phrase, name each account, and switch between them from the popup header.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h11l-3-3M20 17H9l3 3"/></svg>
+            <h3>Mainnet and testnet</h3>
+            <p>Both Divi networks in one build. It starts on testnet, and switching network asks for your wallet password, so a stray click can't put you on real DIVI.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v11H4zM8 20h8M12 16v4M9 10.5l2 2 4-4"/></svg>
+            <h3>Approve every request</h3>
+            <p>Sites ask to connect, sign a message or send a payment. Each one opens an approval window showing the site, the network and the details. Signing and sending need your password.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v18M5 8h14M7 8l-3 7h6zM17 8l-3 7h6z"/></svg>
+            <h3>Spending limits</h3>
+            <p>By default one send can move at most 10% of your balance. Change the percentage or set a fixed DIVI cap in Settings.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6zM6 3v18M10 9h5M10 13h5"/></svg>
+            <h3>Address book</h3>
+            <p>Save contacts with a name and notes. The Send screen suggests them as you type, so you paste addresses less.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9z"/></svg>
+            <h3>History with confirmations</h3>
+            <p>Payments appear as soon as they reach the network, count up from <span class="mono">0/6</span> to <span class="mono">6/6</span> confirmations, and link to the Divi explorer.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 4v5c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V7zM9 12h6"/></svg>
+            <h3>Allowed sites only</h3>
+            <p>The wallet only talks to sites on your Allowed Sites list. Out of the box that's <span class="mono">games.divi.domains</span> and <span class="mono">services.divi.domains</span>, named exactly with no wildcard. You can edit it; adding a site asks for your password.</p>
+          </li>
+          <li class="card feature">
+            <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM18 14h2M14 18v2"/></svg>
+            <h3>Receive and test coins</h3>
+            <p>Share your address as text or a QR code. On testnet a faucet button gets you free test DIVI to try things with.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Networks -->
+    <section class="section section--alt" id="networks" aria-labelledby="networks-title">
+      <div class="container">
+        <h2 id="networks-title">You can always tell which network you're on</h2>
+        <p class="section__lead">Mainnet is real money; testnet is for trying things out. The wallet gives each its own colour, the same ones services.divi.domains uses, across the header, the logo, the network badge and the approval window.</p>
+        <div class="networks">
+          <div class="network network--mainnet">
+            <div class="mock mock--mainnet mock--compact" role="img" aria-label="Wallet popup header on mainnet, in Divi red.">
+              <div class="mock__header" aria-hidden="true">
+                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <span class="mock__brand">Iron<span>Divi</span></span>
+                <span class="mock__gear"></span>
+              </div>
+              <div class="mock__account" aria-hidden="true">
+                <span class="mock__acct">Main account <span class="mock__caret"></span></span>
+                <span class="mock__net">Mainnet</span>
+              </div>
+              <div class="mock__balance" aria-hidden="true">
+                <span class="mock__amount">42.50</span>
+                <span class="mock__unit">DIVI</span>
+              </div>
+            </div>
+            <div class="network__text">
+              <h3><span class="dot dot--mainnet" aria-hidden="true"></span>Mainnet: Divi red</h3>
+              <ul class="ticks">
+                <li>Real DIVI, with addresses that start with <code>D</code>.</li>
+                <li>Red accent, <span class="mono">#E94560</span>.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="network network--testnet">
+            <div class="mock mock--testnet mock--compact" role="img" aria-label="Wallet popup header on testnet, in indigo.">
+              <div class="mock__header" aria-hidden="true">
+                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <span class="mock__brand">Iron<span>Divi</span></span>
+                <span class="mock__gear"></span>
+              </div>
+              <div class="mock__account" aria-hidden="true">
+                <span class="mock__acct">Main account <span class="mock__caret"></span></span>
+                <span class="mock__net">Testnet</span>
+              </div>
+              <div class="mock__balance" aria-hidden="true">
+                <span class="mock__amount">1,250.00</span>
+                <span class="mock__unit">DIVI</span>
+              </div>
+            </div>
+            <div class="network__text">
+              <h3><span class="dot dot--testnet" aria-hidden="true"></span>Testnet: indigo</h3>
+              <ul class="ticks">
+                <li>Test coins with no value, addresses that start with <code>y</code>, and a faucet.</li>
+                <li>Indigo accent, <span class="mono">#6366f1</span>. The wallet starts here.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <ul class="network-notes">
+          <li><strong>Switching asks for your password.</strong> The one you unlock the wallet with, not the recovery phrase.</li>
+          <li><strong>Requests stay on their network.</strong> If you switch while a site's request is waiting, the wallet refuses it and the site has to ask again.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="container">
+        <h2 id="install-title">Install</h2>
+        <p class="section__lead">IronDivi Wallet isn't in the Chrome Web Store, Firefox Add-ons or the Mac App Store yet; store listings are coming. Until then you install it yourself from the file below. It takes a couple of minutes.</p>
+        <p class="release-status" id="release-status" role="status" aria-live="polite">Loading the latest release&hellip;</p>
+        <p class="notice notice--info" id="browser-note" hidden></p>
+
+        <div class="tabs" data-tabs>
+          <div class="tablist" role="tablist" aria-label="Choose your browser">
+            <button class="tab" role="tab" id="tab-chrome" aria-controls="panel-chrome" aria-selected="true" data-browser="chrome"><img src="/assets/browsers/chrome.svg" alt="" width="24" height="24"><span>Chrome</span></button>
+            <button class="tab" role="tab" id="tab-brave" aria-controls="panel-brave" aria-selected="false" tabindex="-1" data-browser="brave"><img src="/assets/browsers/brave.svg" alt="" width="24" height="24"><span>Brave</span></button>
+            <button class="tab" role="tab" id="tab-edge" aria-controls="panel-edge" aria-selected="false" tabindex="-1" data-browser="edge"><img src="/assets/browsers/edge.svg" alt="" width="24" height="24"><span>Edge</span></button>
+            <button class="tab" role="tab" id="tab-opera" aria-controls="panel-opera" aria-selected="false" tabindex="-1" data-browser="opera"><img src="/assets/browsers/opera.svg" alt="" width="24" height="24"><span>Opera</span></button>
+            <button class="tab" role="tab" id="tab-firefox" aria-controls="panel-firefox" aria-selected="false" tabindex="-1" data-browser="firefox"><img src="/assets/browsers/firefox.svg" alt="" width="24" height="24"><span>Firefox</span></button>
+            <button class="tab" role="tab" id="tab-safari" aria-controls="panel-safari" aria-selected="false" tabindex="-1" data-browser="safari"><img src="/assets/browsers/safari.svg" alt="" width="24" height="24"><span>Safari</span></button>
+          </div>
+
+          <!-- Chrome -->
+          <div class="panel" role="tabpanel" id="panel-chrome" aria-labelledby="tab-chrome" tabindex="0">
+            <div class="panel__head">
+              <div>
+                <h3>Chrome</h3>
+                <p class="panel__file" data-file-meta="chrome">File: the Chrome <code>.zip</code> in <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="chrome">Download for Chrome</a>
+            </div>
+            <ol class="steps">
+              <li><strong>Download and unzip.</strong> Unzip it into a folder you'll keep, for example <span class="mono">Documents/IronDivi Wallet</span>. Chrome runs the extension from that folder, so don't delete or move it later.</li>
+              <li><strong>Open the extensions page.</strong> Type <code>chrome://extensions</code> in the address bar and press Enter.</li>
+              <li><strong>Turn on Developer mode</strong> with the switch at the top right.</li>
+              <li><strong>Click &ldquo;Load unpacked&rdquo;</strong> and choose the unzipped folder, the one that contains <code>manifest.json</code>.</li>
+              <li><strong>Pin it.</strong> Click the puzzle-piece icon in the toolbar and pin IronDivi Wallet so it's one click away.</li>
+            </ol>
+            <div class="callout">
+              <h4>Upgrading later</h4>
+              <p>Unzip the new version into the <strong>same folder</strong>, replacing the old files, then press Reload (&#8635;) on the extension's card in <code>chrome://extensions</code>. Your wallet is kept. Removing the extension, or loading the new version from a different folder, starts you with an empty wallet, and only your recovery phrase brings your accounts back.</p>
+            </div>
+          </div>
+
+          <!-- Brave -->
+          <div class="panel" role="tabpanel" id="panel-brave" aria-labelledby="tab-brave" tabindex="0" hidden>
+            <div class="panel__head">
+              <div>
+                <h3>Brave</h3>
+                <p class="panel__file" data-file-meta="brave">Brave uses the Chrome <code>.zip</code> from <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="brave">Download for Brave</a>
+            </div>
+            <ol class="steps">
+              <li><strong>Download and unzip.</strong> Brave uses the Chrome build. Unzip it into a folder you'll keep; Brave runs the extension from there.</li>
+              <li><strong>Open the extensions page.</strong> Type <code>brave://extensions</code> in the address bar and press Enter.</li>
+              <li><strong>Turn on Developer mode</strong> with the switch at the top right.</li>
+              <li><strong>Click &ldquo;Load unpacked&rdquo;</strong> and choose the unzipped folder, the one that contains <code>manifest.json</code>.</li>
+              <li><strong>Pin it</strong> from the extensions (puzzle-piece) menu in the toolbar.</li>
+            </ol>
+            <div class="callout">
+              <h4>Upgrading later</h4>
+              <p>Unzip the new version into the <strong>same folder</strong>, then press Reload (&#8635;) on the extension's card in <code>brave://extensions</code>. Removing the extension or loading from a different folder gives you an empty wallet; only your recovery phrase brings it back.</p>
+            </div>
+          </div>
+
+          <!-- Edge -->
+          <div class="panel" role="tabpanel" id="panel-edge" aria-labelledby="tab-edge" tabindex="0" hidden>
+            <div class="panel__head">
+              <div>
+                <h3>Microsoft Edge</h3>
+                <p class="panel__file" data-file-meta="edge">File: the Edge <code>.zip</code> in <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="edge">Download for Edge</a>
+            </div>
+            <ol class="steps">
+              <li><strong>Download and unzip.</strong> Unzip it into a folder you'll keep; Edge runs the extension from there.</li>
+              <li><strong>Open the extensions page.</strong> Type <code>edge://extensions</code> in the address bar and press Enter.</li>
+              <li><strong>Turn on Developer mode</strong> with its switch (in the left-hand panel; on a narrow window, open the menu first).</li>
+              <li><strong>Click &ldquo;Load unpacked&rdquo;</strong> and choose the unzipped folder, the one that contains <code>manifest.json</code>.</li>
+              <li><strong>Pin it.</strong> Open the Extensions button in the toolbar and choose &ldquo;Show in toolbar&rdquo; for IronDivi Wallet.</li>
+            </ol>
+            <div class="callout">
+              <h4>Upgrading later</h4>
+              <p>Unzip the new version into the <strong>same folder</strong>, then press Reload on the extension's card in <code>edge://extensions</code>. Removing the extension or loading from a different folder gives you an empty wallet; only your recovery phrase brings it back.</p>
+            </div>
+          </div>
+
+          <!-- Opera -->
+          <div class="panel" role="tabpanel" id="panel-opera" aria-labelledby="tab-opera" tabindex="0" hidden>
+            <div class="panel__head">
+              <div>
+                <h3>Opera</h3>
+                <p class="panel__file" data-file-meta="opera">File: the Opera <code>.zip</code> in <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="opera">Download for Opera</a>
+            </div>
+            <ol class="steps">
+              <li><strong>Download and unzip.</strong> Unzip it into a folder you'll keep; Opera runs the extension from there.</li>
+              <li><strong>Open the extensions page.</strong> Type <code>opera://extensions</code> in the address bar and press Enter.</li>
+              <li><strong>Turn on Developer mode</strong> with the switch at the top right.</li>
+              <li><strong>Click &ldquo;Load unpacked&rdquo;</strong> and choose the unzipped folder, the one that contains <code>manifest.json</code>.</li>
+              <li><strong>Pin it</strong> from the extensions (cube) icon in the toolbar.</li>
+            </ol>
+            <div class="callout">
+              <h4>Upgrading later</h4>
+              <p>Unzip the new version into the <strong>same folder</strong>, then press Reload on the extension's card in <code>opera://extensions</code>. Removing the extension or loading from a different folder gives you an empty wallet; only your recovery phrase brings it back.</p>
+            </div>
+          </div>
+
+          <!-- Firefox -->
+          <div class="panel" role="tabpanel" id="panel-firefox" aria-labelledby="tab-firefox" tabindex="0" hidden>
+            <div class="panel__head">
+              <div>
+                <h3>Firefox <span class="req">128 or newer</span></h3>
+                <p class="panel__file" data-file-meta="firefox">File: the Firefox <code>.xpi</code> in <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="firefox">Download for Firefox</a>
+            </div>
+            <p>The add-on isn't signed by Mozilla yet, so regular Firefox won't install it permanently. You have two options.</p>
+            <h4 class="steps-title">Try it now (temporary)</h4>
+            <ol class="steps">
+              <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it. Firefox may offer to install it straight away and then refuse because it's unsigned; that's expected, use the steps below.</li>
+              <li><strong>Open</strong> <code>about:debugging#/runtime/this-firefox</code> in the address bar.</li>
+              <li><strong>Click &ldquo;Load Temporary Add-on&hellip;&rdquo;</strong> and pick the <code>.xpi</code> file.</li>
+            </ol>
+            <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
+            <h4 class="steps-title">Keep it installed</h4>
+            <ol class="steps">
+              <li><strong>Use Firefox Developer Edition or Nightly.</strong> Regular Firefox doesn't allow unsigned add-ons.</li>
+              <li><strong>Open</strong> <code>about:config</code>, search for <code>xpinstall.signatures.required</code> and set it to <code>false</code>.</li>
+              <li><strong>Open</strong> <code>about:addons</code>, click the gear icon and choose <strong>&ldquo;Install Add-on From File&hellip;&rdquo;</strong>, then pick the <code>.xpi</code>.</li>
+            </ol>
+          </div>
+
+          <!-- Safari -->
+          <div class="panel" role="tabpanel" id="panel-safari" aria-labelledby="tab-safari" tabindex="0" hidden>
+            <div class="panel__head">
+              <div>
+                <h3>Safari <span class="req">macOS, Safari 17 or newer</span></h3>
+                <p class="panel__file" data-file-meta="safari">File: the Safari <code>.zip</code> in <a href="/downloads/">/downloads/</a></p>
+              </div>
+              <a class="btn btn--primary" href="/downloads/" data-download="safari">Download for Safari</a>
+            </div>
+            <p>Safari extensions come inside a small Mac app. This build isn't signed by Apple yet, so Safari needs to be told to allow it.</p>
+            <ol class="steps">
+              <li><strong>Download and unzip.</strong> You get <span class="mono">IronDivi Wallet.app</span>. Move it to your Applications folder.</li>
+              <li><strong>Open the app once</strong> so macOS registers the extension. If macOS says it's from an unidentified developer, right-click the app and choose Open, or go to System Settings &rarr; Privacy &amp; Security and click <strong>Open Anyway</strong>.</li>
+              <li><strong>Show the developer settings.</strong> In Safari, open Settings &rarr; Advanced and tick <strong>&ldquo;Show features for web developers&rdquo;</strong>.</li>
+              <li><strong>Allow unsigned extensions.</strong> In Settings &rarr; Developer, tick <strong>&ldquo;Allow unsigned extensions&rdquo;</strong>. Safari turns this off every time it quits, so you'll need to tick it again after each restart.</li>
+              <li><strong>Turn it on.</strong> In Settings &rarr; Extensions, enable IronDivi Wallet and allow it on the websites you want to use it with.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Verify -->
+    <section class="section section--alt" id="verify" aria-labelledby="verify-title">
+      <div class="container">
+        <h2 id="verify-title">Check your download</h2>
+        <p class="section__lead">Each file's SHA-256 checksum is listed below. Compare it with the one your computer calculates; if they don't match, don't install the file.</p>
+
+        <div class="verify-cmds">
+          <div class="cmd">
+            <p class="cmd__label">macOS or Linux, in Terminal</p>
+            <div class="cmd__row">
+              <code class="cmd__code" id="cmd-shasum">shasum -a 256 irondivi-wallet-chrome-v0.0.4.zip</code>
+              <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-shasum">Copy</button>
+            </div>
+          </div>
+          <div class="cmd">
+            <p class="cmd__label">Windows, in PowerShell</p>
+            <div class="cmd__row">
+              <code class="cmd__code" id="cmd-ps">Get-FileHash irondivi-wallet-chrome-v0.0.4.zip -Algorithm SHA256</code>
+              <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-ps">Copy</button>
+            </div>
+          </div>
+        </div>
+        <p class="hint">Run the command in the folder you downloaded to (usually <span class="mono">Downloads</span>). The commands above follow the browser you picked under Install.</p>
+
+        <div class="table-wrap">
+          <table class="sums">
+            <caption class="sr-only">SHA-256 checksums for each download</caption>
+            <thead>
+              <tr><th scope="col">Browser</th><th scope="col">File</th><th scope="col">Size</th><th scope="col">SHA-256</th></tr>
+            </thead>
+            <tbody id="sums-body">
+              <tr><td colspan="4" class="sums__empty">Checksums load from <a href="/downloads/releases.json">releases.json</a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="notice notice--warn" id="downloads-fallback" hidden>Couldn't load the release list. You can still get the files from the <a href="/downloads/">downloads folder</a>.</p>
+      </div>
+    </section>
+
+    <!-- Security -->
+    <section class="section" id="security" aria-labelledby="security-title">
+      <div class="container">
+        <h2 id="security-title">Security and status</h2>
+        <div class="status-card">
+          <span class="pill pill--beta">Beta</span>
+          <div>
+            <p><strong>Testnet first.</strong> IronDivi Wallet is open source and has had an internal adversarial security review, and every critical, high, medium and low finding it raised has been fixed. It has not had an external audit. Don't keep significant mainnet funds in it yet.</p>
+            <p><a href="https://github.com/bshuler/irondivi-browser-extension" rel="noopener">Read the source on GitHub</a></p>
+          </div>
+        </div>
+        <ul class="security-grid">
+          <li class="card">
+            <h3>Keys stay on your computer</h3>
+            <p>Your recovery phrase and keys are generated in the extension and stored encrypted with your password (PBKDF2 with 600,000 iterations, then AES-GCM). They are never sent anywhere.</p>
+          </li>
+          <li class="card">
+            <h3>You approve what sites do</h3>
+            <p>A site can only reach the wallet if it's on your Allowed Sites list. Connecting opens an approval window; every signature and payment opens one too, and needs your password. Ignore it for 5 minutes and it's rejected.</p>
+          </li>
+          <li class="card">
+            <h3>Networks look different</h3>
+            <p>Mainnet is red and testnet is indigo, everywhere in the wallet, and changing network asks for your password.</p>
+          </li>
+          <li class="card">
+            <h3>Your recovery phrase is the backup</h3>
+            <p>Write it down on paper and keep it somewhere safe. Nobody, including the people who make this wallet, can recover it or your password for you.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section--alt" id="faq" aria-labelledby="faq-title">
+      <div class="container container--narrow">
+        <h2 id="faq-title">Questions</h2>
+        <div class="faq">
+          <details>
+            <summary>Why isn't it in the Chrome Web Store or Firefox Add-ons?</summary>
+            <p>It's still in beta. Store listings are coming; until then, install it from the files on this page using the steps for your browser.</p>
+          </details>
+          <details>
+            <summary>Can I use it on my phone?</summary>
+            <p>No. It's an extension for desktop browsers: Chrome, Brave, Edge, Opera and Firefox on Windows, macOS and Linux, and Safari on macOS.</p>
+          </details>
+          <details>
+            <summary>Which network does it start on?</summary>
+            <p>Testnet. Get free test DIVI from the faucet button on the Receive screen, try things out, and switch to mainnet from the network badge or Settings when you're ready.</p>
+          </details>
+          <details>
+            <summary>I forgot my password. What now?</summary>
+            <p>The password can't be recovered, but your accounts can. Add an account with &ldquo;Import Recovery Phrase&rdquo;, enter your phrase, and choose a new password. Without the recovery phrase there is no way back in.</p>
+          </details>
+          <details>
+            <summary>Will updating erase my wallet?</summary>
+            <p>Not if you update in place. On Chrome, Brave, Edge and Opera, unzip the new version over the old folder and press Reload on the extension's card. Removing the extension, or loading it from a different folder, starts an empty wallet. Keep your recovery phrase either way.</p>
+          </details>
+          <details>
+            <summary>Can I use the same wallet in two browsers?</summary>
+            <p>Yes. Install the extension in each one and import the same recovery phrase.</p>
+          </details>
+          <details>
+            <summary>Which sites can use it?</summary>
+            <p>Sites on your Allowed Sites list, which starts as <span class="mono">games.divi.domains</span> and <span class="mono">services.divi.domains</span>. That covers Divi Games and the IronDivi web wallet. The wallet talks to sites through its own <code>window.irondivi</code> provider, not WalletConnect.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <div class="site-footer__brand">
+        <span class="brand">
+          <span class="brand__tile" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+          </span>
+          <span class="brand__word">Iron<span>Divi</span> Wallet</span>
+        </span>
+        <p class="site-footer__note">Beta software for the Divi blockchain. Use it at your own risk.</p>
+      </div>
+      <nav class="site-footer__links" aria-label="Elsewhere">
+        <a href="https://github.com/bshuler/irondivi-browser-extension" rel="noopener">Source on GitHub</a>
+        <a href="https://github.com/bshuler/irondivi-browser-extension/issues" rel="noopener">Report a problem</a>
+        <a href="https://games.divi.domains/" rel="noopener">Divi Games</a>
+        <a href="https://services.divi.domains/" rel="noopener">IronDivi web wallet</a>
+        <a href="/downloads/">All downloads</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
