@@ -7,6 +7,7 @@
 
 import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constants';
 import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
+import { visibleText } from './visible-text';
 
 // Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
@@ -152,78 +153,57 @@ export function showSigningRequestView(request: SigningRequest): void {
     elements.warningText.textContent = 'This will send funds from your wallet. Please verify the details carefully.';
   }
 
-  // Build details content
-  let detailsHtml = '';
+  // Build details content. Everything the site sent is set as text, never
+  // as markup, and shown whole with its hidden characters made visible.
+  const rows: HTMLElement[] = [];
+  let hidden = 0;
+  const shown = (raw: string): string => {
+    const v = visibleText(raw);
+    hidden += v.hidden;
+    return v.text;
+  };
 
   if (request.type === 'connect') {
     // Keep it simple - the warning text explains what happens
-    detailsHtml = `
-      <div class="signing-detail-row" style="text-align: center; padding: 8px 0;">
-        <span style="color: var(--text-secondary);">Allow this site to see your address and ask you to approve signatures and payments?</span>
-      </div>
-    `;
+    const row = el('div', 'signing-detail-row');
+    row.style.textAlign = 'center';
+    row.style.padding = '8px 0';
+    const text = el('span', '', 'Allow this site to see your address and ask you to approve signatures and payments?');
+    text.style.color = 'var(--text-secondary)';
+    row.append(text);
+    rows.push(row);
   } else if (request.type === 'sign_message') {
-    const message = request.data?.message || '';
-    // Show truncated message if too long
-    const displayMessage = message.length > 200
-      ? message.substring(0, 200) + '...'
-      : message;
-    detailsHtml = `
-      <div class="signing-detail-row">
-        <span class="signing-detail-label">Message:</span>
-        <div class="signing-message-content">${escapeHtml(displayMessage)}</div>
-      </div>
-    `;
+    rows.push(detailRow('Message:', el('div', 'signing-message-content', shown(request.data?.message || ''))));
     if (request.data?.address) {
-      detailsHtml += `
-      <div class="signing-detail-row">
-        <span class="signing-detail-label">Address:</span>
-        <span class="signing-detail-value address">${escapeHtml(request.data.address)}</span>
-      </div>
-    `;
+      rows.push(detailRow('Address:', el('span', 'signing-detail-value address', shown(request.data.address))));
     }
   } else if (request.type === 'send_transaction') {
-    const to = request.data?.to || '';
     const amount = request.data?.amount || 0;
     const fee = request.data?.fee || 0.00005;
-    // Escape all user-provided values to prevent XSS. Show the whole
-    // destination: a shortened one can hide a look-alike address.
-    const escapedTo = escapeHtml(to);
-    const escapedAmount = escapeHtml(formatAmount(amount));
-    const escapedFee = escapeHtml(formatAmount(fee));
-    const escapedTotal = escapeHtml(formatAmount(amount + fee));
-    detailsHtml = `
-      <div class="signing-detail-row">
-        <span class="signing-detail-label">To:</span>
-        <span class="signing-detail-value address">${escapedTo}</span>
-      </div>
-      <div class="signing-detail-row">
-        <span class="signing-detail-label">Amount:</span>
-        <span class="signing-detail-value amount">${escapedAmount} DIVI</span>
-      </div>
-      <div class="signing-detail-row">
-        <span class="signing-detail-label">Fee:</span>
-        <span class="signing-detail-value">${escapedFee} DIVI</span>
-      </div>
-      <div class="signing-detail-row total">
-        <span class="signing-detail-label">Total:</span>
-        <span class="signing-detail-value amount">${escapedTotal} DIVI</span>
-      </div>
-    `;
+    // Show the whole destination: a shortened one can hide a look-alike address
+    rows.push(detailRow('To:', el('span', 'signing-detail-value address', shown(request.data?.to || ''))));
+    rows.push(detailRow('Amount:', el('span', 'signing-detail-value amount', `${formatAmount(amount)} DIVI`)));
+    rows.push(detailRow('Fee:', el('span', 'signing-detail-value', `${formatAmount(fee)} DIVI`)));
+    const total = detailRow('Total:', el('span', 'signing-detail-value amount', `${formatAmount(amount + fee)} DIVI`));
+    total.classList.add('total');
+    rows.push(total);
     if (request.data?.opReturn) {
-      detailsHtml += `<div class="signing-detail-row"><span class="signing-detail-label">OP_RETURN</span><span class="signing-detail-value" style="font-size:11px;word-break:break-all">${escapeHtml(request.data.opReturn)}</span></div>`;
+      const value = el('span', 'signing-detail-value', shown(request.data.opReturn));
+      value.style.fontSize = '11px';
+      value.style.wordBreak = 'break-all';
+      rows.push(detailRow('OP_RETURN', value));
     }
+  }
+
+  if (hidden > 0) {
+    rows.push(warningRow('hidden-chars', `This request contains ${hidden} hidden or direction-changing character${hidden === 1 ? '' : 's'}, shown above as ⟨U+…⟩. The text may not be what it seems.`));
   }
 
   if (request.type !== 'connect' && request.firstUse) {
-    detailsHtml += `
-      <div class="signing-detail-row first-use">
-        <span style="color: var(--warning, #f59e0b);">This is the first time this site has asked to ${request.type === 'sign_message' ? 'sign a message' : 'send a payment'}.</span>
-      </div>
-    `;
+    rows.push(warningRow('first-use', `This is the first time this site has asked to ${request.type === 'sign_message' ? 'sign a message' : 'send a payment'}.`));
   }
 
-  elements.details.innerHTML = detailsHtml;
+  elements.details.replaceChildren(...rows);
 
   // Clear password field
   elements.password.value = '';
@@ -385,11 +365,23 @@ export function setupSigningRequestUIHandlers(): void {
   }
 }
 
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function el(tag: string, className: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function detailRow(label: string, value: HTMLElement): HTMLElement {
+  const row = el('div', 'signing-detail-row');
+  row.append(el('span', 'signing-detail-label', label), value);
+  return row;
+}
+
+function warningRow(className: string, text: string): HTMLElement {
+  const row = el('div', `signing-detail-row ${className}`);
+  const span = el('span', '', text);
+  span.style.color = 'var(--warning, #f59e0b)';
+  row.append(span);
+  return row;
 }
