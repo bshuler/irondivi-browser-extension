@@ -151,14 +151,19 @@ async function sendFromAccount(
   if (!seed) throw new Error('Not authenticated');
 
   const privateKeys: Uint8Array[] = [];
+  // Every key made here, master first, so all of them are wiped afterwards
+  const keys: Array<{ wipe(): void }> = [];
   try {
     // Derive private keys for inputs
     const coinType = NETWORKS[account.network].coinType;
     const { HDKey } = await import('../lib/hdkey');
     const hdkey = await HDKey.fromMasterSeed(seed);
+    keys.push(hdkey);
     for (const index of built.inputIndices) {
       const path = `m/44'/${coinType}'/0'/0/${index}`;
-      privateKeys.push((await hdkey.derive(path)).privateKey!);
+      const derived = await hdkey.derive(path);
+      keys.push(derived);
+      privateKeys.push(derived.privateKey!);
     }
 
     // Sign what the owner asked for, and only that, then broadcast
@@ -175,6 +180,7 @@ async function sendFromAccount(
   } finally {
     secureWipe(seed);
     privateKeys.forEach(key => key && secureWipe(key));
+    keys.forEach(key => key.wipe());
   }
 }
 

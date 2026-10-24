@@ -1,4 +1,4 @@
-import { generateId } from '../shared/crypto-utils';
+import { generateId, secureWipe } from '../shared/crypto-utils';
 import {
   getAccounts, saveAccounts,
   saveSecret, deleteSecret,
@@ -9,6 +9,16 @@ import { Mnemonic, type WordlistLanguage } from '../lib/mnemonic';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 import { deriveAddresses } from '../lib/derivation';
 import { unlockSecret } from './unlock-limit';
+
+// Run fn with the seed for a phrase, then wipe the seed
+async function withSeed<T>(mnemonic: string, fn: (seed: Uint8Array) => Promise<T>): Promise<T> {
+  const seed = await Mnemonic.toSeed(mnemonic);
+  try {
+    return await fn(seed);
+  } finally {
+    secureWipe(seed);
+  }
+}
 
 const GAP_LIMIT = 20;
 
@@ -92,11 +102,12 @@ export class AccountManager {
     const now = Date.now();
 
     // Derive the first address on each network
-    const seed = await Mnemonic.toSeed(mnemonic);
     const networks: Partial<Record<NetworkType, NetworkAddresses>> = {};
-    for (const net of Object.keys(NETWORKS) as NetworkType[]) {
-      networks[net] = { addresses: await deriveAddresses(seed, net, 0, 1), addressIndex: 1 };
-    }
+    await withSeed(mnemonic, async seed => {
+      for (const net of Object.keys(NETWORKS) as NetworkType[]) {
+        networks[net] = { addresses: await deriveAddresses(seed, net, 0, 1), addressIndex: 1 };
+      }
+    });
 
     const account: Account = {
       id,
@@ -196,9 +207,8 @@ export class AccountManager {
 
     if (addressesOn(account, network).addresses.length === 0) {
       const mnemonic = await unlockSecret(accountId, password);
-      const seed = await Mnemonic.toSeed(mnemonic);
       setAddressesOn(account, network, {
-        addresses: await deriveAddresses(seed, network, 0, 1),
+        addresses: await withSeed(mnemonic, seed => deriveAddresses(seed, network, 0, 1)),
         addressIndex: 1,
       });
       await saveAccounts(accounts);
@@ -239,25 +249,25 @@ export class AccountManager {
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
     const mnemonic = await unlockSecret(accountId, password);
-    const seed = await Mnemonic.toSeed(mnemonic);
-
     let emptyCount = 0;
     let currentIndex = entry.addressIndex;
     const newAddresses: AccountAddress[] = [];
 
-    while (emptyCount < GAP_LIMIT) {
-      const [addr] = await deriveAddresses(seed, network, currentIndex, 1);
-      const hasTransactions = await checkHasTransactions(addr.address);
+    await withSeed(mnemonic, async seed => {
+      while (emptyCount < GAP_LIMIT) {
+        const [addr] = await deriveAddresses(seed, network, currentIndex, 1);
+        const hasTransactions = await checkHasTransactions(addr.address);
 
-      newAddresses.push(addr);
+        newAddresses.push(addr);
 
-      if (hasTransactions) {
-        emptyCount = 0;
-      } else {
-        emptyCount++;
+        if (hasTransactions) {
+          emptyCount = 0;
+        } else {
+          emptyCount++;
+        }
+        currentIndex++;
       }
-      currentIndex++;
-    }
+    });
 
     // Update account with new addresses
     const addresses = [...entry.addresses, ...newAddresses];
@@ -278,9 +288,7 @@ export class AccountManager {
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
     const mnemonic = await unlockSecret(accountId, password);
-    const seed = await Mnemonic.toSeed(mnemonic);
-
-    const [newAddr] = await deriveAddresses(seed, network, entry.addressIndex, 1);
+    const [newAddr] = await withSeed(mnemonic, seed => deriveAddresses(seed, network, entry.addressIndex, 1));
 
     setAddressesOn(account, network, {
       addresses: [...entry.addresses, newAddr],

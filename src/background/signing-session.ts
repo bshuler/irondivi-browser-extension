@@ -1,4 +1,4 @@
-import { SecureString } from '../shared/crypto-utils';
+import { SecureString, secureWipe } from '../shared/crypto-utils';
 import { storage, alarms } from '../shared/browser-polyfill';
 import { getSettings } from '../shared/storage';
 import { isLockedError, unlockSecret } from './unlock-limit';
@@ -111,13 +111,21 @@ export class SigningSession {
     const coinType = NETWORKS[network].coinType;
     const path = `m/44'/${coinType}'/0'/0/${addressIndex}`;
 
-    const hdkey = await HDKey.fromMasterSeed(seed);
-    const derived = await hdkey.derive(path);
+    let hdkey: HDKey | undefined;
+    let derived: HDKey | undefined;
+    try {
+      hdkey = await HDKey.fromMasterSeed(seed);
+      derived = await hdkey.derive(path);
 
-    if (!derived.privateKey || !derived.publicKey) {
-      throw new Error('Failed to derive keys for signing');
+      if (!derived.privateKey || !derived.publicKey) {
+        throw new Error('Failed to derive keys for signing');
+      }
+      return await Signer.signMessage(message, derived.privateKey, derived.publicKey);
+    } finally {
+      secureWipe(seed);
+      derived?.wipe();
+      hdkey?.wipe();
     }
-    return Signer.signMessage(message, derived.privateKey, derived.publicKey);
   }
 
   /**

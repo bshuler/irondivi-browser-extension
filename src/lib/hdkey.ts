@@ -28,6 +28,7 @@ class HDKey {
 
         key.privateKey = IBytes.slice(0, 32);
         key.chainCode = IBytes.slice(32);
+        secureWipe(IBytes);
         key.publicKey = derivePublicKey(key.privateKey);
 
         return key;
@@ -62,7 +63,11 @@ class HDKey {
                 throw new Error(`Path index out of range: ${index}`);
             }
 
-            current = await current.deriveChild(hardened ? index + 0x80000000 : index);
+            const child = await current.deriveChild(hardened ? index + 0x80000000 : index);
+            // Keys part way down the path are not returned, so wipe them now.
+            // The key derive was called on belongs to the caller.
+            if (current !== this) current.wipe();
+            current = child;
         }
 
         return current;
@@ -111,9 +116,13 @@ class HDKey {
 
         const IL = IBytes.slice(0, 32);
         const IR = IBytes.slice(32);
+        // data holds the parent's private key for a hardened step
+        secureWipe(data);
+        secureWipe(IBytes);
 
         // Add IL to parent private key (mod n)
         child.privateKey = addPrivateKeys(IL, this.privateKey);
+        secureWipe(IL);
         child.chainCode = IR;
         child.publicKey = derivePublicKey(child.privateKey);
 
