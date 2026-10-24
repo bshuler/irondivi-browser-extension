@@ -36,3 +36,23 @@ describe('M4 an approval window shows only its own request', () => {
     expect(reject.slice(0, reject.indexOf('\n}\n'))).toMatch(/boundRequestId \? false : await checkPendingRequests\(\)/);
   });
 });
+
+// The approval window showed "Transaction sent successfully" and closed for
+// any reply, so a refused password or a failed send looked like a success
+describe('the approval window acts on the wallet\'s reply', () => {
+  const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+  const body = (name: string) => {
+    const from = src.slice(src.indexOf(`async function ${name}`));
+    return from.slice(0, from.indexOf('\n}\n'));
+  };
+
+  it('every approve and reject message checks success before showing it', () => {
+    for (const name of ['handleApprove', 'handleReject']) {
+      const fn = body(name);
+      const sends = fn.match(/await sendMessage\(/g) ?? [];
+      const checked = fn.match(/const response = await sendMessage\([\s\S]*?\}\);\s*(\/\/.*\n\s*)*if \(!response\?\.success\) throw/g) ?? [];
+      expect(sends.length).toBeGreaterThan(0);
+      expect(checked).toHaveLength(sends.length);
+    }
+  });
+});

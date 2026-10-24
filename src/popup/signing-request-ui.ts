@@ -234,13 +234,14 @@ async function handleApprove(): Promise<void> {
     showLoading('Connecting...');
 
     try {
-      await sendMessage({
+      const response = await sendMessage({
         type: MSG.APPROVE_SIGNING_REQUEST,
         payload: {
           requestId: currentRequest.id,
           isConnection: true,
         },
       });
+      if (!response?.success) throw new Error(response?.error || 'Failed to connect');
 
       hideLoading();
       showToast('Site connected successfully', 'success');
@@ -267,13 +268,16 @@ async function handleApprove(): Promise<void> {
   showLoading(currentRequest.type === 'sign_message' ? 'Signing message...' : 'Sending transaction...');
 
   try {
-    await sendMessage({
+    const response = await sendMessage({
       type: MSG.APPROVE_SIGNING_REQUEST,
       payload: {
         requestId: currentRequest.id,
         password,
       },
     });
+    // A refused password or a failed send comes back as an error reply, not
+    // a thrown one; it must not be shown as a success
+    if (!response?.success) throw new Error(response?.error || 'Failed to approve request');
 
     hideLoading();
 
@@ -302,12 +306,13 @@ async function handleReject(): Promise<void> {
   if (!currentRequest) return;
 
   try {
-    await sendMessage({
+    const response = await sendMessage({
       type: MSG.REJECT_SIGNING_REQUEST,
       payload: {
         requestId: currentRequest.id,
       },
     });
+    if (!response?.success) throw new Error(response?.error || 'Failed to reject request');
 
     showToast('Request rejected', 'success');
 

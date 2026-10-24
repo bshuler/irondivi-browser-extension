@@ -13,13 +13,13 @@ import { launchWithExtension } from './browser';
 import { Address } from '../src/lib/address';
 import { Mnemonic } from '../src/lib/mnemonic';
 import { deriveAddresses } from '../src/lib/derivation';
+import { Transaction } from '../src/lib/transaction';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXTENSION_PATH = process.env.EXT_PATH || path.join(__dirname, '../dist/chrome');
 const SHOTS = path.join(__dirname, 'screenshots');
 const MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const PASSWORD = 'E2ePassword123!';
-const FAKE_TXID = 'ab'.repeat(32);
 
 const test = base.extend<{ context: BrowserContext; extensionId: string }>({
   context: async ({}, use) => {
@@ -63,6 +63,15 @@ async function rawPost(page: Page, method: string, params?: unknown): Promise<an
   }), [method, params] as const);
 }
 
+/** Click approve and wait for the site's answer, failing at once with the
+ * window's error message if the wallet refused the approval. */
+async function approveAndWait<T>(w: Page, answer: Promise<T>): Promise<T> {
+  await w.click('#approve-request-btn');
+  const refused = w.locator('#toast.error').waitFor({ timeout: 30000 })
+    .then(async () => { throw new Error(`approval refused: ${await w.locator('#toast').innerText()}`); }, () => new Promise<never>(() => {}));
+  return Promise.race([answer, refused]);
+}
+
 async function popupMessage(popup: Page, type: string, payload?: unknown): Promise<any> {
   return popup.evaluate(([type, payload]) => chrome.runtime.sendMessage({ type, payload }), [type, payload] as const);
 }
@@ -73,6 +82,12 @@ async function setup(context: BrowserContext, extensionId: string) {
   const dest = (await deriveAddresses(await Mnemonic.toSeed(MNEMONIC, 'other-account'), 'testnet', 0, 1))[0].address;
   const hash = Array.from(Address.decode(own).hash, (b: number) => b.toString(16).padStart(2, '0')).join('');
   const broadcasts: string[] = [];
+  // The coin's funding transaction, served raw: the wallet checks the coin
+  // against it before it signs
+  const funding = new Transaction();
+  funding.inputs.push({ txid: '01'.repeat(32), vout: 0, script: '', sequence: 0xffffffff });
+  funding.outputs.push({ value: 1000n * 100000000n, script: `76a914${hash}88ac` });
+  const fundingTxid = funding.txid();
   await context.route('https://services.divi.domains/**', async (route) => {
     const body = route.request().postDataJSON() || {};
     let result: unknown = null;
@@ -80,13 +95,14 @@ async function setup(context: BrowserContext, extensionId: string) {
       case 'getblockcount': result = 1000; break;
       case 'getaddressutxos':
         result = body.params[0] === own
-          ? [{ address: own, txid: 'cd'.repeat(32), outputIndex: 0, script: `76a914${hash}88ac`, satoshis: 1000e8, height: 990 }]
+          ? [{ address: own, txid: fundingTxid, outputIndex: 0, script: `76a914${hash}88ac`, satoshis: 1000e8, height: 990 }]
           : [];
         break;
       case 'getaddressbalance': result = { balance: body.params[0] === own ? 1000e8 : 0, received: 0 }; break;
       case 'getaddresstxids': result = []; break;
       case 'validateaddress': result = { isvalid: true }; break;
-      case 'sendrawtransaction': broadcasts.push(body.params[0]); result = FAKE_TXID; break;
+      case 'getrawtransaction': result = body.params[0] === fundingTxid && body.params[1] === 0 ? funding.toHex() : null; break;
+      case 'sendrawtransaction': broadcasts.push(body.params[0]); result = Transaction.fromHex(body.params[0]).txid(); break;
     }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: body.id, result }) });
   });
@@ -143,7 +159,13 @@ test('the approved path still works: connect, send (approve and reject), sign', 
   await page.waitForFunction(() => !!(window as any).irondivi, null, { timeout: 10000 });
 
   // connect -> approval window -> approve
-  const approval = () => context.waitForEvent('page', { predicate: p => p.url().includes('approve='), timeout: 15000 });
+  // The page event can fire before the new window has its URL, so take the
+  // next page and then wait for it to reach the approval screen
+  const approval = async () => {
+    const p = await context.waitForEvent('page', { timeout: 15000 });
+    await p.waitForURL(/approve=/, { timeout: 15000 });
+    return p;
+  };
   let win = approval();
   const connected = page.evaluate(() => (window as any).irondivi.connect());
   let w = await win;
@@ -163,11 +185,10 @@ test('the approved path still works: connect, send (approve and reject), sign', 
   console.log('broadcasts before approval:', broadcasts.length);
   expect(broadcasts).toHaveLength(0);
   await w.fill('#signing-password', PASSWORD);
-  await w.click('#approve-request-btn');
-  const txid = await sent;
+  const txid = await approveAndWait(w, sent);
   console.log('sendTransaction approved -> txid', txid, 'broadcasts:', broadcasts.length);
-  expect(txid).toBe(FAKE_TXID);
   expect(broadcasts).toHaveLength(1);
+  expect(txid).toBe(Transaction.fromHex(broadcasts[0]).txid());
 
   // a rejected send is not broadcast
   win = approval();
@@ -185,8 +206,7 @@ test('the approved path still works: connect, send (approve and reject), sign', 
   w = await win;
   await expect(w.locator('#signing-type')).toHaveText('Sign Message');
   await w.fill('#signing-password', PASSWORD);
-  await w.click('#approve-request-btn');
-  const sig = await signed;
+  const sig = await approveAndWait(w, signed);
   console.log('signMessage approved -> signature', String(sig).slice(0, 16) + '...');
   expect(typeof sig).toBe('string');
   expect(String(sig).length).toBeGreaterThan(40);
