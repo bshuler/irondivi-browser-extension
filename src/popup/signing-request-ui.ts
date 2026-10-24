@@ -49,31 +49,38 @@ function getElements() {
   };
 }
 
+// Set when this popup is an approval window opened for one request. Such a
+// window shows only that request, never another site's.
+let boundRequestId: string | null = null;
+
+/**
+ * Which pending request to show. An approval window gets exactly the request
+ * it was opened for or nothing; the plain popup shows the oldest.
+ */
+export function pickRequest(requests: SigningRequest[], requestId?: string): SigningRequest | undefined {
+  if (requestId) return requests.find(r => r.id === requestId);
+  return requests[0];
+}
+
 /**
  * Check for pending signing requests and show UI if any exist
- * @param requestId - Optional specific request ID to show
- * Returns true if there are pending requests
+ * @param requestId - The request an approval window was opened for
+ * Returns true if a request is shown
  */
 export async function checkPendingRequests(requestId?: string): Promise<boolean> {
+  if (requestId) boundRequestId = requestId;
   try {
     const response = await sendMessage({
       type: MSG.GET_PENDING_SIGNING_REQUESTS,
     });
 
     const data = response.data as { requests?: SigningRequest[] } | undefined;
-    if (response.success && data?.requests && data.requests.length > 0) {
-      // If a specific requestId is provided, find that request
-      let request: SigningRequest | undefined;
-      if (requestId) {
-        request = data.requests.find(r => r.id === requestId);
-      }
-      // Fallback to first request if specific one not found
-      if (!request) {
-        request = data.requests[0];
-      }
+    const request = response.success && data?.requests ? pickRequest(data.requests, requestId) : undefined;
+    if (request) {
       showSigningRequestView(request);
       return true;
     }
+    if (requestId) showToast('This request is no longer pending', 'error');
   } catch (error) {
     console.error('Failed to check pending requests');
   }
@@ -288,8 +295,9 @@ async function handleReject(): Promise<void> {
 
     showToast('Request rejected', 'success');
 
-    // Check for more pending requests
-    const hasMore = await checkPendingRequests();
+    // An approval window closes once its own request is answered; the plain
+    // popup moves on to the next pending one
+    const hasMore = boundRequestId ? false : await checkPendingRequests();
     if (!hasMore) {
       // Close the approval window
       setTimeout(() => {
