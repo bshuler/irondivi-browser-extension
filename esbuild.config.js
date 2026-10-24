@@ -1,5 +1,5 @@
 import esbuild from 'esbuild';
-import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,7 +13,9 @@ const commonConfig = {
   bundle: true,
   format: 'esm',
   target: 'es2022',
-  sourcemap: true,
+  // A release ships no source maps: they hand anyone the readable source and
+  // the build paths, and the store review reads the minified code as shipped
+  sourcemap: isDev,
   minify: !isWatch,
   define: { __IRONDIVI_DEV__: String(isDev) },
 };
@@ -21,7 +23,9 @@ const commonConfig = {
 async function build() {
   const outdir = join(__dirname, 'dist', browser);
 
-  // Ensure output directory
+  // Start empty, so nothing from an earlier build (a dev build's source maps)
+  // ends up in the package
+  rmSync(outdir, { recursive: true, force: true });
   mkdirSync(outdir, { recursive: true });
 
   // Build background service worker
