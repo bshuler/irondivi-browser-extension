@@ -1,6 +1,25 @@
 import { generateId } from '../shared/crypto-utils';
 import { getAddressBook, saveAddressBook, type Contact } from '../shared/storage';
-import type { NetworkType } from '../shared/constants';
+import { NETWORKS, type NetworkType } from '../shared/constants';
+import { Address } from '../lib/address';
+
+const MAX_NAME_LENGTH = 100;
+const MAX_NOTES_LENGTH = 1000;
+
+function checkName(name: unknown): string {
+  if (typeof name !== 'string' || !name.trim() || name.length > MAX_NAME_LENGTH) {
+    throw new Error(`Contact name must be 1 to ${MAX_NAME_LENGTH} characters`);
+  }
+  return name.trim();
+}
+
+function checkNotes(notes: unknown): string | undefined {
+  if (notes === undefined || notes === null || notes === '') return undefined;
+  if (typeof notes !== 'string' || notes.length > MAX_NOTES_LENGTH) {
+    throw new Error(`Notes must be at most ${MAX_NOTES_LENGTH} characters`);
+  }
+  return notes;
+}
 
 export class AddressBook {
   /**
@@ -12,6 +31,18 @@ export class AddressBook {
     network: NetworkType,
     notes?: string
   ): Promise<Contact> {
+    // A contact is a destination the user will pick without re-reading it,
+    // so only a valid address for the contact's own network is kept
+    if (typeof network !== 'string' || !Object.hasOwn(NETWORKS, network)) {
+      throw new Error('Unknown network');
+    }
+    if (typeof address !== 'string' || !Address.validate(address.trim(), network)) {
+      throw new Error(`Not a valid ${NETWORKS[network].name} address`);
+    }
+    address = address.trim();
+    name = checkName(name);
+    notes = checkNotes(notes);
+
     const contacts = await getAddressBook();
 
     // Check for duplicate address
@@ -49,8 +80,8 @@ export class AddressBook {
       throw new Error('Contact not found');
     }
 
-    if (updates.name !== undefined) contact.name = updates.name;
-    if (updates.notes !== undefined) contact.notes = updates.notes;
+    if (updates.name !== undefined) contact.name = checkName(updates.name);
+    if (updates.notes !== undefined) contact.notes = checkNotes(updates.notes);
 
     await saveAddressBook(contacts);
     return contact;

@@ -45,6 +45,10 @@ async function currentNetwork(): Promise<NetworkType> {
   return (await getSettings()).network;
 }
 
+// The popup asks for at least this many characters too, but the worker is the
+// one that encrypts the phrase, so it checks for itself
+export const MIN_PASSWORD_LENGTH = 8;
+
 export class AccountManager {
   /**
    * Create a new account with a generated mnemonic
@@ -71,6 +75,9 @@ export class AccountManager {
     password: string,
     network?: NetworkType
   ): Promise<Account> {
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+      throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
     network ??= await currentNetwork();
     if (typeof mnemonic !== 'string') {
       throw new Error('Invalid mnemonic phrase');
