@@ -262,7 +262,7 @@ describe('#6 signMessage and getBalance honour the address argument', () => {
     h = await createHarness();
     const account = await h.setupWallet();
     const addr1 = await secondAddress(account);
-    h.utxos.push({ address: addr1, satoshis: 5 * 1e8, txid: 'ef'.repeat(32), vout: 1 });
+    h.fund(addr1, 5 * 1e8);
     await h.connectPage();
     expect(await h.provider().getBalance(addr1)).toBe(5);
     expect(await h.provider().getBalance()).toBe(1005);

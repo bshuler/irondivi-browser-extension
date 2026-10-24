@@ -12,7 +12,7 @@ interface TxInput {
 }
 
 interface TxOutput {
-    value: number;
+    value: bigint; // satoshis
     script: Uint8Array | string;
 }
 
@@ -128,6 +128,13 @@ class Transaction {
         // Locktime (4 bytes)
         ensureBytes(4, 'locktime');
         tx.locktime = readUInt32LE(buf, offset);
+        offset += 4;
+
+        // Anything after the locktime is not part of this transaction; a
+        // parser that ignored it would let extra bytes hide real outputs
+        if (offset !== buf.length) {
+            throw new Error(`Malformed transaction: ${buf.length - offset} trailing bytes`);
+        }
 
         return tx;
     }
@@ -140,10 +147,18 @@ class Transaction {
         hex += toVarIntHex(this.inputs.length);
 
         for (const input of this.inputs) {
-            hex += reverseHex(input.txid);
+            // Every field is fixed-size or length-prefixed, so a txid of the
+            // wrong length or a script of odd length would shift every byte
+            // after it into a different transaction
+            if (typeof input.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(input.txid)) {
+                throw new Error('Invalid input txid');
+            }
+            if (!Number.isInteger(input.vout) || input.vout < 0 || input.vout > 0xffffffff) {
+                throw new Error('Invalid input index');
+            }
+            hex += reverseHex(input.txid.toLowerCase());
             hex += toHex32LE(input.vout);
-            const script = input.script instanceof Uint8Array ?
-                bytesToHex(input.script) : (input.script || '');
+            const script = scriptHex(input.script || '');
             hex += toVarIntHex(script.length / 2);
             hex += script;
             hex += toHex32LE(input.sequence);
@@ -152,9 +167,11 @@ class Transaction {
         hex += toVarIntHex(this.outputs.length);
 
         for (const output of this.outputs) {
+            if (typeof output.value !== 'bigint' || output.value < 0n || output.value > MAX_MONEY) {
+                throw new Error('Invalid output value');
+            }
             hex += toHex64LE(output.value);
-            const script = output.script instanceof Uint8Array ?
-                bytesToHex(output.script) : output.script;
+            const script = scriptHex(output.script);
             hex += toVarIntHex(script.length / 2);
             hex += script;
         }
@@ -187,13 +204,35 @@ class Transaction {
         scriptHex += dataHex;
 
         this.outputs.push({
-            value: 0,
+            value: 0n,
             script: scriptHex
         });
     }
 
+    // The txid: double SHA-256 of the serialised transaction, byte-reversed
+    txid(): string {
+        return reverseHex(bytesToHex(Hash.doubleSha256(hexToBytes(this.toHex()))));
+    }
+
+    // Divi's bare txid: the same hash with every input script left empty
+    bareTxid(): string {
+        const copy = new Transaction();
+        copy.version = this.version;
+        copy.locktime = this.locktime;
+        copy.inputs = this.inputs.map(input => ({ ...input, script: '' }));
+        copy.outputs = this.outputs;
+        return copy.txid();
+    }
+
     // Create signature hash for input
     sigHashForInput(inputIndex: number, pubKeyHash: Uint8Array): Uint8Array {
+        if (!Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= this.inputs.length) {
+            throw new Error('Invalid input index for signature hash');
+        }
+        if (!(pubKeyHash instanceof Uint8Array) || pubKeyHash.length !== 20) {
+            throw new Error('Invalid public key hash');
+        }
+
         // Create copy of transaction
         const copy = new Transaction();
         copy.version = this.version;
@@ -237,10 +276,10 @@ function readUInt32LE(buf: Uint8Array, offset: number): number {
             (buf[offset + 2] << 16) | (buf[offset + 3] << 24)) >>> 0;
 }
 
-function readInt64LE(buf: Uint8Array, offset: number): number {
-    const lo = readUInt32LE(buf, offset);
-    const hi = readUInt32LE(buf, offset + 4);
-    return lo + hi * 0x100000000;
+function readInt64LE(buf: Uint8Array, offset: number): bigint {
+    const lo = BigInt(readUInt32LE(buf, offset));
+    const hi = BigInt(readUInt32LE(buf, offset + 4));
+    return BigInt.asIntN(64, (hi << 32n) | lo);
 }
 
 function readVarInt(buf: Uint8Array, offset: number): { value: number; size: number } {
@@ -248,7 +287,19 @@ function readVarInt(buf: Uint8Array, offset: number): { value: number; size: num
     if (first < 0xfd) return { value: first, size: 1 };
     if (first === 0xfd) return { value: buf[offset + 1] | (buf[offset + 2] << 8), size: 3 };
     if (first === 0xfe) return { value: readUInt32LE(buf, offset + 1), size: 5 };
-    return { value: readInt64LE(buf, offset + 1), size: 9 };
+    // No count or length in a transaction comes near 2^32
+    throw new Error('Malformed transaction: 64-bit length');
+}
+
+// Most coins that can exist (Divi's MAX_MONEY), in satoshis
+const MAX_MONEY = 2_534_320_700n * 100_000_000n;
+
+function scriptHex(script: Uint8Array | string): string {
+    const hex = script instanceof Uint8Array ? bytesToHex(script) : script;
+    if (typeof hex !== 'string' || !/^([0-9a-fA-F]{2})*$/.test(hex)) {
+        throw new Error('Invalid script');
+    }
+    return hex.toLowerCase();
 }
 
 function toHex32LE(num: number): string {
@@ -260,19 +311,20 @@ function toHex32LE(num: number): string {
     return bytesToHex(buf);
 }
 
-function toHex64LE(num: number): string {
-    const lo = num & 0xffffffff;
-    const hi = Math.floor(num / 0x100000000);
+function toHex64LE(num: bigint): string {
+    const lo = Number(num & 0xffffffffn);
+    const hi = Number((num >> 32n) & 0xffffffffn);
     return toHex32LE(lo) + toHex32LE(hi);
 }
 
 function toVarIntHex(num: number): string {
+    if (!Number.isInteger(num) || num < 0 || num > 0xffffffff) throw new Error('Invalid length');
     if (num < 0xfd) return num.toString(16).padStart(2, '0');
     if (num <= 0xffff) return 'fd' + toHex32LE(num).substring(0, 4);
-    if (num <= 0xffffffff) return 'fe' + toHex32LE(num);
-    return 'ff' + toHex64LE(num);
+    return 'fe' + toHex32LE(num);
 }
 
-export { Transaction };
+export { Transaction, MAX_MONEY };
+export type { TxInput, TxOutput };
 export { hexToBytes, bytesToHex, reverseHex };
 export const TxUtils = { hexToBytes, bytesToHex, reverseHex };

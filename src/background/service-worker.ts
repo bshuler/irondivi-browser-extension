@@ -5,7 +5,9 @@ import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Acco
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
 import { addressBook } from './address-book';
-import { walletCore, type BuiltTransaction, type TransactionRequest } from './wallet-core';
+import { walletCore, diviToSatoshis, satoshisToDivi, p2pkhScript, type BuiltTransaction, type TransactionRequest } from './wallet-core';
+import { Transaction, bytesToHex } from '../lib/transaction';
+import { recordSpend, spentToday } from './spend-ledger';
 import { rpcClient } from './rpc-client';
 import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
@@ -36,67 +38,142 @@ function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
     sender.url.startsWith(runtime.getURL(''));
 }
 
+// A percentage as basis points, so limits compare in whole satoshis
+function basisPoints(percent: number): bigint {
+  return BigInt(Math.round(Math.min(100, Math.max(0, percent)) * 100));
+}
+
+function diviText(sats: bigint): string {
+  return satoshisToDivi(sats).toFixed(8).replace(/\.?0+$/, '');
+}
+
 /**
- * Build (unsigned) a send from the account, enforcing the transaction limits.
+ * Build (unsigned) a send from the account, enforcing the transaction limits
+ * on what leaves the wallet: the amount plus the fee.
  * Throws with a user-facing message if the send is not allowed.
  */
 async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction> {
   const addresses = account.addresses.map(a => a.address);
   const utxos = await rpcClient.getUtxos(addresses);
 
-  // Enforce transaction limits
-  const settings = await getSettings();
-  const limits = settings.transactionLimits;
-  const totalBalance = walletCore.calculateBalance(utxos);
-
-  // Check absolute limit
-  if (limits.maxAmountAbsolute > 0 && request.amount > limits.maxAmountAbsolute) {
-    throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI`);
-  }
-
-  // Check percentage limit
-  if (limits.maxAmountPercent > 0) {
-    const maxAllowed = (totalBalance * limits.maxAmountPercent) / 100;
-    if (request.amount > maxAllowed) {
-      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${maxAllowed.toFixed(8)} DIVI)`);
-    }
-  }
-
-  return walletCore.buildTransaction(utxos, account.addresses, {
+  const built = walletCore.buildTransaction(utxos, account.addresses, {
     to: request.to,
     amount: request.amount,
     fee: request.fee,
     fromAddresses: request.fromAddresses,
   }, account.network);
+
+  const limits = (await getSettings()).transactionLimits;
+  const spend = built.amountSats + built.feeSats;
+  // The balance is what the node reports; the previous-transaction check in
+  // sendFromAccount stops a node from inventing coins to spend, not from
+  // hiding some to make a percentage look larger
+  const balance = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+
+  if (limits.maxAmountAbsolute > 0 && spend > diviToSatoshis(limits.maxAmountAbsolute)) {
+    throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI (amount plus fee)`);
+  }
+  if (limits.maxAmountPercent > 0) {
+    const bp = basisPoints(limits.maxAmountPercent);
+    if (spend * 10000n > balance * bp) {
+      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${diviText(balance * bp / 10000n)} DIVI including the fee)`);
+    }
+  }
+
+  if (limits.dailyLimitAbsolute > 0 || limits.dailyLimitPercent > 0) {
+    const spent = await spentToday(account.id, account.network);
+    if (limits.dailyLimitAbsolute > 0 && spent + spend > diviToSatoshis(limits.dailyLimitAbsolute)) {
+      throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitAbsolute} DIVI (sent in the last 24 hours: ${diviText(spent)} DIVI)`);
+    }
+    if (limits.dailyLimitPercent > 0) {
+      // The balance 24 hours ago is roughly today's plus what was sent since
+      const bp = basisPoints(limits.dailyLimitPercent);
+      if ((spent + spend) * 10000n > (balance + spent) * bp) {
+        throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitPercent}% of balance`);
+      }
+    }
+  }
+
+  return built;
 }
 
 /**
- * Build, sign with the unlocked session and broadcast a send.
+ * Check each coin a send spends against the transaction that made it: the
+ * node's word for the amount is not enough, because the signature does not
+ * cover input amounts and a node that overstated one would turn the
+ * difference into fee. The transaction is fetched raw and must hash to the
+ * txid being spent.
  */
-async function sendFromAccount(account: Account, request: TransactionRequest): Promise<{ txid: string; fee: number }> {
+async function verifyInputs(built: BuiltTransaction): Promise<void> {
+  const byTxid = new Map<string, Transaction>();
+  for (const input of built.inputs) {
+    let prev = byTxid.get(input.txid);
+    if (!prev) {
+      prev = Transaction.fromHex(await rpcClient.getRawTransactionHex(input.txid));
+      if (prev.txid() !== input.txid) {
+        throw new Error('Node returned a different transaction than the coin being spent');
+      }
+      byTxid.set(input.txid, prev);
+    }
+    const output = prev.outputs[input.vout];
+    if (!output || output.value !== input.satoshis ||
+        bytesToHex(output.script as Uint8Array) !== p2pkhScript(input.address)) {
+      throw new Error('A coin the node reported does not match the transaction that made it');
+    }
+  }
+}
+
+/**
+ * Build, check, sign with the unlocked session and broadcast a send.
+ * maxFeeSats: refuse if the fee is now above this (the fee the owner was shown).
+ */
+// Asking again cannot help: the same coins give the same higher fee
+class FeeRoseError extends Error {
+  constructor() {
+    super('The fee went up since you were asked (the wallet\'s coins changed). Ask the site to send again.');
+  }
+}
+
+async function sendFromAccount(
+  account: Account,
+  request: TransactionRequest,
+  maxFeeSats?: bigint
+): Promise<{ txid: string; fee: number }> {
   const built = await buildSend(account, request);
+  if (maxFeeSats !== undefined && built.feeSats > maxFeeSats) {
+    throw new FeeRoseError();
+  }
+  await verifyInputs(built);
 
   // Get seed from signing session
   const seed = await signingSession.getSeed();
   if (!seed) throw new Error('Not authenticated');
 
+  const privateKeys: Uint8Array[] = [];
   try {
     // Derive private keys for inputs
     const coinType = NETWORKS[account.network].coinType;
     const { HDKey } = await import('../lib/hdkey');
     const hdkey = await HDKey.fromMasterSeed(seed);
-    const privateKeys = await Promise.all(built.inputIndices.map(async index => {
+    for (const index of built.inputIndices) {
       const path = `m/44'/${coinType}'/0'/0/${index}`;
-      return (await hdkey.derive(path)).privateKey!;
-    }));
+      privateKeys.push((await hdkey.derive(path)).privateKey!);
+    }
 
-    // Sign and broadcast
-    const signedHex = await walletCore.signTransaction(built.hex, privateKeys);
+    // Sign what the owner asked for, and only that, then broadcast
+    const signedHex = await walletCore.signTransaction(built, privateKeys, {
+      to: request.to,
+      amountSats: diviToSatoshis(request.amount),
+      ownAddresses: account.addresses.map(a => a.address),
+      network: account.network,
+    });
     const txid = await rpcClient.broadcastTransaction(signedHex);
+    await recordSpend(account.id, account.network, built.amountSats + built.feeSats);
     await addPendingTx(account.network, txid);
     return { txid, fee: built.fee };
   } finally {
     secureWipe(seed);
+    privateKeys.forEach(key => key && secureWipe(key));
   }
 }
 
@@ -366,7 +443,8 @@ async function handleMessage(
         const request: TransactionRequest = {
           to: payload.to,
           amount: payload.amount,
-          fee: payload.fee,
+          // Only the owner, in the popup, may choose the fee; a site's is ignored
+          fee: origin ? undefined : payload.fee,
           fromAddresses: payload.fromAddresses,
         };
 
@@ -662,18 +740,26 @@ async function handleMessage(
             if (!request.data.to || request.data.amount === undefined) {
               return { success: false, error: 'to and amount are required for send_transaction' };
             }
+            // Rebuilt now, as the coins may have changed since the owner was
+            // asked; it must not cost more than the fee they were shown
+            if (typeof request.data.fee !== 'number' || !Number.isFinite(request.data.fee)) {
+              return { success: false, error: 'Request fee missing' };
+            }
             result = await sendFromAccount(account, {
               to: request.data.to,
               amount: request.data.amount,
-              fee: request.data.fee,
               fromAddresses: request.data.fromAddresses,
-            });
+            }, diviToSatoshis(request.data.fee));
           }
 
           // Approve the request with the result
           connectionManager.approveRequest(payload.requestId, result);
           return { success: true, data: result };
         } catch (error) {
+          if (error instanceof FeeRoseError) {
+            // Tell the site at once, so it can ask again with the new fee
+            connectionManager.rejectRequest(payload.requestId, error.message);
+          }
           return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to process request'

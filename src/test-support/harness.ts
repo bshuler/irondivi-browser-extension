@@ -10,6 +10,7 @@
  */
 import { vi } from 'vitest';
 import { Address } from '../lib/address';
+import { Transaction } from '../lib/transaction';
 
 export const EXT_ID = 'testextensionid';
 export const EXT_BASE = `chrome-extension://${EXT_ID}/`;
@@ -37,7 +38,15 @@ export interface Harness {
   createdWindows: Array<{ id: number; url: string }>;
   closeWindow: (id: number) => void;
   broadcasts: string[];
+  /** What the node's address index reports; a test may edit it in place (not reassign it) to make the node lie. */
   utxos: Utxo[];
+  /**
+   * Pay `satoshis` to `address` in a real transaction the fake node can return
+   * raw (getrawtransaction, verbose 0), and list the coin. Returns its txid.
+   */
+  fund: (address: string, satoshis: number) => string;
+  /** Raw transactions by txid, for getrawtransaction with verbose 0. */
+  rawHex: Record<string, string>;
   /** Txids the fake node's address index lists (mined), for getaddresstxids. */
   addressTxids: string[];
   /** Txids in the fake node's mempool, for getrawmempool. */
@@ -117,6 +126,18 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
   const addressTxids: string[] = [];
   const mempool: string[] = [];
   const rawTxs: Record<string, any> = {};
+  const rawHex: Record<string, string> = {};
+  let fundings = 0;
+  const fund = (address: string, satoshis: number): string => {
+    const tx = new Transaction();
+    const n = (++fundings).toString(16).padStart(64, '0');
+    tx.inputs.push({ txid: n, vout: 0, script: '', sequence: 0xffffffff });
+    tx.outputs.push({ value: BigInt(satoshis), script: p2pkhScript(address) });
+    const txid = tx.txid();
+    rawHex[txid] = tx.toHex();
+    utxos.push({ address, satoshis, txid, vout: 0 });
+    return txid;
+  };
   const faucetRequests: string[] = [];
   let nextWindowId = 100;
 
@@ -204,7 +225,11 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
       case 'validateaddress': result = { isvalid: true }; break;
       case 'getaddresstxids': result = [...addressTxids]; break;
       case 'getrawmempool': result = [...mempool]; break;
-      case 'getrawtransaction': result = rawTxs[params[0]] ? structuredClone(rawTxs[params[0]]) : null; break;
+      case 'getrawtransaction':
+        result = params[1] === 0
+          ? rawHex[params[0]] ?? null
+          : rawTxs[params[0]] ? structuredClone(rawTxs[params[0]]) : null;
+        break;
       default: result = null;
     }
     return { ok: true, status: 200, statusText: 'OK', json: async () => ({ jsonrpc: '2.0', id, result }) };
@@ -269,6 +294,8 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
     broadcasts,
     utxos,
+    fund,
+    rawHex,
     addressTxids,
     mempool,
     rawTxs,
@@ -282,7 +309,7 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
       await h.popup('SELECT_ACCOUNT', { accountId: account.id });
       const a = await h.popup('AUTHENTICATE', { accountId: account.id, password: TEST_PASSWORD });
       if (!a?.success) throw new Error(`auth failed: ${a?.error}`);
-      utxos.push({ address: account.addresses[0].address, satoshis: 1000 * 1e8, txid: 'cd'.repeat(32), vout: 0 });
+      fund(account.addresses[0].address, 1000 * 1e8);
       return account;
     },
     waitForPending: async (type) => {

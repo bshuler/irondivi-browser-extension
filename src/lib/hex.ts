@@ -2,6 +2,10 @@
  * Convert hex string to Uint8Array
  */
 export function hexToBytes(hex: string): Uint8Array {
+  // parseInt would read 'zz' as NaN (stored as 0) and '1g' as 1
+  if (typeof hex !== 'string' || !/^([0-9a-fA-F]{2})*$/.test(hex)) {
+    throw new Error('Invalid hex');
+  }
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = parseInt(hex.substr(i, 2), 16);

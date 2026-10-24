@@ -24,9 +24,31 @@ export interface UTXOResponse {
   txid: string;
   vout: number;
   address: string;
-  amount: number;        // In DIVI (not satoshis)
-  scriptPubKey: string;
+  satoshis: bigint;
+  amount: number;        // In DIVI, for display only
   confirmations: number;
+}
+
+// A UTXO is only used if every field is well formed and it is at the address
+// that was asked about; anything else means the node is broken or lying
+function normaliseUtxo(rpcUtxo: RPCUTXOResponse, address: string, currentHeight: number): UTXOResponse {
+  const u = rpcUtxo as any;
+  if (!u || typeof u !== 'object' ||
+      typeof u.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(u.txid) ||
+      !Number.isInteger(u.outputIndex) || u.outputIndex < 0 || u.outputIndex > 0xffffffff ||
+      !Number.isSafeInteger(u.satoshis) || u.satoshis <= 0 ||
+      u.address !== address) {
+    throw new Error('Node returned an invalid UTXO');
+  }
+  const height = Number.isInteger(u.height) ? u.height : 0;
+  return {
+    txid: u.txid.toLowerCase(),
+    vout: u.outputIndex,
+    address,
+    satoshis: BigInt(u.satoshis),
+    amount: u.satoshis / 100000000,
+    confirmations: currentHeight > 0 && height > 0 ? currentHeight - height + 1 : 0,
+  };
 }
 
 export interface TransactionHistoryItem {
@@ -168,16 +190,10 @@ export class RPCClient {
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled') {
-        // Convert from RPC format to normalized format
-        const normalized = result.value.map(rpcUtxo => ({
-          txid: rpcUtxo.txid,
-          vout: rpcUtxo.outputIndex,
-          address: rpcUtxo.address,
-          amount: rpcUtxo.satoshis / 100000000, // Convert satoshis to DIVI
-          scriptPubKey: rpcUtxo.script,
-          confirmations: currentHeight > 0 ? currentHeight - rpcUtxo.height + 1 : 0,
-        }));
-        allUtxos.push(...normalized);
+        if (!Array.isArray(result.value)) {
+          throw new Error('Node returned an invalid UTXO list');
+        }
+        allUtxos.push(...result.value.map(rpcUtxo => normaliseUtxo(rpcUtxo, addresses[i], currentHeight)));
       } else {
         const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
         console.warn(`Failed to get UTXOs for ${addresses[i]}`);
@@ -305,6 +321,18 @@ export class RPCClient {
    */
   async getRawTransaction(txid: string, verbose: boolean = true): Promise<any> {
     return this.rpc('getrawtransaction', [txid, verbose ? 1 : 0]);
+  }
+
+  /**
+   * The serialised transaction, as hex. Callers parse it and check its txid
+   * themselves, so a node cannot swap in a different transaction.
+   */
+  async getRawTransactionHex(txid: string): Promise<string> {
+    const hex = await this.rpc<unknown>('getrawtransaction', [txid, 0]);
+    if (typeof hex !== 'string') {
+      throw new Error('Node returned an invalid transaction');
+    }
+    return hex;
   }
 
   /**

@@ -463,12 +463,12 @@ export class ConnectionManager {
   /**
    * Reject a signing request
    */
-  rejectRequest(requestId: string): void {
+  rejectRequest(requestId: string, reason = 'Request rejected by user'): void {
     const request = this.pendingRequests.get(requestId);
     if (!request) {
       throw new Error('Request not found');
     }
-    request.reject(new Error('Request rejected by user'));
+    request.reject(new Error(reason));
     this.updateBadge();
   }
 
