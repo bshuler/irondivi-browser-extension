@@ -94,34 +94,53 @@ export async function getSecrets(): Promise<Record<string, EncryptedSecrets>> {
   return secrets || {};
 }
 
+// Every change to the secrets map reads the whole map and writes it back, so
+// two changes running at once can lose one of them: a background migration
+// could put back a secret that was just deleted, or drop one just added. They
+// run one after another instead.
+let secretsQueue: Promise<unknown> = Promise.resolve();
+
+function withSecretsLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = secretsQueue.then(fn, fn);
+  secretsQueue = run.catch(() => {});
+  return run;
+}
+
 export async function saveSecret(accountId: string, mnemonic: string, password: string): Promise<void> {
-  const secrets = await getSecrets();
-  secrets[accountId] = await encryptWithPassword(mnemonic, password);
-  await storage.local.set({ secrets });
+  const blob = await encryptWithPassword(mnemonic, password);
+  await withSecretsLock(async () => {
+    const secrets = await getSecrets();
+    secrets[accountId] = blob;
+    await storage.local.set({ secrets });
+  });
 }
 
 /**
- * Migrate a single secret from legacy iterations (100K) to current iterations (600K).
- * The operation is atomic: storage is only updated after successful re-encryption.
- * If any step fails, the original encrypted data is left untouched.
+ * Re-encrypt one secret from the legacy 100K iterations to the current 600K.
+ * The new blob is decrypted and compared with the phrase before anything is
+ * written, and it replaces the old one only if the old one is still what is
+ * stored. A single storage write replaces the map whole, so a crash leaves
+ * either the old blob or the new one, never a mix.
  */
 export async function migrateSecret(accountId: string, password: string): Promise<void> {
-  const secrets = await getSecrets();
-  const secret = secrets[accountId];
-  if (!secret) throw new Error('Account not found');
+  const before = (await getSecrets())[accountId];
+  if (!before) throw new Error('Account not found');
+  if (before.version && before.version >= 2) return;
 
-  // Already migrated - nothing to do
-  if (secret.version && secret.version >= 2) return;
-
-  // Decrypt with legacy iterations
-  const plaintext = await decryptWithPassword(secret, password);
-
-  // Re-encrypt with current iterations (version 2)
+  const plaintext = await decryptWithPassword(before, password);
   const migrated = await encryptWithPassword(plaintext, password);
+  if (await decryptWithPassword(migrated, password) !== plaintext) {
+    throw new Error('Re-encrypted secret did not decrypt to the original');
+  }
 
-  // Atomically write back - only the single entry is replaced
-  const updatedSecrets = { ...secrets, [accountId]: migrated };
-  await storage.local.set({ secrets: updatedSecrets });
+  await withSecretsLock(async () => {
+    const secrets = await getSecrets();
+    const current = secrets[accountId];
+    // Deleted, replaced or already migrated meanwhile: leave it alone
+    if (!current || current.encrypted !== before.encrypted || current.salt !== before.salt) return;
+    secrets[accountId] = migrated;
+    await storage.local.set({ secrets });
+  });
 }
 
 export async function getDecryptedSecret(accountId: string, password: string): Promise<string> {
@@ -131,20 +150,21 @@ export async function getDecryptedSecret(accountId: string, password: string): P
 
   const plaintext = await decryptWithPassword(secret, password);
 
-  // Transparently migrate legacy data in the background - failures are non-fatal
+  // Upgrade a legacy secret before returning, so the worker cannot be stopped
+  // part way through. A failure is not fatal: the legacy secret still opens.
   if (!secret.version || secret.version < 2) {
-    migrateSecret(accountId, password).catch(() => {
-      // Migration failure is non-fatal; data is still readable with legacy iterations
-    });
+    await migrateSecret(accountId, password).catch(() => {});
   }
 
   return plaintext;
 }
 
 export async function deleteSecret(accountId: string): Promise<void> {
-  const secrets = await getSecrets();
-  delete secrets[accountId];
-  await storage.local.set({ secrets });
+  await withSecretsLock(async () => {
+    const secrets = await getSecrets();
+    delete secrets[accountId];
+    await storage.local.set({ secrets });
+  });
 }
 
 export async function getAddressBook(): Promise<Contact[]> {
