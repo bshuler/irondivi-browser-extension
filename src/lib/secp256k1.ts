@@ -114,6 +114,15 @@ export function scalarMult(
 }
 
 /**
+ * A private key is 32 bytes holding a number from 1 to n - 1
+ */
+export function isValidPrivateKey(privateKey: Uint8Array): boolean {
+    if (!(privateKey instanceof Uint8Array) || privateKey.length !== 32) return false;
+    const d = bytesToBigInt(privateKey);
+    return d > 0n && d < CURVE.N;
+}
+
+/**
  * Derive compressed public key from private key
  * Returns 33-byte compressed format (0x02/0x03 prefix + 32-byte x coordinate)
  */

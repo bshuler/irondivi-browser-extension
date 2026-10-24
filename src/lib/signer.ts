@@ -11,7 +11,8 @@ import {
     bytesToBigInt,
     bigIntToBytes,
     pointAdd,
-    scalarMult
+    scalarMult,
+    isValidPrivateKey
 } from './secp256k1';
 
 // HMAC-SHA256 using Web Crypto API
@@ -76,6 +77,9 @@ async function generateRfc6979K(privateKey: Uint8Array, hash: Uint8Array): Promi
 
 // Sign a hash with a key
 async function signHash(hash: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
+    // A zero key signs for nobody and an out-of-range one is a corrupted key
+    if (!isValidPrivateKey(key)) throw new Error('Invalid private key');
+    if (!(hash instanceof Uint8Array) || hash.length !== 32) throw new Error('Hash must be 32 bytes');
     const z = bytesToBigInt(hash);
     const d = bytesToBigInt(key);
 
@@ -90,6 +94,7 @@ async function signHash(hash: Uint8Array, key: Uint8Array): Promise<Uint8Array> 
     if (r === 0n) throw new Error('Invalid r');
 
     let s = mod(modInverse(k, CURVE.N) * (z + r * d), CURVE.N);
+    if (s === 0n) throw new Error('Invalid s');
 
     // Low-S normalization (BIP 62)
     if (s > CURVE.N / 2n) {
@@ -165,6 +170,7 @@ function varintEncode(n: number): Uint8Array {
 
 // Sign hash with recovery ID
 async function signMessageWithRecovery(hash: Uint8Array, privateKey: Uint8Array, publicKey: Uint8Array): Promise<{ r: Uint8Array; s: Uint8Array; recid: number }> {
+    if (!isValidPrivateKey(privateKey)) throw new Error('Invalid private key');
     const z = bytesToBigInt(hash);
     const d = bytesToBigInt(privateKey);
 
@@ -179,6 +185,7 @@ async function signMessageWithRecovery(hash: Uint8Array, privateKey: Uint8Array,
     if (r === 0n) throw new Error('Invalid r');
 
     let s = mod(modInverse(k, CURVE.N) * (z + r * d), CURVE.N);
+    if (s === 0n) throw new Error('Invalid s');
 
     // Low-S normalization (BIP 62)
     if (s > CURVE.N / 2n) {

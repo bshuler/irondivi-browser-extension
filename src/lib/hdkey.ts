@@ -7,7 +7,8 @@ import {
     CURVE,
     bytesToBigInt,
     bigIntToBytes,
-    derivePublicKey
+    derivePublicKey,
+    isValidPrivateKey
 } from './secp256k1';
 
 class HDKey {
@@ -29,6 +30,12 @@ class HDKey {
         key.privateKey = IBytes.slice(0, 32);
         key.chainCode = IBytes.slice(32);
         secureWipe(IBytes);
+        // BIP32: a master key of 0 or at least n is invalid. The chance is
+        // about 2^-127, so refuse the seed rather than guess a recovery
+        if (!isValidPrivateKey(key.privateKey)) {
+            key.wipe();
+            throw new Error('Seed gives an invalid master key');
+        }
         key.publicKey = derivePublicKey(key.privateKey);
 
         return key;
@@ -120,10 +127,22 @@ class HDKey {
         secureWipe(data);
         secureWipe(IBytes);
 
+        // BIP32: if IL >= n or the child key is 0, this index has no key.
+        // The chance is about 2^-127; refuse rather than sign with a bad key
+        if (!(bytesToBigInt(IL) < CURVE.N)) {
+            secureWipe(IL);
+            secureWipe(IR);
+            throw new Error(`Index ${index} gives an invalid key`);
+        }
+
         // Add IL to parent private key (mod n)
         child.privateKey = addPrivateKeys(IL, this.privateKey);
         secureWipe(IL);
         child.chainCode = IR;
+        if (!isValidPrivateKey(child.privateKey)) {
+            child.wipe();
+            throw new Error(`Index ${index} gives an invalid key`);
+        }
         child.publicKey = derivePublicKey(child.privateKey);
 
         return child;
