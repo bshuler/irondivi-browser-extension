@@ -8,6 +8,7 @@ import { showLoading, hideLoading, showToast, showView, hideView } from './ui-st
 import { sendMessage } from './message-api';
 import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
+import { defaultAllowedSites } from '../shared/origin';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
@@ -80,7 +81,7 @@ export function updateSettingsDisplay(): void {
   txLimitAbsoluteInput.value = limits.maxAmountAbsolute > 0 ? String(limits.maxAmountAbsolute) : '';
 
   // Allowed sites
-  const sites = state.settings.allowedSites || ['*.divi.domains', 'localhost', '127.0.0.1'];
+  const sites = state.settings.allowedSites || defaultAllowedSites();
   allowedSitesTextarea.value = sites.join('\n');
 }
 

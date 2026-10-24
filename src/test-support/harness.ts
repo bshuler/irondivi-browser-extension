@@ -121,9 +121,13 @@ function p2pkhScript(address: string): string {
  * Build the fake browser and load the background (and, for a page URL, the
  * content script and provider). Call vi.resetModules() before each harness.
  */
-export async function createHarness(pageUrl = 'https://app.divi.domains/'): Promise<Harness> {
+export async function createHarness(
+  pageUrl = 'https://games.divi.domains/',
+  opts: { allowedSites?: string[] } = {},
+): Promise<Harness> {
   const pageOrigin = new URL(pageUrl).origin;
   const local: Record<string, any> = {};
+  if (opts.allowedSites) local.settings = { allowedSites: opts.allowedSites };
   const session: Record<string, any> = {};
   const onMessage = event();
   const onRemoved = event();

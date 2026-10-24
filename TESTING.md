@@ -9,8 +9,9 @@ npm install
 # 2. Install browser
 npx playwright install chromium
 
-# 3. Build extension
-npm run build
+# 3. Build extension. The tests serve their dApp from 127.0.0.1, which only
+#    a development build allows.
+npm run build:dev
 
 # 4. Run tests
 npm test
@@ -153,7 +154,7 @@ The fixture automatically:
 ## Best Practices
 
 ### Before Running Tests
-1. **Always rebuild**: `npm run build`
+1. **Always rebuild**: `npm run build:dev` (a release build refuses the test dApp on 127.0.0.1)
 2. **Check dist exists**: `ls dist/chrome/manifest.json`
 3. **Verify background script**: `ls dist/chrome/background.js`
 
@@ -171,7 +172,7 @@ The fixture automatically:
 ## Common Issues
 
 ### "Extension not found"
-**Solution:** Run `npm run build` before testing
+**Solution:** Run `npm run build:dev` before testing
 
 ### "Timeout waiting for element"
 **Cause:** Slow wallet creation/import
@@ -233,7 +234,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build extension
-        run: npm run build
+        run: npm run build:dev
 
       - name: Run tests
         run: npm test

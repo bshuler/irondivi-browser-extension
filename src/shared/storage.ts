@@ -1,6 +1,7 @@
 import { storage } from './browser-polyfill';
 import { encryptWithPassword, decryptWithPassword } from './crypto-utils';
 import type { NetworkType } from './constants';
+import { defaultAllowedSites, effectiveAllowedSites } from './origin';
 
 // Storage schema types
 export interface Account {
@@ -160,8 +161,8 @@ export const DEFAULT_SETTINGS: Settings = {
   authTimeoutMinutes: 5,
   currency: 'USD',
   hideBalance: false,
-  // Default allowed sites - *.divi.domains and localhost for development
-  allowedSites: ['*.divi.domains', 'localhost', '127.0.0.1'],
+  // The production dApp hosts, plus localhost in a development build
+  allowedSites: defaultAllowedSites(),
   // Default transaction limits - 10% of balance per transaction
   transactionLimits: {
     maxAmountAbsolute: 0, // No absolute limit
@@ -174,7 +175,8 @@ export const DEFAULT_SETTINGS: Settings = {
 export async function getSettings(): Promise<Settings> {
   const { settings } = await storage.local.get<{ settings: Settings }>('settings');
   // Merge with defaults to ensure new fields are present
-  return { ...DEFAULT_SETTINGS, ...settings };
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  return { ...merged, allowedSites: effectiveAllowedSites(settings?.allowedSites) };
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

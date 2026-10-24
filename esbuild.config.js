@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWatch = process.argv.includes('--watch');
 const browser = process.argv[2] || 'chrome';
+// A development build also allows dApps on localhost and 127.0.0.1
+const isDev = isWatch || process.env.IRONDIVI_DEV === '1';
 
 const commonConfig = {
   bundle: true,
@@ -13,6 +15,7 @@ const commonConfig = {
   target: 'es2022',
   sourcemap: true,
   minify: !isWatch,
+  define: { __IRONDIVI_DEV__: String(isDev) },
 };
 
 async function build() {

@@ -141,10 +141,13 @@ The content script runs on every page, but it adds the provider, and passes
 messages on to the wallet, only on a page that is
 
 - `https:`, or `http:` on `localhost` or `127.0.0.1`, **and**
-- on a host in **Settings → Allowed Sites**. The default list is
-  `*.divi.domains`, `localhost` and `127.0.0.1`. `*` matches within one name
-  label, so `*.divi.domains` covers `app.divi.domains` but not `divi.domains`
-  itself or `a.b.divi.domains`; `**` matches across labels.
+- on a host in **Settings → Allowed Sites**. The default list names each
+  production dApp exactly: `games.divi.domains` and `services.divi.domains`.
+  A development build (`npm run build:dev`, or `npm run watch`) also allows
+  `localhost` and `127.0.0.1`; a release build does not. A list saved by
+  0.0.3 or earlier that is still that version's default (`*.divi.domains`,
+  localhost and 127.0.0.1) is replaced by the new default. In a pattern you
+  add, `*` matches within one name label and `**` matches across labels.
 
 The background applies the same rule to every message from a page. A page can
 use only the provider methods below; every other wallet message (settings,

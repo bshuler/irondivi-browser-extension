@@ -10,7 +10,7 @@ vi.setConfig({ testTimeout: 30000 });
 function storedPermissions(h: Harness): string[] {
   const all = h.storage.connections ?? {};
   for (const byOrigin of Object.values(all) as any[]) {
-    const c = byOrigin['https://app.divi.domains'];
+    const c = byOrigin['https://games.divi.domains'];
     if (c) return c.permissions;
   }
   return [];
@@ -72,7 +72,7 @@ describe('M5 a site cannot flood the owner with approval windows', () => {
     const other = connectionManager.requestConnection('https://other.example', 'x');
     other.catch(() => {});
     const all = connectionManager.getAllPendingRequests();
-    expect(all.map(r => r.origin).sort()).toEqual(['https://app.divi.domains', 'https://other.example']);
+    expect(all.map(r => r.origin).sort()).toEqual(['https://games.divi.domains', 'https://other.example']);
   });
 });
 

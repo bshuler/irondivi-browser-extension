@@ -39,7 +39,7 @@ describe('#2 popup-only messages need an extension page sender', () => {
     ['GET_CONTACTS', undefined],
     ['ADD_CONTACT', { name: 'n', address: 'a', network: 'testnet' }],
     ['GET_CONNECTED_SITES', undefined],
-    ['REVOKE_SITE', { origin: 'https://app.divi.domains' }],
+    ['REVOKE_SITE', { origin: 'https://games.divi.domains' }],
     ['REQUEST_FAUCET', { address: 'a' }],
     ['GET_PENDING_SIGNING_REQUESTS', undefined],
     ['APPROVE_SIGNING_REQUEST', { requestId: 'x', isConnection: true }],
@@ -154,9 +154,12 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
   });
 });
 
+// A development build's list, which allows a local dApp
+const LOCAL_DEV = { allowedSites: ['games.divi.domains', '127.0.0.1'] };
+
 describe('#4 one origin rule; sign and send need a connected origin', () => {
   it('http://127.0.0.1 gets the provider and can connect', async () => {
-    h = await createHarness('http://127.0.0.1:8080/');
+    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
     await h.setupWallet();
     expect(h.provider()).toBeDefined();
     await h.connectPage();
@@ -164,7 +167,7 @@ describe('#4 one origin rule; sign and send need a connected origin', () => {
   });
 
   it('an unconnected http://127.0.0.1 page cannot sign a message', async () => {
-    h = await createHarness('http://127.0.0.1:8080/');
+    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
     await h.setupWallet();
     const r = await h.pagePost('SIGN_MESSAGE', { message: 'hello' });
     expect(r.success).toBe(false);
@@ -173,7 +176,7 @@ describe('#4 one origin rule; sign and send need a connected origin', () => {
   });
 
   it('an unconnected http://127.0.0.1 page cannot send', async () => {
-    h = await createHarness('http://127.0.0.1:8080/');
+    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
     await h.setupWallet();
     const r = await h.pagePost('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 1 });
     expect(r.success).toBe(false);
