@@ -8,7 +8,8 @@ import { showLoading, hideLoading, showToast, showView, hideView } from './ui-st
 import { sendMessage } from './message-api';
 import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
-import { defaultAllowedSites } from '../shared/origin';
+import { defaultAllowedSites, isValidSitePattern } from '../shared/origin';
+import { checkSettingsUpdate } from '../shared/settings-check';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
@@ -132,9 +133,26 @@ export function updateConnectedSitesList(sites: ConnectedSite[]): void {
  * Update settings
  */
 export async function updateSettings(updates: Partial<Settings>): Promise<void> {
+  // Allowing a new site, raising or removing a limit, or a longer lock time
+  // needs the wallet's password; the background refuses it otherwise
+  const checked = checkSettingsUpdate(updates, state.settings as any);
+  if (!checked.ok) {
+    showToast(checked.error, 'error');
+    updateSettingsDisplay();
+    return;
+  }
+  let message: Partial<Settings> & { password?: string } = updates;
+  if (checked.loosens && state.accounts.length > 0) {
+    const password = await showPasswordModal('Enter your password to change this setting');
+    if (password === null) {
+      updateSettingsDisplay();
+      return;
+    }
+    message = { ...updates, password };
+  }
   try {
-    await sendMessage(MSG.UPDATE_SETTINGS, updates);
-    state.settings = { ...state.settings, ...updates };
+    await sendMessage(MSG.UPDATE_SETTINGS, message);
+    state.settings = { ...state.settings, ...checked.updates };
     updateSettingsDisplay();
     updateBalanceDisplay();
     updateFaucetVisibility();
@@ -142,6 +160,7 @@ export async function updateSettings(updates: Partial<Settings>): Promise<void> 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to update settings';
     showToast(errorMessage, 'error');
+    updateSettingsDisplay();
   }
 }
 
@@ -314,6 +333,11 @@ export function setupSettingsUIHandlers(): void {
       .split('\n')
       .map(s => s.trim())
       .filter(s => s.length > 0);
+    const bad = sites.find(s => !isValidSitePattern(s));
+    if (bad) {
+      showToast(`Not a valid site: ${bad.slice(0, 60)}`, 'error');
+      return;
+    }
     updateSettings({ allowedSites: sites });
   });
 

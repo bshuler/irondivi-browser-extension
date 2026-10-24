@@ -108,10 +108,10 @@ describe('switching network needs the password', () => {
     void account;
   });
 
-  it('other settings change without the password', async () => {
+  it('other settings that loosen nothing change without the password', async () => {
     h = await createHarness();
     await h.setupWallet();
-    const r = await h.popup('UPDATE_SETTINGS', { authTimeoutMinutes: 30 });
+    const r = await h.popup('UPDATE_SETTINGS', { authTimeoutMinutes: 1 });
     expect(r?.success).toBe(true);
   });
 });

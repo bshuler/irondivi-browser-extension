@@ -13,6 +13,7 @@ import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
+import { checkSettingsUpdate } from '../shared/settings-check';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 
@@ -548,16 +549,22 @@ async function handleMessage(
       }
 
       case MSG.UPDATE_SETTINGS: {
-        // The password is only a check for a network switch; never saved
-        const { password, ...updates } = payload ?? {};
+        // The password is only a check; never saved
+        const { password, ...raw } = payload ?? {};
         const currentSettings = await getSettings();
+        const checked = checkSettingsUpdate(raw, currentSettings);
+        if (!checked.ok) return { success: false, error: checked.error };
+        const { updates } = checked;
         const switching = !!updates.network && updates.network !== currentSettings.network;
-        // Moving a wallet between Mainnet and Testnet needs its password;
-        // before there is a wallet there is nothing to protect
-        const accounts = switching ? await getAccounts() : [];
+        // Moving a wallet between Mainnet and Testnet, or loosening a
+        // protection, needs its password; before there is a wallet there is
+        // nothing to protect
+        const accounts = switching || checked.loosens ? await getAccounts() : [];
         const accountId = accounts.length > 0 ? (await getSelectedAccountId()) ?? accounts[0].id : null;
         if (accountId) {
-          if (!password) return { success: false, error: 'Enter your password to switch network' };
+          if (typeof password !== 'string' || !password) {
+            return { success: false, error: switching ? 'Enter your password to switch network' : 'Enter your password to change this setting' };
+          }
           if (!(await signingSession.verifyPassword(accountId, password))) {
             return { success: false, error: 'Invalid password' };
           }

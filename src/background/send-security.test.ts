@@ -17,6 +17,7 @@ async function setLimits(h: Harness, limits: Record<string, number>) {
   const { data } = await h.popup('GET_SETTINGS');
   const r = await h.popup('UPDATE_SETTINGS', {
     transactionLimits: { ...data.settings.transactionLimits, ...limits },
+    password: TEST_PASSWORD,
   });
   expect(r.success).toBe(true);
 }

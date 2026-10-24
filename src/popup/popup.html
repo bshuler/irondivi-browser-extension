@@ -239,8 +239,8 @@
         </div>
         <div class="setting-section">
           <h3>Allowed Sites</h3>
-          <p class="setting-hint">Sites that can connect to your wallet. Use * for wildcards.</p>
-          <textarea id="setting-allowed-sites" rows="4" placeholder="*.divi.domains&#10;localhost&#10;127.0.0.1"></textarea>
+          <p class="setting-hint">Sites that can connect to your wallet, one per line. *.example.com allows one level of subdomain, **.example.com any depth. Add :8080 for a port, or :* for any port. Adding a site asks for your password.</p>
+          <textarea id="setting-allowed-sites" rows="4" placeholder="games.divi.domains&#10;**.divi.domains&#10;localhost:*"></textarea>
           <button class="secondary-btn" id="save-allowed-sites-btn" style="margin-top:8px;">Save Sites</button>
         </div>
         <div class="setting-section">
