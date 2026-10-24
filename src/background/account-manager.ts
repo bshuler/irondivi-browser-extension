@@ -1,13 +1,14 @@
 import { generateId } from '../shared/crypto-utils';
 import {
   getAccounts, saveAccounts,
-  saveSecret, getDecryptedSecret, deleteSecret,
+  saveSecret, deleteSecret,
   getSelectedAccountId, setSelectedAccountId, getSettings,
   type Account, type AccountAddress, type NetworkAddresses
 } from '../shared/storage';
 import { Mnemonic, type WordlistLanguage } from '../lib/mnemonic';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 import { deriveAddresses } from '../lib/derivation';
+import { unlockSecret } from './unlock-limit';
 
 const GAP_LIMIT = 20;
 
@@ -128,7 +129,7 @@ export class AccountManager {
    */
   async deleteAccount(accountId: string, password: string): Promise<void> {
     // Verify password by attempting decryption
-    await getDecryptedSecret(accountId, password);
+    await unlockSecret(accountId, password);
 
     // Remove from accounts list
     const accounts = await getAccounts();
@@ -194,7 +195,7 @@ export class AccountManager {
     if (!account) throw new Error('Account not found');
 
     if (addressesOn(account, network).addresses.length === 0) {
-      const mnemonic = await getDecryptedSecret(accountId, password);
+      const mnemonic = await unlockSecret(accountId, password);
       const seed = await Mnemonic.toSeed(mnemonic);
       setAddressesOn(account, network, {
         addresses: await deriveAddresses(seed, network, 0, 1),
@@ -220,7 +221,7 @@ export class AccountManager {
    * Export mnemonic (requires password)
    */
   async exportMnemonic(accountId: string, password: string): Promise<string> {
-    return getDecryptedSecret(accountId, password);
+    return unlockSecret(accountId, password);
   }
 
   /**
@@ -237,7 +238,7 @@ export class AccountManager {
 
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
-    const mnemonic = await getDecryptedSecret(accountId, password);
+    const mnemonic = await unlockSecret(accountId, password);
     const seed = await Mnemonic.toSeed(mnemonic);
 
     let emptyCount = 0;
@@ -276,7 +277,7 @@ export class AccountManager {
 
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
-    const mnemonic = await getDecryptedSecret(accountId, password);
+    const mnemonic = await unlockSecret(accountId, password);
     const seed = await Mnemonic.toSeed(mnemonic);
 
     const [newAddr] = await deriveAddresses(seed, network, entry.addressIndex, 1);
