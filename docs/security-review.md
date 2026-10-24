@@ -64,6 +64,7 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 | L14 | Fixed: every dependency is pinned to an exact version that matches the lockfile, `.npmrc` saves new ones exactly, and packaging writes `SHA256SUMS-v<version>` for every package. Residual: the extension is not yet in the browser stores, so it has no store review or auto-update, and the checksum file is not signed | c0a63e9 | supply-chain.test.ts |
 | L15 | Fixed: popup message signing takes an account id and refuses it unless the session unlocked that account; it signs from an address the account owns on its own network and returns that address | ffa421f, 9245ef7 | sign-message-account.test.ts |
 | I2, I3 | Fixed: `isValidPrivateKey` checks that a key is 32 bytes from 1 to n - 1. Transaction and message signing refuse any other key and refuse s = 0; BIP32 refuses a master key outside that range, IL of n or more, and a child key of 0 | 7f40d75 | key-range.test.ts |
+| T1 | Fixed: the approval window checks the wallet's reply to approve and reject, and shows an error and keeps the window open when it is refused | 25f0b53 | signing-request.test.ts, dapp-security.spec.ts |
 | I1, I4, I5, I6, I7 | Accepted as they stand; see each finding for why | | |
 
 Checked against the live networks on 2026-10-24:
@@ -441,6 +442,14 @@ Checked against the live networks on 2026-10-24:
   - **Location:** `src/test-support/harness.ts`.
   - **Problem:** it contains a public BIP39 test-vector phrase and a test password. It is not bundled into any entry point; keep it that way.
   - **Evidence:** inferred from reading the esbuild entry points.
+
+### Found while testing the fixes
+
+- **T1. The approval window showed a refused approval as a success.**
+  - **Location:** `src/popup/signing-request-ui.ts`, `handleApprove` and `handleReject`.
+  - **Problem:** the popup's `sendMessage` resolves with the wallet's reply and does not throw when the reply says `success: false`. The window treated any reply as approved, so a wrong password or a send the wallet refused showed a success message and closed, while the site was told the request failed. No funds moved, but the user was told something false about a payment.
+  - **Evidence:** verified by running. The end-to-end send test showed "approved" while the site received an error.
+  - **Fix:** throw on a reply without `success`, so the error is shown and the window stays open.
 
 ## Checked and found sound
 
