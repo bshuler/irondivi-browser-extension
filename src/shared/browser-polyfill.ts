@@ -1,8 +1,18 @@
-// Unified browser API that works across Chrome, Firefox, Edge
+// Unified browser API that works across Chrome, Edge, Opera, Brave, Firefox and Safari
 declare const chrome: any;
 declare const browser: any;
 
-export const browserAPI = (globalThis as any).browser || (globalThis as any).chrome;
+// Prefer chrome.*: every wrapper below passes callbacks, which chrome.* takes in
+// Chromium, Firefox and Safari alike, while Firefox's browser.* only returns promises.
+export const browserAPI = (globalThis as any).chrome || (globalThis as any).browser;
+
+function sessionArea(): any {
+  const area = browserAPI.storage?.session;
+  if (!area) {
+    throw new Error('This browser has no session storage; IronDivi Wallet needs a newer version.');
+  }
+  return area;
+}
 
 // Promisified storage wrapper
 export const storage = {
@@ -23,30 +33,26 @@ export const storage = {
       });
     },
   },
+  // storage.session holds the unlocked wallet key, so it must never land on
+  // disk. Every supported browser has it (Chrome 102, Firefox 115, Safari 16.4);
+  // where it is missing, refuse rather than fall back to storage.local.
   session: {
     get: async <T = any>(keys: string | string[]): Promise<T> => {
-      if (!browserAPI.storage.session) {
-        // Firefox fallback - use local storage with prefix
-        return storage.local.get(keys);
-      }
+      const area = sessionArea();
       return new Promise((resolve) => {
-        browserAPI.storage.session.get(keys, (result: T) => resolve(result));
+        area.get(keys, (result: T) => resolve(result));
       });
     },
     set: async (items: Record<string, any>): Promise<void> => {
-      if (!browserAPI.storage.session) {
-        return storage.local.set(items);
-      }
+      const area = sessionArea();
       return new Promise((resolve) => {
-        browserAPI.storage.session.set(items, () => resolve());
+        area.set(items, () => resolve());
       });
     },
     remove: async (keys: string | string[]): Promise<void> => {
-      if (!browserAPI.storage.session) {
-        return storage.local.remove(keys);
-      }
+      const area = sessionArea();
       return new Promise((resolve) => {
-        browserAPI.storage.session.remove(keys, () => resolve());
+        area.remove(keys, () => resolve());
       });
     },
   },
