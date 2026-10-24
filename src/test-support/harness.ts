@@ -57,6 +57,13 @@ export interface Harness {
   faucetReply: { success: boolean; txid?: string; error?: string };
   faucetRequests: string[];
   storage: Record<string, any>;
+  /** The fake storage.session area. */
+  sessionStorage: Record<string, any>;
+  /**
+   * Stop and start the background as the browser does when it idles the
+   * service worker: storage survives, the worker's memory does not.
+   */
+  restartWorker: () => Promise<void>;
   /** Import TEST_MNEMONIC on testnet and unlock a signing session. Returns the account. */
   setupWallet: () => Promise<any>;
   /** Approve the connect request for this page from the approval window. */
@@ -259,7 +266,18 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
   (globalThis as any).window = fakeWindow;
   (globalThis as any).document = fakeDocument;
 
+  let workerListeners = onMessage.listeners.length;
   await import('../background/service-worker');
+  let workerAdded = onMessage.listeners.slice(workerListeners);
+  let restarts = 0;
+  const restartWorker = async () => {
+    for (const l of workerAdded) onMessage.removeListener(l);
+    vi.resetModules();
+    workerListeners = onMessage.listeners.length;
+    const path = `../background/service-worker?restart=${++restarts}`;
+    await import(/* @vite-ignore */ path);
+    workerAdded = onMessage.listeners.slice(workerListeners);
+  };
   await import('../content/content-script');
   // Let the content script read settings and decide whether to inject.
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
@@ -302,6 +320,8 @@ export async function createHarness(pageUrl = 'https://app.divi.domains/'): Prom
     faucetReply: { success: false, error: 'faucet not set up in this test' },
     faucetRequests,
     storage: local,
+    sessionStorage: session,
+    restartWorker,
     setupWallet: async () => {
       const r = await h.popup('IMPORT_ACCOUNT', { name: 'Test', mnemonic: TEST_MNEMONIC, password: TEST_PASSWORD, network: 'testnet' });
       if (!r?.success) throw new Error(`import failed: ${r?.error}`);

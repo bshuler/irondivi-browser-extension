@@ -1,11 +1,4 @@
-import {
-  generateSessionKey,
-  encryptWithKey,
-  decryptWithKey,
-  wrapSessionKey,
-  unwrapSessionKey,
-  SecureString,
-} from '../shared/crypto-utils';
+import { SecureString } from '../shared/crypto-utils';
 import { storage, alarms } from '../shared/browser-polyfill';
 import { getDecryptedSecret, getSettings } from '../shared/storage';
 import { Mnemonic } from '../lib/mnemonic';
@@ -14,14 +7,6 @@ import { Signer } from '../lib/signer';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 
 const SESSION_ALARM_NAME = 'signing-session-timeout';
-
-interface SigningSessionData {
-  accountId: string;
-  encrypted: string;
-  iv: string;
-  expiresAt: number;
-  wrappedKey?: string;
-}
 
 interface RateLimitEntry {
   count: number;
@@ -33,13 +18,21 @@ interface RateLimitState {
   [accountId: string]: RateLimitEntry;
 }
 
-const INSTALLATION_ID_KEY = 'installation_id';
+// Earlier versions kept the unlocked phrase in session storage, wrapped with a
+// key derived from this id; both are removed on the next unlock
+const LEGACY_INSTALLATION_ID_KEY = 'installation_id';
+const LEGACY_SESSION_KEY = 'signingSession';
 const RATE_LIMIT_STATE_KEY = 'rate_limit_state';
 
+/**
+ * The unlocked phrase is held only in this service worker's memory, never in
+ * any storage area. When the browser stops the worker (Chrome does so after
+ * about 30 seconds without events) the session ends and the owner unlocks again.
+ */
 export class SigningSession {
-  private sessionKey: CryptoKey | null = null;
   private decryptedMnemonic: SecureString | null = null;
   private currentAccountId: string | null = null;
+  private expiresAt = 0;
   private failedAttempts: Map<string, RateLimitEntry> = new Map();
   private readonly MAX_ATTEMPTS = 5;
   // Exponential backoff lockout durations (5 min, 15 min, 1 hour, 24 hours)
@@ -49,31 +42,7 @@ export class SigningSession {
     60 * 60 * 1000,     // 1 hour
     24 * 60 * 60 * 1000 // 24 hours
   ];
-  private installationId: string | null = null;
   private rateLimitInitialized = false;
-
-  /**
-   * Returns a stable, random identifier unique to this extension installation.
-   * Generated on first use and stored in storage.local.
-   * Used as the basis for the session key wrapping key.
-   */
-  private async getInstallationId(): Promise<string> {
-    if (this.installationId) {
-      return this.installationId;
-    }
-
-    const result = await storage.local.get<{ [INSTALLATION_ID_KEY]: string }>(INSTALLATION_ID_KEY);
-    if (result[INSTALLATION_ID_KEY]) {
-      this.installationId = result[INSTALLATION_ID_KEY];
-      return this.installationId;
-    }
-
-    // Generate a new random 32-byte installation ID
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    this.installationId = btoa(String.fromCharCode(...randomBytes));
-    await storage.local.set({ [INSTALLATION_ID_KEY]: this.installationId });
-    return this.installationId;
-  }
 
   /**
    * Load rate limit state from session storage
@@ -178,33 +147,10 @@ export class SigningSession {
       this.decryptedMnemonic = new SecureString(mnemonic);
       this.currentAccountId = accountId;
 
-      // Generate ephemeral session key
-      this.sessionKey = await generateSessionKey();
-
-      // Get timeout setting
       const settings = await getSettings();
-      const timeoutMs = settings.authTimeoutMinutes * 60 * 1000;
-      const expiresAt = Date.now() + timeoutMs;
-
-      // Encrypt mnemonic with session key for persistence
-      const encrypted = await encryptWithKey(mnemonic, this.sessionKey);
-
-      // Wrap the session key so it can survive service worker restarts
-      const installationId = await this.getInstallationId();
-      const wrappedKey = await wrapSessionKey(
-        this.sessionKey,
-        installationId
-      );
-
-      // Store in session storage
-      const sessionData: SigningSessionData = {
-        accountId,
-        encrypted: encrypted.encrypted,
-        iv: encrypted.iv,
-        expiresAt,
-        wrappedKey,
-      };
-      await storage.session.set({ signingSession: sessionData });
+      this.expiresAt = Date.now() + settings.authTimeoutMinutes * 60 * 1000;
+      await storage.session.remove(LEGACY_SESSION_KEY);
+      await storage.local.remove(LEGACY_INSTALLATION_ID_KEY);
 
       // Set alarm for auto-clear
       alarms.create(SESSION_ALARM_NAME, {
@@ -243,36 +189,32 @@ export class SigningSession {
   }
 
   /**
+   * Whether the phrase is in memory and the session has not run out. The alarm
+   * also ends the session, but alarms fire late, so every use checks the time.
+   */
+  private live(): boolean {
+    if (!this.decryptedMnemonic || !this.currentAccountId) return false;
+    if (Date.now() >= this.expiresAt) {
+      void this.clearSession();
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Check if there's an active signing session for an account
    */
   async isAuthenticated(accountId?: string): Promise<boolean> {
-    // Check in-memory state first
-    if (this.decryptedMnemonic && this.currentAccountId) {
-      if (!accountId || accountId === this.currentAccountId) {
-        return true;
-      }
-    }
-
-    // Try to restore from session storage
-    const restored = await this.restoreSession();
-    if (!restored) return false;
-
-    if (accountId && accountId !== this.currentAccountId) {
-      return false;
-    }
-
-    return true;
+    if (!this.live()) return false;
+    return !accountId || accountId === this.currentAccountId;
   }
 
   /**
    * Get remaining session time in seconds
    */
   async getSessionTimeRemaining(): Promise<number> {
-    const { signingSession } = await storage.session.get<{ signingSession: SigningSessionData }>('signingSession');
-    if (!signingSession) return 0;
-
-    const remaining = Math.max(0, signingSession.expiresAt - Date.now());
-    return Math.floor(remaining / 1000);
+    if (!this.live()) return 0;
+    return Math.floor((this.expiresAt - Date.now()) / 1000);
   }
 
   /**
@@ -283,12 +225,8 @@ export class SigningSession {
     addressIndex: number,
     network: NetworkType
   ): Promise<string> {
-    if (!this.decryptedMnemonic || !this.currentAccountId) {
-      // Try to restore session
-      const restored = await this.restoreSession();
-      if (!restored) {
-        throw new Error('Not authenticated - please enter password');
-      }
+    if (!this.live()) {
+      throw new Error('Not authenticated - please enter password');
     }
 
     const seed = await Mnemonic.toSeed(this.decryptedMnemonic!.toString());
@@ -308,10 +246,7 @@ export class SigningSession {
    * Get the current account's seed (for address derivation during signing)
    */
   async getSeed(): Promise<Uint8Array | null> {
-    if (!this.decryptedMnemonic) {
-      const restored = await this.restoreSession();
-      if (!restored) return null;
-    }
+    if (!this.live()) return null;
     return Mnemonic.toSeed(this.decryptedMnemonic!.toString());
   }
 
@@ -319,16 +254,15 @@ export class SigningSession {
    * Clear the signing session (manual lock)
    */
   async clearSession(): Promise<void> {
-    await storage.session.remove('signingSession');
-    await alarms.clear(SESSION_ALARM_NAME);
-
-    // Clear memory - wipe sensitive data first
+    // Clear memory first - wipe sensitive data - so nothing can use it while
+    // the awaits below run
     if (this.decryptedMnemonic) {
       this.decryptedMnemonic.wipe();
     }
-    this.sessionKey = null;
     this.decryptedMnemonic = null;
     this.currentAccountId = null;
+    this.expiresAt = 0;
+    await alarms.clear(SESSION_ALARM_NAME);
   }
 
   /**
@@ -336,58 +270,6 @@ export class SigningSession {
    */
   async handleAlarmTimeout(): Promise<void> {
     await this.clearSession();
-  }
-
-  /**
-   * Try to restore session from storage (called on service worker wake)
-   */
-  private async restoreSession(): Promise<boolean> {
-    const { signingSession } = await storage.session.get<{ signingSession: SigningSessionData }>('signingSession');
-
-    if (!signingSession) {
-      return false;
-    }
-
-    // Check expiry
-    if (Date.now() > signingSession.expiresAt) {
-      await this.clearSession();
-      return false;
-    }
-
-    // If session key was lost (service worker restart), try to restore it
-    // from the wrapped key stored alongside the session data
-    if (!this.sessionKey) {
-      if (!signingSession.wrappedKey) {
-        // No wrapped key available (legacy session) - cannot restore
-        await this.clearSession();
-        return false;
-      }
-      try {
-        const installationId = await this.getInstallationId();
-        this.sessionKey = await unwrapSessionKey(
-          signingSession.wrappedKey,
-          installationId
-        );
-      } catch (error) {
-        // Wrapped key is invalid or identifier changed - clear and re-auth
-        await this.clearSession();
-        return false;
-      }
-    }
-
-    try {
-      // Decrypt mnemonic with session key
-      const decrypted = await decryptWithKey(
-        { encrypted: signingSession.encrypted, iv: signingSession.iv },
-        this.sessionKey
-      );
-      this.decryptedMnemonic = new SecureString(decrypted);
-      this.currentAccountId = signingSession.accountId;
-      return true;
-    } catch (error) {
-      await this.clearSession();
-      return false;
-    }
   }
 }
 

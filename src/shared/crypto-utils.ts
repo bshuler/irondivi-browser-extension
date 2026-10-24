@@ -137,52 +137,6 @@ export async function decryptWithPassword(
   }
 }
 
-// Generate ephemeral session key for signing sessions
-export async function generateSessionKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-}
-
-export async function encryptWithKey(data: string, key: CryptoKey): Promise<{
-  encrypted: string;
-  iv: string;
-}> {
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoder.encode(data)
-  );
-
-  return {
-    encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-    iv: btoa(String.fromCharCode(...iv)),
-  };
-}
-
-export async function decryptWithKey(
-  encryptedData: { encrypted: string; iv: string },
-  key: CryptoKey
-): Promise<string> {
-  const decoder = new TextDecoder();
-
-  const encrypted = Uint8Array.from(atob(encryptedData.encrypted), c => c.charCodeAt(0));
-  const iv = Uint8Array.from(atob(encryptedData.iv), c => c.charCodeAt(0));
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encrypted
-  );
-
-  return decoder.decode(decrypted);
-}
-
 // Generate UUID v4
 export function generateId(): string {
   return crypto.randomUUID();
@@ -216,65 +170,4 @@ export class SecureString {
 export function secureWipe(arr: Uint8Array): void {
   crypto.getRandomValues(arr);
   arr.fill(0);
-}
-
-// Fixed salt for wrapping key derivation - not secret, provides domain separation
-const WRAPPING_KEY_SALT = new Uint8Array([
-  0x70, 0x64, 0x69, 0x76, 0x69, 0x2d, 0x73, 0x65,
-  0x73, 0x73, 0x69, 0x6f, 0x6e, 0x2d, 0x77, 0x6b,
-]);
-
-/**
- * Derive an AES-KW wrapping key from a stable identifier (e.g. extension ID).
- * The wrapping key is not secret from the user - it just prevents storing raw
- * key material and provides a consistent encryption layer for persisted session keys.
- */
-async function getWrappingKey(identifier: string): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(identifier),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: WRAPPING_KEY_SALT,
-      iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
-    },
-    baseKey,
-    { name: 'AES-KW', length: 256 },
-    false,
-    ['wrapKey', 'unwrapKey']
-  );
-}
-
-/**
- * Wrap (export + encrypt) a session CryptoKey using AES-KW keyed from identifier.
- * Returns a base64-encoded wrapped key string.
- */
-export async function wrapSessionKey(key: CryptoKey, identifier: string): Promise<string> {
-  const wrappingKey = await getWrappingKey(identifier);
-  const wrapped = await crypto.subtle.wrapKey('raw', key, wrappingKey, 'AES-KW');
-  return btoa(String.fromCharCode(...new Uint8Array(wrapped)));
-}
-
-/**
- * Unwrap a base64-encoded wrapped session key back into a CryptoKey.
- */
-export async function unwrapSessionKey(wrapped: string, identifier: string): Promise<CryptoKey> {
-  const wrappingKey = await getWrappingKey(identifier);
-  const wrappedBytes = Uint8Array.from(atob(wrapped), c => c.charCodeAt(0));
-  return crypto.subtle.unwrapKey(
-    'raw',
-    wrappedBytes,
-    wrappingKey,
-    'AES-KW',
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
 }
