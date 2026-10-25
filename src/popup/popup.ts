@@ -129,8 +129,12 @@ function checkApprovalParams(): { type: string; requestId: string } | null {
  */
 async function init(): Promise<void> {
   // Held open while this window is; when the last wallet window closes, the
-  // background locks the wallet
-  runtime.connect({ name: UI_PORT });
+  // background locks the wallet. A browser without it still opens the popup.
+  try {
+    runtime.connect({ name: UI_PORT });
+  } catch {
+    console.warn('Could not tell the background this window is open');
+  }
   setupEventListeners();
 
   showLoading('Loading wallet...');
