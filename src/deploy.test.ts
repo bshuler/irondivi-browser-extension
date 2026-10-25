@@ -53,7 +53,7 @@ describe('EXT-13 deploy.sh stages privately and checks the whole site', () => {
 describe('EXT-31 the site loads nothing from another origin', () => {
   const site = (file: string) => readFileSync(fileURLToPath(new URL(`../site/${file}`, import.meta.url)), 'utf8');
   const nginx = site('deploy/nginx/browser.divi.domains.conf');
-  const pages = ['index.html', '404.html'];
+  const pages = ['index.html', '404.html', 'privacy/index.html'];
 
   for (const page of pages) {
     it(`${page} links and allows only its own origin`, () => {

@@ -507,3 +507,12 @@ code {
 .notfound h1 { font-size: clamp(1.8rem, 6vw, 2.6rem); font-weight: 800; margin-bottom: 0.75rem; }
 .notfound p { color: var(--text-3); margin-bottom: 1.75rem; }
 .notfound__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
+
+/* The privacy policy: a page of plain prose */
+.policy { max-width: 760px; }
+.policy h1 { font-size: clamp(1.8rem, 6vw, 2.4rem); font-weight: 800; margin-bottom: 0.5rem; }
+.policy h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; }
+.policy p, .policy li { color: var(--text-2); line-height: 1.65; }
+.policy ul { padding-left: 1.25rem; margin: 0.5rem 0 0.75rem; }
+.policy li { margin-bottom: 0.4rem; }
+.policy a { color: var(--main-glow); }

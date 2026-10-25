@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:">
+  <title>Privacy policy | IronDivi Wallet</title>
+  <meta name="description" content="What the IronDivi Wallet browser extension keeps, what it sends, and to whom.">
+  <meta name="theme-color" content="#0f0f1a">
+  <link rel="canonical" href="https://browser.divi.domains/privacy/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a class="brand" href="/" aria-label="IronDivi Wallet home">
+        <span class="brand__tile" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+        <span class="brand__word">Iron<span>Divi</span></span>
+      </a>
+    </div>
+  </header>
+  <main id="main" class="container section policy">
+    <h1>Privacy policy</h1>
+    <p>For the IronDivi Wallet browser extension (Chrome, Edge, Brave, Firefox and Safari). Last changed 25 October 2026.</p>
+
+    <h2>In short</h2>
+    <p>The wallet collects nothing about you. It has no account, no analytics, no tracking and no advertising. Your recovery phrase and keys never leave your browser. To show balances and send payments it asks the Divi network about your addresses, and those addresses are public on the blockchain anyway.</p>
+
+    <h2>What stays in your browser</h2>
+    <ul>
+      <li>Your recovery phrase and private keys, encrypted with your password (PBKDF2 and AES-GCM). They are never sent anywhere.</li>
+      <li>Your wallet names, addresses, settings, spending limits, the sites you allowed or blocked, and a record of your sends, in the browser's extension storage on this device.</li>
+      <li>IronDivi Connect pairings, in the browser's session storage. They are gone when the browser closes.</li>
+    </ul>
+    <p>Removing the extension deletes all of it. Nothing is synced between devices.</p>
+
+    <h2>What is sent, and to whom</h2>
+    <ul>
+      <li><strong>services.divi.domains</strong> (run by the IronDivi project): your public addresses, to read balances and unspent coins, and your signed transactions, to broadcast them. This is how every light wallet works. The server's ordinary web logs record the IP address of each request.</li>
+      <li><strong>The testnet faucet</strong> (services.divi.domains, or vps1.divi.domains for mainnet), only when you press the faucet button: the one address you ask it to pay.</li>
+      <li><strong>An IronDivi Connect relay</strong>, the one named in the pairing code (usually divi.cx), only when you pair with a page using its code: encrypted messages between the wallet and that page. The relay cannot read them; it sees their size and timing and the IP address that sent them.</li>
+      <li><strong>Websites you allow</strong>: a site you allow can ask to connect. Only after you approve does it learn your wallet address and network, and it learns more only as you approve each signature or payment.</li>
+    </ul>
+
+    <h2>What is not done</h2>
+    <ul>
+      <li>No personal data is sold, shared for advertising, or used for anything but running the wallet.</li>
+      <li>The wallet does not read the pages you visit. Its page script runs only on sites you allowed, and only to answer the site's wallet requests.</li>
+      <li>There is no remote code: everything the extension runs is in the package you installed.</li>
+    </ul>
+
+    <h2>Questions</h2>
+    <p>The source code is public, so every claim here can be checked. Ask or report a problem at <a href="https://github.com/bshuler/irondivi-browser-extension/issues" rel="noopener">github.com/bshuler/irondivi-browser-extension/issues</a>. If this policy changes, the new version is posted here with a new date.</p>
+  </main>
+</body>
+</html>
