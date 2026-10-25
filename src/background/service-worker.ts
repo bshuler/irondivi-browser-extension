@@ -14,7 +14,7 @@ import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
-import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
+import { checkGameTx, checkMessageShape, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning } from './records-seal';
@@ -590,6 +590,11 @@ async function handleMessage(
         if (!account) return { success: false, error: 'Name the account to sign with' };
         if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
         if (account.addresses.length === 0) return noAddressesOn(account);
+        try {
+          checkMessageShape(payload.message);
+        } catch (error) {
+          return { success: false, error: (error as Error).message };
+        }
         const signer = resolveAddress(account, payload.address, payload.addressIndex);
         const signature = await signingSession.signMessage(payload.message, signer.index, account.network, account.id);
         return { success: true, data: { signature, address: signer.address } };

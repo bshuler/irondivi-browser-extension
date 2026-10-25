@@ -14,6 +14,19 @@ import { bytesToHex } from '../lib/hex';
 // The prefix of the error a site gets for a transaction offered as a message
 export const USE_SIGN_GAME_TX = 'USE_SIGN_GAME_TX:';
 
+// The longest message the wallet signs: anything longer is kept in the
+// pending request and drawn in the approval window, and could freeze both
+export const MAX_MESSAGE_BYTES = 8 * 1024;
+
+/** A message to sign, from a site or the popup, must be text of a sane length */
+export function checkMessageShape(message: unknown): asserts message is string {
+  if (typeof message !== 'string') throw new Error('The message must be a string');
+  if (!message) throw new Error('The message is empty');
+  if (new TextEncoder().encode(message).length > MAX_MESSAGE_BYTES) {
+    throw new Error('The message is too long (8 KB at most)');
+  }
+}
+
 /**
  * Check a plain message a site asks to have signed. A Divi Games transaction
  * body is refused (it must go through signGameTx, which shows what it does),
@@ -26,7 +39,7 @@ export function checkMessageToSign(
   network: NetworkType,
   dev?: boolean,
 ): { session?: SessionGrant } {
-  if (typeof message !== 'string') throw new Error('The message must be a string');
+  checkMessageShape(message);
   if (looksLikeGameTx(message)) {
     throw new Error(`${USE_SIGN_GAME_TX} this is a Divi Games transaction; sign it with signGameTx`);
   }

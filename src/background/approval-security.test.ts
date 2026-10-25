@@ -3,7 +3,7 @@ import { createHarness, TEST_MNEMONIC, TEST_PASSWORD, type Harness } from '../te
 import { Mnemonic } from '../lib/mnemonic';
 import { deriveAddresses } from '../lib/derivation';
 
-// Regression tests for the security review's EXT-5, EXT-6, EXT-7 and EXT-9:
+// Regression tests for the security review's EXT-5, EXT-6, EXT-7, EXT-9 and EXT-10:
 // how the background answers sites and approves their requests
 
 vi.setConfig({ testTimeout: 30000 });
@@ -96,5 +96,31 @@ describe('EXT-9 a connected site is told the address of the account it connected
     const r = await done;
     expect(r.success).toBe(true);
     expect(r.data.address).toBe(account.addresses[0].address);
+  });
+});
+
+describe('EXT-10 a message to sign must be text of a sane length', () => {
+  for (const [what, message] of [['a number', 42], ['an object', { a: 1 }], ['an empty string', ''], ['over 8 KB', 'x'.repeat(8 * 1024 + 1)]] as const) {
+    it(`${what} is refused before any window opens`, async () => {
+      await h.connectPage();
+      const windows = h.createdWindows.length;
+      const r = await h.fromTab('SIGN_MESSAGE', { message });
+      expect(r.success).toBe(false);
+      expect(r.error).toMatch(/string|empty|too long/);
+      expect(h.createdWindows).toHaveLength(windows);
+    });
+  }
+
+  it('8 KB exactly is shown for approval', async () => {
+    await h.connectPage();
+    const signed = h.provider().signMessage('x'.repeat(8 * 1024));
+    const req = await h.waitForPending('sign_message');
+    expect((await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD })).success).toBe(true);
+    await signed;
+  });
+
+  it('the popup refuses the same', async () => {
+    const r = await h.popup('SIGN_MESSAGE', { accountId: account.id, password: TEST_PASSWORD, message: 'x'.repeat(9000) });
+    expect(r).toEqual({ success: false, error: 'The message is too long (8 KB at most)' });
   });
 });

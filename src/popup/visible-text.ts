@@ -20,7 +20,9 @@ export interface VisibleText {
 
 export function visibleText(raw: string): VisibleText {
   let hidden = 0;
-  const text = raw.replace(HIDDEN, ch => {
+  // The background refuses anything but text; this only keeps a bad value
+  // from breaking the window
+  const text = String(raw ?? '').replace(HIDDEN, ch => {
     hidden++;
     return `⟨U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}⟩`;
   });
