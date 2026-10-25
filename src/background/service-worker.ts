@@ -1,5 +1,5 @@
 
-import { runtime, alarms, idle } from '../shared/browser-polyfill';
+import { runtime, alarms, idle, browserAPI } from '../shared/browser-polyfill';
 import { MSG, NETWORKS, DAPP_METHODS, UI_PORT } from '../shared/constants';
 import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
 import { accountManager } from './account-manager';
@@ -16,6 +16,7 @@ import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
 import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
+import { syncSiteScripts } from './site-scripts';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
@@ -648,6 +649,8 @@ async function handleMessage(
         if (updates.network) {
           rpcClient.setNetwork(updates.network);
         }
+        // The wallet's scripts follow the allowed sites
+        if (updates.allowedSites) await syncSiteScripts();
 
         if (switching) {
           // Nothing unlocked on one network carries over to the other
@@ -923,15 +926,32 @@ idle.onStateChanged?.addListener((state: string) => {
 async function initialize() {
   const settings = await getSettings();
   rpcClient.setNetwork(settings.network);
+  // Registered scripts persist, but a browser that dropped them (or an
+  // update that changed the scripts) gets them back here
+  await syncSiteScripts();
 }
 
+browserAPI.runtime.onInstalled?.addListener(() => { void syncSiteScripts(); });
+browserAPI.runtime.onStartup?.addListener(() => { void syncSiteScripts(); });
+
 // Keep web pages' content scripts out of local storage, where the encrypted
-// vault lives. They ask SITE_ALLOWED instead. Not every browser supports this
-// for local storage; where it does not, the content script still never reads it.
-try {
-  (chrome.storage.local as any).setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' })?.catch?.(() => {});
-} catch {
-  // Unsupported
+// vault lives. They ask SITE_ALLOWED instead. Chrome and Edge support this for
+// local storage; Firefox and Safari do not, and there the content script still
+// never reads it. A failure is reported, not hidden.
+function restrictLocalStorage(): void {
+  const local = browserAPI.storage?.local;
+  if (typeof local?.setAccessLevel !== 'function') {
+    console.warn('IronDivi: this browser cannot keep content scripts out of local storage');
+    return;
+  }
+  try {
+    Promise.resolve(local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })).catch((error: unknown) => {
+      console.warn('IronDivi: could not keep content scripts out of local storage', error);
+    });
+  } catch (error) {
+    console.warn('IronDivi: could not keep content scripts out of local storage', error);
+  }
 }
+restrictLocalStorage();
 
 initialize();

@@ -8,11 +8,22 @@
  *   - approval window (windows.create): id, extension url, and a tab
  *   - content script: id, tab, url = the page URL, origin = the page origin
  */
+import { readFileSync } from 'fs';
 import { vi } from 'vitest';
 import { Address } from '../lib/address';
 import { Transaction } from '../lib/transaction';
 
 export const EXT_ID = 'testextensionid';
+
+/** Whether a match pattern (scheme://host/*, host may start with *.) covers a URL */
+export function matchPattern(pattern: string, url: string): boolean {
+  const m = /^(https?):\/\/(\*\.)?([^/*]+)\/\*$/.exec(pattern);
+  if (!m) return false;
+  const u = new URL(url);
+  if (u.protocol !== `${m[1]}:`) return false;
+  const host = u.hostname;
+  return m[2] ? host === m[3] || host.endsWith(`.${m[3]}`) : host === m[3];
+}
 export const EXT_BASE = `chrome-extension://${EXT_ID}/`;
 
 // BIP39 test vector mnemonic; used only for testnet addresses in fake RPC.
@@ -33,8 +44,10 @@ export interface Harness {
   fromTab: (type: string, payload?: unknown) => Promise<any>;
   /** A page script posting the provider bridge message itself (bypassing window.irondivi). */
   pagePost: (method: string, params?: unknown) => Promise<any>;
-  /** The injected window.irondivi provider (undefined if the content script did not inject it). */
+  /** window.irondivi (undefined if the background registered no provider for this page). */
   provider: () => any;
+  /** The content scripts the background has registered. */
+  registeredScripts: any[];
   createdWindows: Array<{ id: number; url: string }>;
   closeWindow: (id: number) => void;
   broadcasts: string[];
@@ -129,7 +142,7 @@ function p2pkhScript(address: string): string {
  */
 export async function createHarness(
   pageUrl = 'https://games.divi.domains/',
-  opts: { allowedSites?: string[] } = {},
+  opts: { allowedSites?: string[]; grantedOrigins?: string[] } = {},
 ): Promise<Harness> {
   const pageOrigin = new URL(pageUrl).origin;
   const local: Record<string, any> = {};
@@ -159,6 +172,10 @@ export async function createHarness(
   };
   const faucetRequests: string[] = [];
   let nextWindowId = 100;
+  const registeredScripts: any[] = [];
+  // The manifest's host permissions, granted at install, and any the test adds
+  const manifest = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf-8'));
+  const grantedOrigins: string[] = [...manifest.host_permissions, ...(opts.grantedOrigins ?? [])];
 
   const dispatch = (msg: any, sender: any): Promise<any> => new Promise((resolve) => {
     let answered = false;
@@ -211,8 +228,26 @@ export async function createHarness(
     tabs: { onActivated: event(), get: async () => ({}) },
     scripting: {
       executeScript: async () => [],
-      registerContentScripts: async () => {},
-      unregisterContentScripts: async () => {},
+      getRegisteredContentScripts: async (filter?: { ids?: string[] }) =>
+        registeredScripts.filter(s => !filter?.ids || filter.ids.includes(s.id)).map(s => structuredClone(s)),
+      registerContentScripts: async (scripts: any[]) => {
+        for (const s of scripts) {
+          if (registeredScripts.some(r => r.id === s.id)) throw new Error(`Duplicate script ID '${s.id}'`);
+        }
+        registeredScripts.push(...scripts.map(s => structuredClone(s)));
+      },
+      unregisterContentScripts: async (filter?: { ids?: string[] }) => {
+        for (let i = registeredScripts.length - 1; i >= 0; i--) {
+          if (!filter?.ids || filter.ids.includes(registeredScripts[i].id)) registeredScripts.splice(i, 1);
+        }
+      },
+    },
+    permissions: {
+      contains: async ({ origins }: { origins: string[] }) => origins.every(o => grantedOrigins.includes(o)),
+      request: async ({ origins }: { origins: string[] }) => {
+        grantedOrigins.push(...origins.filter(o => !grantedOrigins.includes(o)));
+        return true;
+      },
     },
   };
   (globalThis as any).chrome = chromeFake;
@@ -294,14 +329,17 @@ export async function createHarness(
     vi.resetModules();
     workerAdded = await loadWorker(`../background/service-worker?restart=${++restarts}`);
   };
-  await import('../content/content-script');
-  // Let the content script read settings and decide whether to inject.
+  // Let the worker register the scripts for the allowed sites
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
-  if (injected.some(src => src.endsWith('provider.js'))) {
+  // The browser runs a registered script only on a page its patterns match
+  const runs = (file: string) => registeredScripts.some(s => s.js.includes(file) && s.matches.some((m: string) => matchPattern(m, pageUrl)));
+  if (runs('provider.js')) {
     // provider.ts is a classic script, not a module; import it by path.
     const providerPath = '../injected/provider';
     await import(/* @vite-ignore */ providerPath);
   }
+  if (runs('content-script.js')) await import('../content/content-script');
+  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
 
   const pagePost = (method: string, params?: unknown) => new Promise<any>((resolve) => {
     const id = `raw-${Math.random()}`;
@@ -324,6 +362,7 @@ export async function createHarness(
     fromTab: (type, payload) => dispatch({ type, payload, origin: pageOrigin }, tabSender),
     pagePost,
     provider: () => fakeWindow.irondivi,
+    registeredScripts,
     createdWindows,
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
     broadcasts,

@@ -16,14 +16,5 @@
     ],
     "type": "module"
   },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "provider.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ]
+  "minimum_chrome_version": null
 }

@@ -156,7 +156,7 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
 
 // A development build's list, which allows a local dApp
 // A pattern without a port allows only the default one, so the dev server's needs :*
-const LOCAL_DEV = { allowedSites: ['games.divi.domains', '127.0.0.1:*'] };
+const LOCAL_DEV = { allowedSites: ['games.divi.domains', '127.0.0.1:*'], grantedOrigins: ['http://127.0.0.1/*'] };
 
 describe('#4 one origin rule; sign and send need a connected origin', () => {
   it('http://127.0.0.1 gets the provider and can connect', async () => {

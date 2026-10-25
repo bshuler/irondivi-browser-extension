@@ -8,9 +8,13 @@ const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
 // Capture page origin once at initialization
 const pageOrigin = window.location.origin;
 
+// The background registers this script, and window.irondivi in the page's own
+// world, only on the allowed sites (site-scripts.ts); nothing of the wallet
+// runs on any other page.
+//
 // Run once per page. This window is the content script's own isolated world,
 // so the page cannot see or set the flag; a second copy (an extension reload)
-// must not add a second relay or inject a second provider.
+// must not add a second relay.
 const firstCopy = !(window as any).__irondiviBridge;
 (window as any).__irondiviBridge = true;
 
@@ -19,19 +23,6 @@ const firstCopy = !(window as any).__irondiviBridge;
 const siteAllowed: Promise<boolean> = (runtime.sendMessage({ type: MSG.SITE_ALLOWED }) as Promise<any>)
   .then(r => r?.success === true && r.data?.allowed === true)
   .catch(() => false);
-
-/**
- * Inject the provider script into the page context
- */
-function injectProvider() {
-  const script = document.createElement('script');
-  script.src = runtime.getURL('provider.js');
-  // Don't use type="module" - load as regular script for synchronous execution
-  script.onload = () => {
-    script.remove();
-  };
-  (document.head || document.documentElement).appendChild(script);
-}
 
 /**
  * Listen for messages from the injected provider
@@ -87,8 +78,3 @@ async function onPageMessage(event: MessageEvent) {
 }
 
 if (firstCopy) window.addEventListener('message', onPageMessage);
-
-// Inject the provider only on allowed sites
-siteAllowed.then(allowed => {
-  if (allowed && firstCopy) injectProvider();
-});

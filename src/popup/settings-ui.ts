@@ -10,6 +10,8 @@ import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal 
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
 import { defaultAllowedSites, isValidSitePattern } from '../shared/origin';
 import { checkSettingsUpdate } from '../shared/settings-check';
+import { patternsFor } from '../shared/site-patterns';
+import { browserAPI } from '../shared/browser-polyfill';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
@@ -360,7 +362,17 @@ export function setupSettingsUIHandlers(): void {
       showToast(`Not a valid site: ${bad.slice(0, 60)}`, 'error');
       return;
     }
-    updateSettings({ allowedSites: sites });
+    // The wallet's scripts run only where the browser lets it: ask for the
+    // added sites now, while the click still counts as the owner's (Chrome
+    // asks nothing for the sites it already has)
+    const request = browserAPI.permissions?.request;
+    const asked: Promise<boolean> = typeof request === 'function'
+      ? Promise.resolve(browserAPI.permissions.request({ origins: patternsFor(sites) })).catch(() => false)
+      : Promise.resolve(true);
+    asked.then(ok => {
+      if (!ok) showToast('Saved; the sites you did not allow in the browser cannot use the wallet', 'error');
+      updateSettings({ allowedSites: sites });
+    });
   });
 
   // Rename account button

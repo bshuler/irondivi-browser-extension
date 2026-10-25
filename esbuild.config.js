@@ -66,8 +66,17 @@ async function build() {
   const baseManifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));
   // manifest.<browser>.json, when present, shallow-overrides top-level keys.
   const overridePath = join(__dirname, `manifest.${browser}.json`);
+  // A key set to null there is removed.
   if (existsSync(overridePath)) {
-    Object.assign(baseManifest, JSON.parse(readFileSync(overridePath, 'utf-8')));
+    for (const [key, value] of Object.entries(JSON.parse(readFileSync(overridePath, 'utf-8')))) {
+      if (value === null) delete baseManifest[key];
+      else baseManifest[key] = value;
+    }
+  }
+  // A development build runs on local dApps from install; a release asks for
+  // them only when the owner adds one in Settings
+  if (isDev) {
+    baseManifest.host_permissions = [...baseManifest.host_permissions, 'http://localhost/*', 'http://127.0.0.1/*'];
   }
   writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(baseManifest, null, 2));
 

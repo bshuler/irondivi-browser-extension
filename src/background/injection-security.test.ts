@@ -56,10 +56,14 @@ describe('M1 the content script never reads extension storage', () => {
     expect(src).not.toMatch(/storage\.(local|session|get|set)|getSettings|import \{[^}]*storage/);
   });
 
-  it('the manifest asks only for storage, alarms and idle, and only the wallet\'s servers', () => {
+  it('the manifest asks only for what the wallet needs, and only its own hosts up front', () => {
     const m = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
-    expect(m.permissions).toEqual(['storage', 'alarms', 'idle']);
-    expect(m.host_permissions).toEqual(['https://services.divi.domains/*', 'https://vps1.divi.domains/*']);
+    expect(m.permissions).toEqual(['storage', 'alarms', 'idle', 'scripting']);
+    expect(m.host_permissions).toEqual([
+      'https://games.divi.domains/*', 'https://services.divi.domains/*', 'https://vps1.divi.domains/*',
+    ]);
+    // Any other site is asked for when the owner adds it in Settings
+    expect(m.optional_host_permissions).toEqual(['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*']);
   });
 });
 
@@ -103,8 +107,10 @@ describe('M11 the wallet is injected once, through one path', () => {
     expect(h.provider()).toBe(original);
   });
 
-  it('the background no longer injects on navigation or tab switch', () => {
-    const src = readFileSync(new URL('./service-worker.ts', import.meta.url), 'utf8');
-    expect(src).not.toMatch(/webNavigation|registerContentScripts|executeScript|tabs\.onActivated/);
+  it('the background does not inject on navigation or tab switch', () => {
+    for (const file of ['./service-worker.ts', './site-scripts.ts']) {
+      const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+      expect(src).not.toMatch(/webNavigation|executeScript|tabs\.onActivated/);
+    }
   });
 });
