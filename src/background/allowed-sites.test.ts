@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHarness } from '../test-support/harness';
 import {
-  DEV_SITES, LEGACY_DEFAULT_SITES, PRODUCTION_SITES,
+  DEFAULT_SITES_0_0_4, DEV_SITES, LEGACY_DEFAULT_SITES, PRODUCTION_SITES,
   defaultAllowedSites, effectiveAllowedSites, isAllowedDappOrigin,
 } from '../shared/origin';
 
@@ -20,15 +20,13 @@ describe('M6 the default list names the production hosts exactly', () => {
     const sites = defaultAllowedSites(false);
     expect(sites).toEqual(PRODUCTION_SITES);
     expect(sites.every(s => !s.includes('*') && !s.includes('?'))).toBe(true);
-    for (const origin of ['https://games.divi.domains', 'https://services.divi.domains']) {
-      expect(isAllowedDappOrigin(origin, sites)).toBe(true);
-    }
+    expect(isAllowedDappOrigin('https://games.divi.domains', sites)).toBe(true);
   });
 
   it('a release build refuses other divi.domains hosts and local pages', () => {
     const sites = defaultAllowedSites(false);
     for (const origin of [
-      'https://evil.divi.domains', 'https://app.divi.domains', 'https://divi.domains',
+      'https://evil.divi.domains', 'https://app.divi.domains', 'https://divi.domains', 'https://services.divi.domains',
       'https://games.divi.domains.evil.example', 'http://localhost:8080', 'http://127.0.0.1:8080',
     ]) {
       expect({ origin, allowed: isAllowedDappOrigin(origin, sites) }).toEqual({ origin, allowed: false });
@@ -98,5 +96,29 @@ describe('M6 no default list is written out anywhere else', () => {
         .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       expect({ f, wildcard: src.includes("'*.divi.domains'") }).toEqual({ f, wildcard: false });
     }
+  });
+});
+
+describe('EXT-15 the RPC host is not a trusted dApp', () => {
+  it('services.divi.domains, which serves the balance feed, is not on the default list', () => {
+    expect(PRODUCTION_SITES).toEqual(['games.divi.domains']);
+    expect(isAllowedDappOrigin('https://services.divi.domains', defaultAllowedSites(false))).toBe(false);
+    expect(isAllowedDappOrigin('https://services.divi.domains', defaultAllowedSites(true))).toBe(false);
+  });
+
+  it('the 0.0.4 default, release or development, is replaced by the new one', () => {
+    expect(effectiveAllowedSites([...DEFAULT_SITES_0_0_4], false)).toEqual(PRODUCTION_SITES);
+    expect(effectiveAllowedSites([...DEFAULT_SITES_0_0_4, ...DEV_SITES], true)).toEqual(defaultAllowedSites(true));
+  });
+
+  it('a list the owner made that names services.divi.domains is kept', () => {
+    const mine = ['games.divi.domains', 'services.divi.domains', 'my.dapp.example'];
+    expect(effectiveAllowedSites(mine, false)).toBe(mine);
+  });
+
+  it('a wallet that stored the 0.0.4 default stops serving services.divi.domains', async () => {
+    const h = await createHarness('https://services.divi.domains/', { allowedSites: [...DEFAULT_SITES_0_0_4] });
+    expect(await h.fromTab('SITE_ALLOWED')).toEqual({ success: true, data: { allowed: false } });
+    expect(h.provider()).toBeUndefined();
   });
 });

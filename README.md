@@ -142,7 +142,8 @@ messages on to the wallet, only on a page that is
 
 - `https:`, or `http:` on `localhost` or `127.0.0.1`, **and**
 - on a host in **Settings → Allowed Sites**. The default list names each
-  production dApp exactly: `games.divi.domains` and `services.divi.domains`.
+  production dApp exactly: `games.divi.domains` alone. `services.divi.domains`
+  serves the RPC the wallet trusts for balances, so it is not also a dApp.
   A development build (`npm run build:dev`, or `npm run watch`) also allows
   `localhost` and `127.0.0.1`; a release build does not. A list saved by
   0.0.3 or earlier that is still that version's default (`*.divi.domains`,

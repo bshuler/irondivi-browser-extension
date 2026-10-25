@@ -11,7 +11,10 @@ const DEV_BUILD = typeof __IRONDIVI_DEV__ !== 'undefined' && __IRONDIVI_DEV__;
 
 // The sites that use the wallet. Each is named exactly: a wildcard such as
 // *.divi.domains would also admit any other host under that name.
-export const PRODUCTION_SITES = ['games.divi.domains', 'services.divi.domains'];
+// services.divi.domains is not one: it serves the RPC the wallet reads its
+// balance from, and its pages do not use window.irondivi, so trusting it as a
+// dApp too would let one XSS there both feed and spend (security review EXT-15).
+export const PRODUCTION_SITES = ['games.divi.domains'];
 
 // Local dApps under development, on any port. Only a development build
 // allows them.
@@ -20,6 +23,11 @@ export const DEV_SITES = ['localhost:*', '127.0.0.1:*'];
 // The default list up to 0.0.3. A stored list equal to it was never chosen
 // by the user, so it is replaced by the current default.
 export const LEGACY_DEFAULT_SITES = ['*.divi.domains', 'localhost', '127.0.0.1'];
+
+// The default list of 0.0.4, in release and development builds. A stored list
+// equal to one of these was never chosen by the user either.
+export const DEFAULT_SITES_0_0_4 = ['games.divi.domains', 'services.divi.domains'];
+const OLD_DEFAULTS = [LEGACY_DEFAULT_SITES, DEFAULT_SITES_0_0_4, [...DEFAULT_SITES_0_0_4, ...DEV_SITES]];
 
 // The only origin that may ask the wallet to sign Divi Games chain
 // transactions or session grants, whatever else the user allows. A
@@ -47,8 +55,7 @@ export function defaultAllowedSites(dev: boolean = DEV_BUILD): string[] {
  */
 export function effectiveAllowedSites(stored: string[] | undefined, dev: boolean = DEV_BUILD): string[] {
   if (!Array.isArray(stored)) return defaultAllowedSites(dev);
-  const isLegacy = stored.length === LEGACY_DEFAULT_SITES.length &&
-    stored.every((s, i) => s === LEGACY_DEFAULT_SITES[i]);
+  const isLegacy = OLD_DEFAULTS.some(old => stored.length === old.length && stored.every((s, i) => s === old[i]));
   return isLegacy ? defaultAllowedSites(dev) : stored;
 }
 
