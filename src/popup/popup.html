@@ -252,6 +252,12 @@
             <input type="number" id="setting-daily-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
           </div>
           <p class="setting-hint">The first two apply to each transaction, the daily ones to everything sent in 24 hours, fee included. A limit in DIVI is the strongest: it does not depend on the balance a node reports. 0 = no limit.</p>
+          <div class="setting-item">
+            <span>Security Phrase</span>
+            <input type="text" id="setting-security-phrase" maxlength="40" placeholder="e.g. blue heron" autocomplete="off">
+          </div>
+          <button class="setting-item" id="save-security-phrase-btn">Save Security Phrase</button>
+          <p class="setting-hint">Every approval window shows this phrase. A website can draw a window that looks like the wallet's, but it cannot know your phrase: never type your password into a window that does not show it.</p>
         </div>
         <div class="setting-section">
           <h3>Allowed Sites</h3>
@@ -408,6 +414,7 @@
           <span class="signing-origin-label">Request from:</span>
           <div id="signing-origin" class="signing-origin"></div>
         </div>
+        <div id="signing-security-phrase" class="security-phrase"></div>
         <div id="signing-type" class="signing-type"></div>
         <div id="signing-details" class="signing-details"></div>
         <div class="signing-warning" id="signing-warning">

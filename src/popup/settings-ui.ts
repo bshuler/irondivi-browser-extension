@@ -78,6 +78,8 @@ export function updateSettingsDisplay(): void {
 
   networkSelect.value = state.settings.network;
   hideBalanceCheck.checked = state.settings.hideBalance;
+  const securityPhraseInput = document.getElementById('setting-security-phrase') as HTMLInputElement | null;
+  if (securityPhraseInput) securityPhraseInput.value = state.settings.securityPhrase ?? '';
   authTimeoutSelect.value = String(state.settings.authTimeoutMinutes);
 
   // Transaction limits
@@ -380,6 +382,12 @@ export function setupSettingsUIHandlers(): void {
       if (!ok) showToast('Saved; the sites you did not allow in the browser cannot use the wallet', 'error');
       updateSettings({ allowedSites: sites });
     });
+  });
+
+  // The phrase approval windows show (EXT-18); changing it asks for the password
+  document.getElementById('save-security-phrase-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('setting-security-phrase') as HTMLInputElement;
+    updateSettings({ securityPhrase: input.value.trim() });
   });
 
   // Rename account button

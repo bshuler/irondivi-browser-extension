@@ -14,6 +14,7 @@ const LIMIT_KEYS: (keyof TransactionLimits)[] = [
 ];
 const PERCENT_KEYS = new Set<keyof TransactionLimits>(['maxAmountPercent', 'dailyLimitPercent']);
 export const AUTH_TIMEOUTS = [1, 5, 15, 30];
+export const MAX_SECURITY_PHRASE = 40;
 
 export type SettingsCheck =
   | { ok: false; error: string }
@@ -81,6 +82,18 @@ export function checkSettingsUpdate(raw: unknown, current: Settings): SettingsCh
           limits[k] = v[k] as number;
         }
         updates.transactionLimits = limits;
+        break;
+      }
+      case 'securityPhrase': {
+        // Shown on every approval window (EXT-18); changing it needs the
+        // password, so a page cannot learn or set it
+        if (typeof value !== 'string') return { ok: false, error: 'Invalid security phrase' };
+        const phrase = value.trim();
+        if (phrase.length > MAX_SECURITY_PHRASE || /[\p{C}]/u.test(phrase)) {
+          return { ok: false, error: `The security phrase must be plain text of ${MAX_SECURITY_PHRASE} characters at most` };
+        }
+        if (phrase !== (current.securityPhrase ?? '')) loosens = true;
+        updates.securityPhrase = phrase;
         break;
       }
       default:

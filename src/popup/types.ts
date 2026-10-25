@@ -56,6 +56,8 @@ export interface Settings {
   hideBalance: boolean;
   allowedSites: string[];
   transactionLimits: TransactionLimits;
+  // Shown in every approval window (EXT-18)
+  securityPhrase?: string;
 }
 
 export interface PendingSendTx {

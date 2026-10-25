@@ -73,6 +73,7 @@ function getElements() {
     type: document.getElementById('signing-type') as HTMLDivElement,
     details: document.getElementById('signing-details') as HTMLDivElement,
     warningText: document.getElementById('signing-warning-text') as HTMLSpanElement,
+    securityPhrase: document.getElementById('signing-security-phrase') as HTMLDivElement,
     password: document.getElementById('signing-password') as HTMLInputElement,
     rejectBtn: document.getElementById('reject-request-btn') as HTMLButtonElement,
     approveBtn: document.getElementById('approve-request-btn') as HTMLButtonElement,
@@ -127,10 +128,11 @@ export async function checkPendingRequests(requestId?: string): Promise<boolean>
       type: MSG.GET_PENDING_SIGNING_REQUESTS,
     });
 
-    const data = response.data as { requests?: SigningRequest[] } | undefined;
+    const data = response.data as { requests?: SigningRequest[]; securityPhrase?: string } | undefined;
     const request = response.success && data?.requests ? pickRequest(data.requests, requestId) : undefined;
     if (request) {
       showSigningRequestView(request);
+      showSecurityPhrase(data?.securityPhrase ?? '');
       return true;
     }
     if (requestId) showToast('This request is no longer pending', 'error');
@@ -396,6 +398,22 @@ async function approveCurrent(elements: ReturnType<typeof getElements>): Promise
     elements.password.value = '';
     showToast(error instanceof Error ? error.message : 'Failed to approve request', 'error');
     elements.approveBtn.disabled = false;
+  }
+}
+
+/**
+ * Show the owner's security phrase. A page can draw a look-alike window but
+ * cannot know the phrase, so a window without it is not the wallet's (EXT-18).
+ */
+function showSecurityPhrase(phrase: string): void {
+  const { securityPhrase } = getElements();
+  if (!securityPhrase) return;
+  if (phrase) {
+    securityPhrase.textContent = phrase;
+    securityPhrase.className = 'security-phrase';
+  } else {
+    securityPhrase.textContent = 'Set a security phrase in Settings: this window will show it, and a window that does not is not your wallet.';
+    securityPhrase.className = 'security-phrase unset';
   }
 }
 

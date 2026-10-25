@@ -930,7 +930,8 @@ async function handleMessage(
             ...(await requestContext(r, network, accounts)),
           };
         }));
-        return { success: true, data: { requests } };
+        // The owner's security phrase, so the window shows it is the wallet's (EXT-18)
+        return { success: true, data: { requests, securityPhrase: settings.securityPhrase ?? '' } };
       }
 
       case MSG.APPROVE_SIGNING_REQUEST: {

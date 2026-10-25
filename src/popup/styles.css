@@ -1770,6 +1770,31 @@ body:not([data-network]) .network-bar {
   display: none;
 }
 
+/* The owner's security phrase in an approval window (EXT-18) */
+.security-phrase {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-light);
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: center;
+  word-break: break-word;
+}
+
+.security-phrase:empty {
+  display: none;
+}
+
+.security-phrase.unset {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+
 /* What the wallet knows about a payment's recipient (EXT-8) */
 .recipient-note {
   font-size: 11px;

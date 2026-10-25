@@ -57,7 +57,9 @@ export interface Snapshot {
   // Accounts whose addresses were derived from their phrase since the last
   // reset; the others were sealed as they were found
   verified: string[];
-  settings: { allowedSites: string[]; limits: TransactionLimits; timeout: number };
+  // phrase: the security phrase approval windows show (EXT-18); a seal made
+  // before it existed has none, which is the same as no phrase
+  settings: { allowedSites: string[]; limits: TransactionLimits; timeout: number; phrase?: string };
   // account id -> origin -> permissions, sorted; connected entries only
   connections: Record<string, Record<string, string[]>>;
   // contact id -> "network:address"
@@ -183,6 +185,7 @@ export function snapshotOf(records: Records, verified: Iterable<string>): Snapsh
       allowedSites: settings.allowedSites.map(s => s.trim().toLowerCase()).sort(),
       limits: { ...settings.transactionLimits },
       timeout: settings.authTimeoutMinutes,
+      phrase: settings.securityPhrase ?? '',
     },
     connections,
     contacts,
@@ -200,6 +203,8 @@ function settingsLooser(cur: Snapshot['settings'], sealed: Snapshot['settings'])
   for (const k of Object.keys(cur.limits) as (keyof TransactionLimits)[]) {
     if (looser(cur.limits[k], sealed.limits[k] ?? 0)) return true;
   }
+  // A changed phrase would let a page that planted it pass for the wallet
+  if ((cur.phrase ?? '') !== (sealed.phrase ?? '')) return true;
   return cur.timeout > sealed.timeout;
 }
 
@@ -266,6 +271,8 @@ function revert(records: Records, sealed: Snapshot): Records {
     settings.transactionLimits = { ...sealed.settings.limits };
     settings.authTimeoutMinutes = sealed.settings.timeout;
     settings.limitsVersion = 2;
+    if (sealed.settings.phrase) settings.securityPhrase = sealed.settings.phrase;
+    else delete settings.securityPhrase;
   }
 
   const connections: NonNullable<Records['connections']> = {};
@@ -302,6 +309,8 @@ function reset(records: Records): Records {
       transactionLimits: { ...DEFAULT_SETTINGS.transactionLimits },
       authTimeoutMinutes: DEFAULT_SETTINGS.authTimeoutMinutes,
       limitsVersion: 2,
+      // A phrase found with no seal to vouch for it may be a planted one
+      securityPhrase: undefined,
     },
     connections: {},
     addressBook: (records.addressBook ?? []).map(c => ({ ...c, unverified: true })),

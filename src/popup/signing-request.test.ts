@@ -88,13 +88,21 @@ describe('EXT-6 the approval window sends one approval at a time', () => {
   });
 });
 
-// EXT-8: what the approval window shows
-describe('EXT-8 the approval window', () => {
+// EXT-8 and EXT-18: what the approval window shows
+describe('EXT-8 and EXT-18 the approval window', () => {
   const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('./popup.html', import.meta.url), 'utf8');
   it('shows the account it is from, the recipient note and what is left', () => {
     expect(src).toMatch(/detailRow\('From:'/);
     expect(src).toMatch(/recipient-note \$\{request\.recipient\.level\}/);
     expect(src).toMatch(/detailRow\('Left after:'/);
+  });
+
+  it('has a place for the security phrase, set as text', () => {
+    expect(html).toMatch(/id="signing-security-phrase"/);
+    expect(html).toMatch(/id="setting-security-phrase"[^>]*maxlength="40"/);
+    const fn = src.slice(src.indexOf('function showSecurityPhrase'));
+    expect(fn.slice(0, fn.indexOf('\n}\n'))).not.toMatch(/innerHTML/);
   });
 });
 

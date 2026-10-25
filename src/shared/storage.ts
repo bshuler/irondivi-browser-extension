@@ -71,6 +71,9 @@ export interface Settings {
   // 2 from 0.0.5, when a daily limit became the default. Settings saved
   // earlier have the daily limits off because that was the default then.
   limitsVersion?: number;
+  // The owner's own words, shown on every approval window so a page cannot
+  // pass off a window of its own as the wallet's (EXT-18)
+  securityPhrase?: string;
 }
 
 export interface Connection {

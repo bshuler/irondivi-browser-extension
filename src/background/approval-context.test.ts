@@ -3,8 +3,9 @@ import { createHarness, TEST_MNEMONIC, TEST_PASSWORD, type Harness } from '../te
 import { Mnemonic } from '../lib/mnemonic';
 import { deriveAddresses } from '../lib/derivation';
 
-// Regression tests for the security review's EXT-8: the approval window did
-// not say which account pays or whom it pays
+// Regression tests for the security review's EXT-8 (the approval window did
+// not say which account pays or whom it pays) and EXT-18 (nothing told the
+// owner's approval window apart from one a page draws)
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -77,5 +78,54 @@ describe('EXT-8 the approval window says which account pays and whom', () => {
     const r = await h.approvalWindow('GET_PENDING_SIGNING_REQUESTS');
     expect(r.data.requests[0].from.address).toBe(account.addresses[0].address);
     expect(r.data.requests[0].recipient).toBeUndefined();
+  });
+});
+
+describe('EXT-18 the owner\'s security phrase', () => {
+  it('setting it needs the password', async () => {
+    const r = await h.popup('UPDATE_SETTINGS', { securityPhrase: 'blue heron' });
+    expect(r.success).toBe(false);
+    expect(h.storage.settings?.securityPhrase).toBeUndefined();
+    expect((await h.popup('UPDATE_SETTINGS', { securityPhrase: 'blue heron', password: TEST_PASSWORD })).success).toBe(true);
+    expect(h.storage.settings.securityPhrase).toBe('blue heron');
+  });
+
+  it.each([
+    ['too long', 'x'.repeat(41)],
+    ['a control character', 'blue\u0000heron'],
+    ['a direction override', 'blue‮heron'],
+    ['not text', 42],
+  ])('%s is refused', async (_what, securityPhrase) => {
+    const r = await h.popup('UPDATE_SETTINGS', { securityPhrase, password: TEST_PASSWORD });
+    expect(r.success).toBe(false);
+    expect(h.storage.settings?.securityPhrase).toBeUndefined();
+  });
+
+  it('the approval window is given it with the requests', async () => {
+    await h.popup('UPDATE_SETTINGS', { securityPhrase: 'blue heron', password: TEST_PASSWORD });
+    const { list } = await pendingPayment(await foreignTestnetAddress());
+    expect(list.securityPhrase).toBe('blue heron');
+  });
+
+  it('a site cannot read it', async () => {
+    await h.popup('UPDATE_SETTINGS', { securityPhrase: 'blue heron', password: TEST_PASSWORD });
+    await h.connectPage();
+    for (const type of ['GET_PENDING_SIGNING_REQUESTS', 'GET_SETTINGS']) {
+      const r = await h.fromTab(type);
+      expect(JSON.stringify(r)).not.toContain('blue heron');
+    }
+  });
+
+  it('is sealed with the other settings, so a planted phrase is put back', async () => {
+    await h.popup('UPDATE_SETTINGS', { securityPhrase: 'blue heron', password: TEST_PASSWORD });
+    h.storage.settings = { ...h.storage.settings, securityPhrase: 'attacker' };
+    expect((await h.popup('AUTHENTICATE', { accountId: account.id, password: TEST_PASSWORD })).success).toBe(true);
+    expect(h.storage.settings.securityPhrase).toBe('blue heron');
+  });
+
+  it('a phrase planted where there was none is removed', async () => {
+    h.storage.settings = { ...h.storage.settings, securityPhrase: 'attacker' };
+    expect((await h.popup('AUTHENTICATE', { accountId: account.id, password: TEST_PASSWORD })).success).toBe(true);
+    expect(h.storage.settings.securityPhrase).toBeUndefined();
   });
 });
