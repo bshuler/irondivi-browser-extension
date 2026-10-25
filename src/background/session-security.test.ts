@@ -93,6 +93,38 @@ describe('EXT-2 every send and signature from the popup needs the password', () 
   });
 });
 
+describe('EXT-2 the wallet locks when its windows close or the screen locks', () => {
+  it('locks when the last wallet window closes, not before', async () => {
+    const popup = h.openUiPort();
+    const approval = h.openUiPort(`chrome-extension://testextensionid/popup.html?approve=connect&requestId=x`);
+    expect(await h.isAuthenticated(account.id)).toBe(true);
+    popup.disconnect();
+    expect(await h.isAuthenticated(account.id)).toBe(true);
+    approval.disconnect();
+    expect(await h.isAuthenticated(account.id)).toBe(false);
+  });
+
+  it('ignores a port from a web page', async () => {
+    const page = h.openUiPort('https://evil.example/');
+    page.disconnect();
+    // A page's port never counted as a wallet window, so closing it locks nothing
+    expect(await h.isAuthenticated(account.id)).toBe(true);
+  });
+
+  it('locks when the screen locks', async () => {
+    h.setIdleState('idle');
+    expect(await h.isAuthenticated(account.id)).toBe(true);
+    h.setIdleState('locked');
+    expect(await h.isAuthenticated(account.id)).toBe(false);
+  });
+
+  it('asks for the idle permission and the popup holds the port', () => {
+    const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
+    expect(manifest.permissions).toContain('idle');
+    expect(readFileSync('src/popup/popup.ts', 'utf8')).toMatch(/runtime\.connect\(\{ name: UI_PORT \}\)/);
+  });
+});
+
 describe('M2 (code)', () => {
   it('the signing session has no code that stores or wraps the phrase', () => {
     const src = readFileSync(new URL('./signing-session.ts', import.meta.url), 'utf8');

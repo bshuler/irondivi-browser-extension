@@ -8,7 +8,8 @@
   },
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "idle"
   ],
   "host_permissions": [
     "https://services.divi.domains/*",

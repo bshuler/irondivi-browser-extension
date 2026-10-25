@@ -32,6 +32,10 @@ export type NetworkType = keyof typeof NETWORKS;
 export const DUST_THRESHOLD = 0.0000546;
 
 // Message types for communication
+// The port the wallet's own windows (the popup and approval windows) hold open
+// to the background. When the last one closes the signing session ends.
+export const UI_PORT = 'irondivi-ui';
+
 export const MSG = {
   // Account operations
   GET_ACCOUNTS: 'GET_ACCOUNTS',

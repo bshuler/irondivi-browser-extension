@@ -56,9 +56,9 @@ describe('M1 the content script never reads extension storage', () => {
     expect(src).not.toMatch(/storage\.(local|session|get|set)|getSettings|import \{[^}]*storage/);
   });
 
-  it('the manifest asks only for storage and alarms, and only the wallet\'s servers', () => {
+  it('the manifest asks only for storage, alarms and idle, and only the wallet\'s servers', () => {
     const m = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
-    expect(m.permissions).toEqual(['storage', 'alarms']);
+    expect(m.permissions).toEqual(['storage', 'alarms', 'idle']);
     expect(m.host_permissions).toEqual(['https://services.divi.domains/*', 'https://vps1.divi.domains/*']);
   });
 });

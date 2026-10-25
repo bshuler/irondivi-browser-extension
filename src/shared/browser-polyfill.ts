@@ -83,5 +83,16 @@ export const runtime = {
     });
   },
   onMessage: browserAPI.runtime.onMessage,
+  get onConnect() {
+    return browserAPI.runtime.onConnect;
+  },
+  connect: (info: { name: string }) => browserAPI.runtime.connect(info),
   getURL: (path: string): string => browserAPI.runtime.getURL(path),
+};
+
+// Idle API: tells the background when the screen locks. Safari has none.
+export const idle = {
+  get onStateChanged() {
+    return browserAPI.idle?.onStateChanged;
+  },
 };

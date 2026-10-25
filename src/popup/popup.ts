@@ -9,7 +9,8 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
 import { sendMessage } from './message-api';
-import { MSG } from '../shared/constants';
+import { MSG, UI_PORT } from '../shared/constants';
+import { runtime } from '../shared/browser-polyfill';
 import { setupMnemonicModalHandlers } from './modals';
 import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensureNetworkAddresses } from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
@@ -127,6 +128,9 @@ function checkApprovalParams(): { type: string; requestId: string } | null {
  * Initialize the popup
  */
 async function init(): Promise<void> {
+  // Held open while this window is; when the last wallet window closes, the
+  // background locks the wallet
+  runtime.connect({ name: UI_PORT });
   setupEventListeners();
 
   showLoading('Loading wallet...');

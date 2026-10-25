@@ -64,6 +64,10 @@ export interface Harness {
    * service worker: storage survives, the worker's memory does not.
    */
   restartWorker: () => Promise<void>;
+  /** Open a wallet window's port to the background, as the popup does; from another URL if given */
+  openUiPort: (url?: string) => { disconnect: () => void };
+  /** Tell the background the idle state changed ('active', 'idle' or 'locked') */
+  setIdleState: (state: string) => void;
   /** Whether the running worker's signing session is open (for the account) */
   isAuthenticated: (accountId?: string) => Promise<boolean>;
   /** Import TEST_MNEMONIC on testnet and unlock a signing session. Returns the account. */
@@ -132,6 +136,8 @@ export async function createHarness(
   if (opts.allowedSites) local.settings = { allowedSites: opts.allowedSites };
   const session: Record<string, any> = {};
   const onMessage = event();
+  const onConnect = event();
+  const onIdle = event();
   const onRemoved = event();
   const createdWindows: Array<{ id: number; url: string }> = [];
   const broadcasts: string[] = [];
@@ -178,6 +184,7 @@ export async function createHarness(
       id: EXT_ID,
       getURL: (p: string) => EXT_BASE + p.replace(/^\//, ''),
       onMessage,
+      onConnect,
       lastError: undefined,
       // Only the content script calls this in the harness; popup calls use popup().
       sendMessage: (msg: any, cb?: (r: any) => void) => {
@@ -188,6 +195,7 @@ export async function createHarness(
     },
     storage: { local: makeStorageArea(local), session: makeStorageArea(session) },
     alarms: { create: () => {}, clear: (_n: string, cb?: (b: boolean) => void) => { cb?.(true); return Promise.resolve(true); }, onAlarm: event() },
+    idle: { onStateChanged: onIdle },
     action: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {} },
     windows: {
       getAll: async () => [],
@@ -272,17 +280,19 @@ export async function createHarness(
   (globalThis as any).window = fakeWindow;
   (globalThis as any).document = fakeDocument;
 
-  let workerListeners = onMessage.listeners.length;
-  await import('../background/service-worker');
-  let workerAdded = onMessage.listeners.slice(workerListeners);
+  // The listeners the worker adds, so a restart can take them away again
+  const workerEvents = [onMessage, onConnect, onIdle];
+  const loadWorker = async (path: string) => {
+    const before = workerEvents.map(e => e.listeners.length);
+    await import(/* @vite-ignore */ path);
+    return workerEvents.map((e, i) => e.listeners.slice(before[i]));
+  };
+  let workerAdded = await loadWorker('../background/service-worker');
   let restarts = 0;
   const restartWorker = async () => {
-    for (const l of workerAdded) onMessage.removeListener(l);
+    workerEvents.forEach((e, i) => workerAdded[i].forEach(l => e.removeListener(l)));
     vi.resetModules();
-    workerListeners = onMessage.listeners.length;
-    const path = `../background/service-worker?restart=${++restarts}`;
-    await import(/* @vite-ignore */ path);
-    workerAdded = onMessage.listeners.slice(workerListeners);
+    workerAdded = await loadWorker(`../background/service-worker?restart=${++restarts}`);
   };
   await import('../content/content-script');
   // Let the content script read settings and decide whether to inject.
@@ -328,6 +338,13 @@ export async function createHarness(
     storage: local,
     sessionStorage: session,
     restartWorker,
+    openUiPort: (url = `${EXT_BASE}popup.html`) => {
+      const onDisconnect = event();
+      const port = { name: 'irondivi-ui', sender: { id: EXT_ID, url }, onDisconnect, onMessage: event() };
+      onConnect.listeners.forEach(l => l(port));
+      return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)) };
+    },
+    setIdleState: (state) => onIdle.listeners.forEach(l => l(state)),
     isAuthenticated: async (accountId?: string) =>
       (await import('../background/signing-session')).signingSession.isAuthenticated(accountId),
     setupWallet: async () => {

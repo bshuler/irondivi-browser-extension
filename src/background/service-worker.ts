@@ -1,6 +1,6 @@
 
-import { runtime, alarms } from '../shared/browser-polyfill';
-import { MSG, NETWORKS, DAPP_METHODS } from '../shared/constants';
+import { runtime, alarms, idle } from '../shared/browser-polyfill';
+import { MSG, NETWORKS, DAPP_METHODS, UI_PORT } from '../shared/constants';
 import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
@@ -890,6 +890,24 @@ alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'signing-session-timeout') {
     await signingSession.handleAlarmTimeout();
   }
+});
+
+// The wallet's open windows. The phrase stays in memory only while one is
+// open: closing the last popup or approval window locks the wallet.
+const openUiPorts = new Set<chrome.runtime.Port>();
+runtime.onConnect?.addListener((port: chrome.runtime.Port) => {
+  // Only the extension's own pages; a content script's port has a web page URL
+  if (port.name !== UI_PORT || !port.sender?.url?.startsWith(runtime.getURL(''))) return;
+  openUiPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    openUiPorts.delete(port);
+    if (openUiPorts.size === 0) void signingSession.clearSession();
+  });
+});
+
+// Lock when the screen locks
+idle.onStateChanged?.addListener((state: string) => {
+  if (state === 'locked') void signingSession.clearSession();
 });
 
 // Initialize on startup
