@@ -1,53 +1,67 @@
 // BIP39 Mnemonic implementation
 // Generates human-readable recovery phrases from random entropy
 // Standard used by most cryptocurrency wallets for backup/recovery
+//
+// Phrases and checksums are @scure/bip39's, with its wordlists (NFKD form,
+// the form a phrase is compared and hashed in). The seed is PBKDF2 from the
+// browser's Web Crypto.
 
-import { Hash } from './hash';
+import { entropyToMnemonic, validateMnemonic as scureValidate } from '@scure/bip39';
+import { wordlist as czech } from '@scure/bip39/wordlists/czech.js';
+import { wordlist as english } from '@scure/bip39/wordlists/english.js';
+import { wordlist as french } from '@scure/bip39/wordlists/french.js';
+import { wordlist as italian } from '@scure/bip39/wordlists/italian.js';
+import { wordlist as japanese } from '@scure/bip39/wordlists/japanese.js';
+import { wordlist as korean } from '@scure/bip39/wordlists/korean.js';
+import { wordlist as portuguese } from '@scure/bip39/wordlists/portuguese.js';
+import { wordlist as chineseSimplified } from '@scure/bip39/wordlists/simplified-chinese.js';
+import { wordlist as spanish } from '@scure/bip39/wordlists/spanish.js';
+import { wordlist as chineseTraditional } from '@scure/bip39/wordlists/traditional-chinese.js';
+import { secureWipe } from '../shared/crypto-utils';
 import { PBKDF2 } from './pbkdf2';
-import { WORDLISTS } from './wordlists';
 
 export type WordlistLanguage = 'english' | 'japanese' | 'korean' | 'spanish' |
   'chinese_simplified' | 'chinese_traditional' | 'french' | 'italian' | 'czech' | 'portuguese';
 
-// Generate random bytes using Web Crypto API
-function getRandomBytes(length: number): Uint8Array {
-    return crypto.getRandomValues(new Uint8Array(length));
-}
-
-// Generate mnemonic from entropy
-function entropyToMnemonic(entropy: Uint8Array, language: WordlistLanguage = 'english'): string {
-    const wordlist = WORDLISTS[language];
-    const entropyBits = bytesToBinary(entropy);
-    const checksumBits = bytesToBinary(Hash.sha256(entropy)).slice(0, entropy.length / 4);
-    const bits = entropyBits + checksumBits;
-
-    const words: string[] = [];
-    for (let i = 0; i < bits.length; i += 11) {
-        const index = parseInt(bits.slice(i, i + 11), 2);
-        words.push(wordlist[index]);
-    }
-
-    return words.join(' ');
-}
+// In the order languages were checked before, so a phrase that is valid in
+// two lists is still reported as the same language
+const WORDLISTS: Record<WordlistLanguage, string[]> = {
+    english,
+    japanese,
+    korean,
+    spanish,
+    chinese_simplified: chineseSimplified,
+    chinese_traditional: chineseTraditional,
+    french,
+    italian,
+    czech,
+    portuguese,
+};
 
 // Generate new mnemonic (12 or 24 words)
 async function generateMnemonic(wordCount: number = 12, language: WordlistLanguage = 'english'): Promise<string> {
-    const entropyBytes = wordCount === 24 ? 32 : 16;
-    const entropy = getRandomBytes(entropyBytes);
-    return entropyToMnemonic(entropy, language);
+    const entropy = crypto.getRandomValues(new Uint8Array(wordCount === 24 ? 32 : 16));
+    try {
+        // Japanese is joined with an ideographic space; the wallet uses one form
+        return normalizePhrase(entropyToMnemonic(entropy, WORDLISTS[language]));
+    } finally {
+        secureWipe(entropy);
+    }
 }
 
-// Detect language from mnemonic phrase
+// The languages whose list holds every word of the phrase
+function candidates(words: string[]): WordlistLanguage[] {
+    return (Object.keys(WORDLISTS) as WordlistLanguage[])
+        .filter(lang => words.every(word => WORDLISTS[lang].includes(word)));
+}
+
+// Detect language from mnemonic phrase. Lists share words (the two Chinese
+// lists share most of theirs), so the language is the one whose checksum
+// holds; a phrase no checksum fits gets the first list that has its words.
 function detectLanguage(phrase: string): WordlistLanguage | null {
-    const words = phrase.trim().toLowerCase().split(/\s+/);
-
-    for (const [lang, wordlist] of Object.entries(WORDLISTS)) {
-        if (words.every(word => wordlist.includes(word))) {
-            return lang as WordlistLanguage;
-        }
-    }
-
-    return null;
+    const normalized = normalizePhrase(phrase);
+    const found = candidates(normalized.split(' '));
+    return found.find(lang => scureValidate(normalized, WORDLISTS[lang])) ?? found[0] ?? null;
 }
 
 // Validate mnemonic
@@ -55,39 +69,21 @@ function validateMnemonic(mnemonic: string, language?: WordlistLanguage): boolea
     // Early sanity checks
     if (!mnemonic || typeof mnemonic !== 'string') return false;
 
-    // Max length check (24 words * ~10 chars + spaces = ~300 chars max)
-    if (mnemonic.length > 500) return false;
+    // Max length check: 24 words, in the NFKD form Korean words take up to 12
+    // characters, plus spaces
+    if (mnemonic.length > 1000) return false;
 
-    const words = mnemonic.trim().toLowerCase().split(/\s+/);
+    const normalized = normalizePhrase(mnemonic);
+    const words = normalized.split(' ');
 
     // Word count must be 12 or 24
     if (words.length !== 12 && words.length !== 24) return false;
 
-    // Individual word length sanity (BIP39 words are max ~8 chars)
-    if (words.some(w => w.length > 10)) return false;
+    // Individual word length sanity (no NFKD BIP39 word is longer than 12)
+    if (words.some(w => w.length > 16)) return false;
 
-    const detectedLanguage = language || detectLanguage(mnemonic);
-    if (!detectedLanguage) return false;
-
-    const wordlist = WORDLISTS[detectedLanguage];
-
-    for (const word of words) {
-        if (!wordlist.includes(word)) return false;
-    }
-
-    // Verify checksum
-    const bits = words.map(w => {
-        const index = wordlist.indexOf(w);
-        return index.toString(2).padStart(11, '0');
-    }).join('');
-
-    const entropyBits = bits.slice(0, bits.length - bits.length / 33);
-    const checksumBits = bits.slice(-bits.length / 33);
-
-    const entropy = binaryToBytes(entropyBits);
-    const expectedChecksum = bytesToBinary(Hash.sha256(entropy)).slice(0, checksumBits.length);
-
-    return checksumBits === expectedChecksum;
+    const languages = language ? [language] : candidates(words);
+    return languages.some(lang => scureValidate(normalized, WORDLISTS[lang]));
 }
 
 /**
@@ -101,20 +97,6 @@ function normalizePhrase(phrase: string): string {
 // Convert mnemonic to seed
 async function toSeed(phrase: string, passphrase: string = ''): Promise<Uint8Array> {
     return await PBKDF2.mnemonicToSeed(phrase, passphrase);
-}
-
-// Helper: bytes to binary string
-function bytesToBinary(bytes: Uint8Array): string {
-    return Array.from(bytes).map(b => b.toString(2).padStart(8, '0')).join('');
-}
-
-// Helper: binary string to bytes
-function binaryToBytes(binary: string): Uint8Array {
-    const bytes = new Uint8Array(binary.length / 8);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(binary.slice(i * 8, (i + 1) * 8), 2);
-    }
-    return bytes;
 }
 
 export const Mnemonic = {

@@ -1,44 +1,45 @@
 // Hierarchical Deterministic (HD) Key Derivation
 // BIP32/BIP44 standard for deriving multiple addresses from a single seed
 // This allows users to backup one phrase and recover all addresses
+//
+// The derivation is @scure/bip32's; this class keeps the wallet's own
+// interface (async, plain fields, wipe) and wipes the library's copies
 
+import { HDKey as ScureHDKey } from '@scure/bip32';
 import { secureWipe } from '../shared/crypto-utils';
-import {
-    CURVE,
-    bytesToBigInt,
-    bigIntToBytes,
-    derivePublicKey,
-    isValidPrivateKey
-} from './secp256k1';
+
+// Zero what a library key holds. Its getters return copies, so the chain
+// code is reached through the field they copy from.
+function wipeScure(key: ScureHDKey): void {
+    key.wipePrivateData();
+    const chainCode = (key as unknown as { _chainCode?: Uint8Array | null })._chainCode;
+    if (chainCode) secureWipe(chainCode);
+}
 
 class HDKey {
     privateKey: Uint8Array | null = null;
     publicKey: Uint8Array | null = null;
     chainCode: Uint8Array | null = null;
 
-    static async fromMasterSeed(seed: Uint8Array): Promise<HDKey> {
+    private static from(scure: ScureHDKey): HDKey {
         const key = new HDKey();
+        key.privateKey = scure.privateKey;
+        key.publicKey = scure.publicKey;
+        key.chainCode = scure.chainCode;
+        wipeScure(scure);
+        return key;
+    }
 
-        // HMAC-SHA512 with "Bitcoin seed" as key
-        const hmacKey = new TextEncoder().encode('Bitcoin seed');
-        const cryptoKey = await crypto.subtle.importKey(
-            'raw', hmacKey, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']
-        );
-        const I = await crypto.subtle.sign('HMAC', cryptoKey, seed as BufferSource);
-        const IBytes = new Uint8Array(I);
-
-        key.privateKey = IBytes.slice(0, 32);
-        key.chainCode = IBytes.slice(32);
-        secureWipe(IBytes);
-        // BIP32: a master key of 0 or at least n is invalid. The chance is
-        // about 2^-127, so refuse the seed rather than guess a recovery
-        if (!isValidPrivateKey(key.privateKey)) {
-            key.wipe();
+    static async fromMasterSeed(seed: Uint8Array): Promise<HDKey> {
+        let master: ScureHDKey;
+        try {
+            master = ScureHDKey.fromMasterSeed(seed);
+        } catch {
+            // BIP32: a master key of 0 or at least n is invalid. The chance is
+            // about 2^-127, so refuse the seed rather than guess a recovery
             throw new Error('Seed gives an invalid master key');
         }
-        key.publicKey = derivePublicKey(key.privateKey);
-
-        return key;
+        return HDKey.from(master);
     }
 
     async derive(path: string): Promise<HDKey> {
@@ -95,66 +96,26 @@ class HDKey {
         if (!this.privateKey || !this.publicKey || !this.chainCode) {
             throw new Error('Cannot derive from incomplete key');
         }
-
-        const child = new HDKey();
-        const data = new Uint8Array(37);
-
-        if (index >= 0x80000000) {
-            // Hardened derivation
-            data[0] = 0;
-            data.set(this.privateKey, 1);
-        } else {
-            // Normal derivation
-            data.set(this.publicKey, 0);
+        // The library copies what it is given
+        const parent = new ScureHDKey({ privateKey: this.privateKey, chainCode: this.chainCode });
+        let child: ScureHDKey;
+        try {
+            child = parent.deriveChild(index);
+        } catch {
+            throw new Error(`Index ${index} gives an invalid key`);
+        } finally {
+            wipeScure(parent);
         }
-
-        // Index as big-endian 32-bit
-        data[33] = (index >>> 24) & 0xff;
-        data[34] = (index >>> 16) & 0xff;
-        data[35] = (index >>> 8) & 0xff;
-        data[36] = index & 0xff;
-
-        // HMAC-SHA512
-        const cryptoKey = await crypto.subtle.importKey(
-            'raw', this.chainCode as BufferSource, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']
-        );
-        const I = await crypto.subtle.sign('HMAC', cryptoKey, data);
-        const IBytes = new Uint8Array(I);
-
-        const IL = IBytes.slice(0, 32);
-        const IR = IBytes.slice(32);
-        // data holds the parent's private key for a hardened step
-        secureWipe(data);
-        secureWipe(IBytes);
-
-        // BIP32: if IL >= n or the child key is 0, this index has no key.
-        // The chance is about 2^-127; refuse rather than sign with a bad key
-        if (!(bytesToBigInt(IL) < CURVE.N)) {
-            secureWipe(IL);
-            secureWipe(IR);
+        // BIP32: if IL >= n or the child key is 0, this index has no key, and
+        // the library moves on to the next index. The wallet names a key by
+        // its path, so a key for another index is refused instead (the chance
+        // is about 2^-127)
+        if (child.index !== index) {
+            wipeScure(child);
             throw new Error(`Index ${index} gives an invalid key`);
         }
-
-        // Add IL to parent private key (mod n)
-        child.privateKey = addPrivateKeys(IL, this.privateKey);
-        secureWipe(IL);
-        child.chainCode = IR;
-        if (!isValidPrivateKey(child.privateKey)) {
-            child.wipe();
-            throw new Error(`Index ${index} gives an invalid key`);
-        }
-        child.publicKey = derivePublicKey(child.privateKey);
-
-        return child;
+        return HDKey.from(child);
     }
-}
-
-// Uses CURVE.N from secp256k1.ts for curve order
-function addPrivateKeys(a: Uint8Array, b: Uint8Array): Uint8Array {
-    const aBig = bytesToBigInt(a);
-    const bBig = bytesToBigInt(b);
-    const sum = (aBig + bBig) % CURVE.N;
-    return bigIntToBytes(sum, 32);
 }
 
 export { HDKey };

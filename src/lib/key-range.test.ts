@@ -10,7 +10,7 @@ import { HDKey } from './hdkey';
 const hash = new Uint8Array(32).fill(7);
 const seed = new Uint8Array(64).fill(1);
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); forced.next = null; });
 
 describe('isValidPrivateKey', () => {
   it('accepts 1 and n - 1', () => {
@@ -47,17 +47,29 @@ describe('I3 signHash refuses a bad private key', () => {
   });
 });
 
-// Make the next HMAC-SHA512 return IL || IR, then behave normally again
+// Make the next HMAC-SHA512 return IL || IR, then behave normally again.
+// @scure/bip32 hashes with @noble/hashes' synchronous hmac, which is replaced
+// here (vitest.config.ts inlines @scure/bip32 so it sees the mock).
+const forced = vi.hoisted(() => ({ next: null as Uint8Array | null }));
+vi.mock('@noble/hashes/hmac.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@noble/hashes/hmac.js')>();
+  const hmac = ((hash: any, key: Uint8Array, msg: Uint8Array) => {
+    if (forced.next && hash.outputLen === 64) {
+      const out = forced.next;
+      forced.next = null;
+      return out;
+    }
+    return real.hmac(hash, key, msg);
+  }) as typeof real.hmac;
+  hmac.create = real.hmac.create;
+  return { ...real, hmac };
+});
+
 function forceNextHmac(IL: Uint8Array) {
-  const real = crypto.subtle.sign.bind(crypto.subtle);
-  const spy = vi.spyOn(crypto.subtle, 'sign');
-  spy.mockImplementationOnce(async () => {
-    const out = new Uint8Array(64);
-    out.set(IL, 0);
-    out.fill(9, 32);
-    return out.buffer;
-  });
-  spy.mockImplementation(real);
+  const out = new Uint8Array(64);
+  out.set(IL, 0);
+  out.fill(9, 32);
+  forced.next = out;
 }
 
 describe('I2 BIP32 refuses keys outside 1 .. n - 1', () => {

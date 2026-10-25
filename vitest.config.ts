@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // Inlined so a test can mock the @noble/hashes functions it calls
+    server: { deps: { inline: [/@scure\/bip32/] } },
   },
 });
