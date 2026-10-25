@@ -24,16 +24,33 @@ const buildDirFor = { opera: 'chrome' };
 // bundle's symlinks and code signature, which a plain zip would break.
 const safariApp = join(rootDir, 'safari', 'build', 'Build', 'Products', 'Debug', 'IronDivi Wallet.app');
 
+// The extension's files inside the app, as safari.sh copied them from dist/safari
+function safariResources() {
+  return join(safariApp, 'Contents', 'PlugIns', `IronDivi Wallet Extension.appex`, 'Contents', 'Resources');
+}
+
 function packageSafari() {
   if (!existsSync(safariApp)) {
     console.log('Skipped safari: run npm run build:safari && scripts/safari.sh first.');
     return;
   }
+  assertReleaseBuild(safariResources());
   const filename = `irondivi-wallet-safari-v${version}.zip`;
   const outputPath = join(packagesDir, filename);
   rmSync(outputPath, { force: true });
   execFileSync('ditto', ['-c', '-k', '--keepParent', safariApp, outputPath]);
   console.log(`Created ${filename}`);
+}
+
+// A development build allows dApps on localhost and ships source maps; dev
+// and watch builds write to the same dist/ folder, so check what is there
+export function assertReleaseBuild(dir) {
+  const infoPath = join(dir, 'build-info.json');
+  if (!existsSync(infoPath)) throw new Error(`${dir} has no build-info.json: rebuild it with npm run build:all`);
+  const info = JSON.parse(readFileSync(infoPath, 'utf-8'));
+  if (info.dev !== false) throw new Error(`${dir} is a development build: rebuild it with npm run build:all`);
+  const maps = readdirSync(dir, { recursive: true }).filter(name => String(name).endsWith('.map'));
+  if (maps.length) throw new Error(`${dir} contains source maps (${maps.join(', ')})`);
 }
 
 async function createPackage(browser) {
@@ -43,6 +60,7 @@ async function createPackage(browser) {
     console.error(`Build not found for ${browser}. Run npm run build:all first.`);
     process.exit(1);
   }
+  assertReleaseBuild(browserDir);
 
   // Create packages directory
   mkdirSync(packagesDir, { recursive: true });

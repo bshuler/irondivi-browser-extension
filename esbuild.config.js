@@ -21,7 +21,8 @@ const commonConfig = {
 };
 
 async function build() {
-  const outdir = join(__dirname, 'dist', browser);
+  // IRONDIVI_OUTDIR lets the packaging tests build somewhere other than dist/
+  const outdir = join(process.env.IRONDIVI_OUTDIR || join(__dirname, 'dist'), browser);
 
   // Start empty, so nothing from an earlier build (a dev build's source maps)
   // ends up in the package
@@ -79,6 +80,8 @@ async function build() {
     baseManifest.host_permissions = [...baseManifest.host_permissions, 'http://localhost/*', 'http://127.0.0.1/*'];
   }
   writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(baseManifest, null, 2));
+  // scripts/package.js reads this and refuses to package a development build
+  writeFileSync(join(outdir, 'build-info.json'), JSON.stringify({ dev: isDev }, null, 2) + '\n');
 
   console.log(`Built for ${browser} in dist/${browser}/`);
 }
