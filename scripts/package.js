@@ -143,6 +143,8 @@ export function writeChecksums(packagesDir, version) {
   const text = lines.map(l => `${l.sha256}  ${l.name}`).join('\n');
   const sumsPath = join(packagesDir, `SHA256SUMS-v${version}`);
   writeFileSync(sumsPath, text + '\n');
+  // A signature of the old sums no longer holds: scripts/sign-release.sh makes the new one
+  rmSync(`${sumsPath}.sig`, { force: true });
   console.log(`\nWrote ${sumsPath}:\n${text}`);
   return lines;
 }

@@ -24,13 +24,16 @@ PKG="$REPO/packages"
 REL=$(node -p "require('$PKG/releases.json').version")
 [[ "$REL" == "$VERSION" ]] || { echo "packages/releases.json is v$REL, package.json is v$VERSION" >&2; exit 1; }
 (cd "$PKG" && shasum -a 256 -c "SHA256SUMS-v$VERSION" >/dev/null) || { echo "packages do not match SHA256SUMS-v$VERSION" >&2; exit 1; }
+# The sums must be signed by the release key, so the site never serves a release
+# that key did not sign (security review EXT-1)
+"$REPO/scripts/verify-release.sh" "$PKG" "$VERSION"
 
 LOCAL=$(mktemp -d)
 trap 'rm -rf "$LOCAL"' EXIT
 MANIFEST=.site-sha256
 rsync -a --exclude deploy --exclude '.DS_Store' "$REPO/site/" "$LOCAL/"
 mkdir -p "$LOCAL/downloads"
-cp "$PKG"/irondivi-wallet-*-v"$VERSION".* "$PKG/SHA256SUMS-v$VERSION" "$PKG/releases.json" "$LOCAL/downloads/"
+cp "$PKG"/irondivi-wallet-*-v"$VERSION".* "$PKG/SHA256SUMS-v$VERSION" "$PKG/SHA256SUMS-v$VERSION.sig" "$PKG/releases.json" "$LOCAL/downloads/"
 # A hash of every file of the site, checked on the host before and after the copy into the web root
 (cd "$LOCAL" && find . -type f ! -name "$MANIFEST" -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > "$MANIFEST")
 
