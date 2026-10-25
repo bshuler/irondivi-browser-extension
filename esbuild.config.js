@@ -73,6 +73,7 @@ async function build() {
   // Copy static files
   cpSync(join(__dirname, 'src/popup/popup.html'), join(outdir, 'popup.html'));
   cpSync(join(__dirname, 'src/popup/styles.css'), join(outdir, 'styles.css'));
+  cpSync(join(__dirname, 'src/swap/pkg/swap_wasm_bg.wasm'), join(outdir, 'swap_wasm_bg.wasm'));
   cpSync(join(__dirname, 'assets/icons'), join(outdir, 'icons'), { recursive: true });
 
   // Merge manifest for browser

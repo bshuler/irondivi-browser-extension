@@ -5,7 +5,7 @@
   "description": "Secure cryptocurrency wallet for IronDivi",
   "minimum_chrome_version": "140",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'self'"
   },
   "permissions": [
     "storage",

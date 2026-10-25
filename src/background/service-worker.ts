@@ -20,6 +20,7 @@ import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
 import { checkRecipient, recipientNote } from '../popup/recipient-check';
 import { connectRelay, RELAY_ALARM, RELAY_PREFIX } from './connect-relay';
+import { swapService, SWAP_TICK_ALARM } from './swap-service';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
@@ -988,6 +989,25 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true };
       }
 
+      // ============ Atomic swaps (testnet) ============
+      case MSG.SWAP_ADDRESSES:
+        return { success: true, data: await swapService.addresses() };
+
+      case MSG.SWAP_OFFERS:
+        return { success: true, data: await swapService.offers() };
+
+      case MSG.SWAP_LIST:
+        return { success: true, data: await swapService.list() };
+
+      case MSG.SWAP_BEGIN:
+        return { success: true, data: await swapService.begin(payload?.offerId, payload?.btcSats) };
+
+      case MSG.SWAP_LOCK:
+        return { success: true, data: await swapService.lock(String(payload?.id ?? '')) };
+
+      case MSG.SWAP_REFUND:
+        return { success: true, data: await swapService.refund(String(payload?.id ?? '')) };
+
       // ============ Faucet ============
       case MSG.REQUEST_FAUCET: {
         const account = await accountManager.getSelectedAccount();
@@ -1149,6 +1169,9 @@ alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   } else if (alarm.name === RELAY_ALARM) {
     // The browser stopped the worker: the pairings' long polls start again
     await connectRelay.resume();
+  } else if (alarm.name === SWAP_TICK_ALARM) {
+    // Message only: an engine error may quote a transaction, never a key
+    await swapService.tick().catch((e: unknown) => console.warn('swap tick:', e instanceof Error ? e.message : e));
   }
 });
 

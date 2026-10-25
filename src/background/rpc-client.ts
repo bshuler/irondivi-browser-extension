@@ -166,6 +166,15 @@ export class RPCClient {
   }
 
   /**
+   * Raw getaddressutxos for one address (exact satoshis, as the swap engine needs them)
+   */
+  async getAddressUtxosRaw(address: string): Promise<RPCUTXOResponse[]> {
+    const utxos = await this.rpc<RPCUTXOResponse[]>('getaddressutxos', [address]);
+    if (!Array.isArray(utxos)) throw new Error('Node returned an invalid UTXO list');
+    return utxos;
+  }
+
+  /**
    * Get UTXOs for multiple addresses
    * Converts from RPC format to normalized format
    */

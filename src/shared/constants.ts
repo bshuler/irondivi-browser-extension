@@ -107,6 +107,13 @@ export const MSG = {
   CONNECT_PAIR: 'CONNECT_PAIR',
   CONNECT_SESSIONS: 'CONNECT_SESSIONS',
   CONNECT_END: 'CONNECT_END',
+  // Atomic swaps (testnet, extension pages only)
+  SWAP_ADDRESSES: 'SWAP_ADDRESSES',
+  SWAP_OFFERS: 'SWAP_OFFERS',
+  SWAP_LIST: 'SWAP_LIST',
+  SWAP_BEGIN: 'SWAP_BEGIN',
+  SWAP_LOCK: 'SWAP_LOCK',
+  SWAP_REFUND: 'SWAP_REFUND',
 } as const;
 
 export type MessageType = typeof MSG[keyof typeof MSG];
@@ -279,7 +286,13 @@ export type WalletMessage =
   | { type: typeof MSG.SET_SITE_ACCESS; payload: { action: 'revoke' | 'block' | 'unblock'; origin: string } }
   | { type: typeof MSG.CONNECT_PAIR; payload: { uri: string } }
   | { type: typeof MSG.CONNECT_SESSIONS; payload?: undefined }
-  | { type: typeof MSG.CONNECT_END; payload: { topic: string } };
+  | { type: typeof MSG.CONNECT_END; payload: { topic: string } }
+  | { type: typeof MSG.SWAP_ADDRESSES; payload?: undefined }
+  | { type: typeof MSG.SWAP_OFFERS; payload?: undefined }
+  | { type: typeof MSG.SWAP_LIST; payload?: undefined }
+  | { type: typeof MSG.SWAP_BEGIN; payload: { offerId: string; btcSats: number } }
+  | { type: typeof MSG.SWAP_LOCK; payload: { id: string } }
+  | { type: typeof MSG.SWAP_REFUND; payload: { id: string } };
 
 // ============================================================
 // Generic response wrapper

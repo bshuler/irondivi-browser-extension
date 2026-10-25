@@ -23,6 +23,7 @@ const LEGACY_SESSION_KEY = 'signingSession';
  */
 export class SigningSession {
   private seed: Uint8Array | null = null;
+  private clearListeners: Array<() => void> = [];
   private currentAccountId: string | null = null;
   private expiresAt = 0;
   /**
@@ -146,6 +147,11 @@ export class SigningSession {
     return this.seed!.slice();
   }
 
+  /** Run cb whenever the session is cleared (lock, timeout, account switch). */
+  onClear(cb: () => void): void {
+    this.clearListeners.push(cb);
+  }
+
   /**
    * Clear the signing session (manual lock)
    */
@@ -154,6 +160,7 @@ export class SigningSession {
     // the awaits below run
     if (this.seed) secureWipe(this.seed);
     this.seed = null;
+    for (const cb of this.clearListeners) cb();
     this.currentAccountId = null;
     this.expiresAt = 0;
     await alarms.clear(SESSION_ALARM_NAME);
