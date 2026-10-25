@@ -67,7 +67,7 @@ The page in `site/` reads the version and file names from `releases.json`, so it
 ## Verify Deployment
 
 ```bash
-cd "$(mktemp -d)" && v=0.0.4 && b=https://browser.divi.domains/downloads
+cd "$(mktemp -d)" && v=0.0.5 && b=https://browser.divi.domains/downloads
 curl -sSfO "$b/SHA256SUMS-v$v"
 for f in chrome-v$v.zip edge-v$v.zip opera-v$v.zip firefox-v$v.xpi safari-v$v.zip; do curl -sSfO "$b/irondivi-wallet-$f"; done
 shasum -a 256 -c "SHA256SUMS-v$v"
