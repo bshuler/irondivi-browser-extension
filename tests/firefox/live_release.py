@@ -1,7 +1,7 @@
 """The published Firefox package against the real sites.
 
     uv venv /tmp/ffvenv && uv pip install --python /tmp/ffvenv -r tests/firefox/requirements.txt
-    /tmp/ffvenv/bin/python -I tests/firefox/live_release.py packages/irondivi-wallet-firefox-v0.0.5.xpi
+    /tmp/ffvenv/bin/python -I tests/firefox/live_release.py packages/irondivi-wallet-firefox-v0.0.6.xpi
 
 Installs the .xpi as a temporary add-on in Firefox, creates a throwaway
 wallet (the recovery phrase is never read, printed or captured), connects it

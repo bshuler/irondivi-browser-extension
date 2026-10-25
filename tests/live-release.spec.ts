@@ -1,7 +1,7 @@
 // The published Chrome package against the real sites. Skipped unless
 // LIVE_RELEASE=<path to an unpacked irondivi-wallet-chrome zip> is set, since
 // it needs the network:
-//   unzip packages/irondivi-wallet-chrome-v0.0.5.zip -d /tmp/x
+//   unzip packages/irondivi-wallet-chrome-v0.0.6.zip -d /tmp/x
 //   LIVE_RELEASE=/tmp/x npx playwright test tests/live-release.spec.ts
 // It creates a throwaway wallet (the recovery phrase is never read, printed
 // or captured), connects it to games.divi.domains, and checks that a site off

@@ -336,7 +336,7 @@ or by hand, with `allowed_signers` from this repository (not from the download
 site, so one compromised host cannot change both):
 
 ```bash
-ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.5.sig < SHA256SUMS-v0.0.5
+ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.6.sig < SHA256SUMS-v0.0.6
 ```
 
 ## License
