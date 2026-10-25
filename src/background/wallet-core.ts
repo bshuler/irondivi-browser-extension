@@ -111,17 +111,15 @@ export class WalletCore {
   }
 
   /**
-   * Build an unsigned transaction. The fee is worked out here from the
-   * transaction's size; a fee in the request is used only if it is between
-   * that minimum and MAX_FEE_SATS.
+   * Check what a send asks for, before looking at the wallet's coins. Its
+   * errors are about the request alone, so they may be shown to the site
+   * that made it.
    */
-  buildTransaction(
-    utxos: UTXO[],
-    addresses: AccountAddress[],
+  checkRequest(
     request: TransactionRequest,
     network: NetworkType
-  ): BuiltTransaction {
-    const { to, amount, fee: requestedFee, fromAddresses } = request;
+  ): { amountSats: bigint; requestedFeeSats: bigint | undefined } {
+    const { to, amount, fee: requestedFee } = request;
 
     if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
       throw new Error('Invalid amount');
@@ -149,6 +147,23 @@ export class WalletCore {
     if (!Address.validate(to, network)) {
       throw new Error('Invalid address: checksum verification failed');
     }
+
+    return { amountSats, requestedFeeSats };
+  }
+
+  /**
+   * Build an unsigned transaction. The fee is worked out here from the
+   * transaction's size; a fee in the request is used only if it is between
+   * that minimum and MAX_FEE_SATS.
+   */
+  buildTransaction(
+    utxos: UTXO[],
+    addresses: AccountAddress[],
+    request: TransactionRequest,
+    network: NetworkType
+  ): BuiltTransaction {
+    const { to, amount, fromAddresses } = request;
+    const { amountSats, requestedFeeSats } = this.checkRequest(request, network);
 
     // Only coins at this account's own addresses can be spent
     const addressIndexMap = new Map(addresses.map(a => [a.address, a.index]));

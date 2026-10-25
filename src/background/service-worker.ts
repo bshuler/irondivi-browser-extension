@@ -24,6 +24,8 @@ installRecordsSeal();
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
+// What a site is told when a payment it asks for cannot be made
+const CANNOT_PAY = 'The wallet cannot make this payment';
 
 /**
  * Unlock with the password given for one send or signature from the popup.
@@ -541,8 +543,16 @@ async function handleMessage(
           const isConnected = await connectionManager.isConnected(origin, account.id);
           if (!isConnected) return NOT_CONNECTED;
 
-          // Check the send can be made before asking, and show the real fee
-          const built = await buildSend(account, request);
+          // Check the send can be made before asking, and show the real fee.
+          // Why it cannot be made (the balance, the limits, which coins) is
+          // the owner's to know, not the site's
+          walletCore.checkRequest(request, account.network);
+          let built: BuiltTransaction;
+          try {
+            built = await buildSend(account, request);
+          } catch {
+            return { success: false, error: CANNOT_PAY };
+          }
 
           try {
             const result = await connectionManager.createSigningRequest(
