@@ -27,38 +27,54 @@ REL=$(node -p "require('$PKG/releases.json').version")
 
 LOCAL=$(mktemp -d)
 trap 'rm -rf "$LOCAL"' EXIT
+MANIFEST=.site-sha256
 rsync -a --exclude deploy --exclude '.DS_Store' "$REPO/site/" "$LOCAL/"
 mkdir -p "$LOCAL/downloads"
 cp "$PKG"/irondivi-wallet-*-v"$VERSION".* "$PKG/SHA256SUMS-v$VERSION" "$PKG/releases.json" "$LOCAL/downloads/"
+# A hash of every file of the site, checked on the host before and after the copy into the web root
+(cd "$LOCAL" && find . -type f ! -name "$MANIFEST" -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > "$MANIFEST")
 
-STAGE=/tmp/$SITE-stage
-rsync -rlc --delete $DRY "$LOCAL/" "$HOST:$STAGE/"
-[[ -n "$DRY" ]] && { echo "dry run: nothing changed on $HOST"; exit 0; }
-scp -q "$REPO/site/deploy/nginx/$SITE.conf" "$HOST:/tmp/$SITE.conf"
+[[ -n "$DRY" ]] && { echo "dry run: the site is staged in $LOCAL; nothing changed on $HOST"; exit 0; }
+# The stage on the host is a fresh private directory of the deploying user, never a fixed /tmp name
+# another local user could create first (security review EXT-13)
+STAGE=$(ssh "$HOST" 'mktemp -d')
+[[ "$STAGE" == /tmp/tmp.* ]] || { echo "unexpected stage directory on $HOST: $STAGE" >&2; exit 1; }
+trap 'rm -rf "$LOCAL"; ssh "$HOST" "rm -rf \"$STAGE\""' EXIT
+rsync -rlc --delete "$LOCAL/" "$HOST:$STAGE/site/"
+scp -q "$REPO/site/deploy/nginx/$SITE.conf" "$HOST:$STAGE/$SITE.conf"
 
-ssh "$HOST" "SITE=$SITE ROOT=$ROOT STAGE=$STAGE VERSION=$VERSION bash -s" <<'REMOTE'
+ssh "$HOST" "SITE=$SITE ROOT=$ROOT STAGE=$STAGE VERSION=$VERSION MANIFEST=$MANIFEST bash -s" <<'REMOTE'
 set -euo pipefail
 stamp=$(date +%Y%m%d-%H%M%S)
+# Refuse a stage that is not a real directory owned by us and closed to everyone else
+[ -d "$STAGE" ] && [ ! -L "$STAGE" ] || { echo "$STAGE is not a directory" >&2; exit 1; }
+[ "$(stat -c '%u %a' "$STAGE")" = "$(id -u) 700" ] || { echo "$STAGE is not ours alone" >&2; exit 1; }
+if find "$STAGE" -type l | grep -q .; then echo "$STAGE holds a symlink" >&2; exit 1; fi
+conf_src="$STAGE/$SITE.conf"
+STAGE="$STAGE/site"
+(cd "$STAGE" && sha256sum -c --quiet "$MANIFEST")
 sudo mkdir -p /var/www/.backups "$ROOT"
 [ -n "$(ls -A "$ROOT")" ] && sudo cp -a "$ROOT" "/var/www/.backups/$SITE-$stamp"
 # The page is replaced; downloads only gain files, so older versions stay downloadable
-sudo rsync -rlc --delete --exclude /downloads/ "$STAGE/" "$ROOT/"
+sudo rsync -rlc --delete --exclude /downloads/ --exclude "/$MANIFEST" "$STAGE/" "$ROOT/"
 sudo mkdir -p "$ROOT/downloads"
 sudo rsync -rlc "$STAGE/downloads/" "$ROOT/downloads/"
 (cd "$ROOT/downloads" && sha256sum -c --quiet "SHA256SUMS-v$VERSION")
+# Every file of the site that is now served is the one built here
+(cd "$ROOT" && sha256sum -c --quiet "$STAGE/$MANIFEST")
 sudo chown -R www-data:www-data "$ROOT"
 sudo find "$ROOT" -type d -exec chmod 755 {} + ; sudo find "$ROOT" -type f -exec chmod 644 {} +
 
 conf=/etc/nginx/sites-enabled/$SITE
-if ! sudo cmp -s "/tmp/$SITE.conf" "/etc/nginx/$SITE.conf.src" 2>/dev/null; then
+if ! sudo cmp -s "$conf_src" "/etc/nginx/$SITE.conf.src" 2>/dev/null; then
   [ -f "$conf" ] && sudo cp -a "$conf" "/var/www/.backups/$SITE.conf-$stamp"
-  sudo cp "/tmp/$SITE.conf" "$conf"
+  sudo cp "$conf_src" "$conf"
   # A vhost nginx rejects would stop every other site reloading, so put the old one back
   if ! sudo nginx -t; then
     if [ -f "/var/www/.backups/$SITE.conf-$stamp" ]; then sudo cp -a "/var/www/.backups/$SITE.conf-$stamp" "$conf"; else sudo rm -f "$conf"; fi
     echo "nginx rejected $SITE.conf; the previous vhost is back" >&2; exit 1
   fi
-  sudo cp "/tmp/$SITE.conf" "/etc/nginx/$SITE.conf.src"
+  sudo cp "$conf_src" "/etc/nginx/$SITE.conf.src"
   sudo systemctl reload nginx
   # First run: obtain the certificate (needs DNS pointing here). Later runs: re-apply it to the
   # freshly copied vhost. /etc/letsencrypt/live is root-only, so the test needs sudo too.
