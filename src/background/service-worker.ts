@@ -798,11 +798,10 @@ async function handleMessage(
 
         const isConnected = await connectionManager.isConnected(origin, accountId);
         if (isConnected) {
-          const account = await accountManager.getSelectedAccount();
           return {
             success: true,
             data: {
-              address: account?.addresses[0]?.address,
+              address: selected?.addresses[0]?.address,
               connected: true
             }
           };
@@ -811,12 +810,12 @@ async function handleMessage(
         // Create connection request and wait for approval
         try {
           await connectionManager.requestConnection(origin, accountId);
-          // Connection approved - return address
-          const account = await accountManager.getSelectedAccount();
+          // Connection approved - return the address of the account the site
+          // was connected to, even if the owner chose another meanwhile
           return {
             success: true,
             data: {
-              address: account?.addresses[0]?.address,
+              address: selected?.addresses[0]?.address,
               connected: true
             }
           };

@@ -82,3 +82,19 @@ describe('EXT-7 the session signs only for its own account', () => {
     await expect(signingSession.signMessage('hello', 0, 'testnet', account.id)).resolves.toMatch(/\S/);
   });
 });
+
+describe('EXT-9 a connected site is told the address of the account it connected to', () => {
+  it('choosing another account while the connect window is open does not change the answer', async () => {
+    const b = await h.popup('IMPORT_ACCOUNT', { name: 'B', mnemonic: OTHER_MNEMONIC, password: TEST_PASSWORD, network: 'testnet' });
+    expect(b.success).toBe(true);
+    expect((await h.popup('SELECT_ACCOUNT', { accountId: account.id })).success).toBe(true);
+
+    const done = h.fromTab('CONNECT');
+    const req = await h.waitForPending('connect');
+    expect((await h.popup('SELECT_ACCOUNT', { accountId: b.data.account.id })).success).toBe(true);
+    expect((await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, isConnection: true })).success).toBe(true);
+    const r = await done;
+    expect(r.success).toBe(true);
+    expect(r.data.address).toBe(account.addresses[0].address);
+  });
+});
