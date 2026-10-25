@@ -47,6 +47,8 @@ export const CONNECT_PERMISSIONS = ['view_address'];
 
 export class ConnectionManager {
   private pendingRequests: Map<string, PendingRequest> = new Map();
+  // Requests an approval is running for
+  private claimedRequests: Set<string> = new Set();
   // Approval window for each pending request, so closing it rejects the request
   private requestWindows: Map<string, number> = new Map();
   private operationLock: Promise<void> = Promise.resolve();
@@ -458,6 +460,20 @@ export class ConnectionManager {
    */
   getPendingRequest(requestId: string): PendingRequest | undefined {
     return this.pendingRequests.get(requestId);
+  }
+
+  /**
+   * Mark a pending request as being approved. Returns false if it is gone or
+   * an approval of it is already running.
+   */
+  claimRequest(requestId: string): boolean {
+    if (!this.pendingRequests.has(requestId) || this.claimedRequests.has(requestId)) return false;
+    this.claimedRequests.add(requestId);
+    return true;
+  }
+
+  releaseRequest(requestId: string): void {
+    this.claimedRequests.delete(requestId);
   }
 
   /**

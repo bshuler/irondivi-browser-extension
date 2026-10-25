@@ -11,7 +11,7 @@ import { recordSpend, spentToday } from './spend-ledger';
 import { highWaterBalance, recordBalance } from './balance-record';
 import { rpcClient } from './rpc-client';
 import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
-import { connectionManager } from './connection-manager';
+import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
 import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
@@ -121,6 +121,108 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
   }
 
   return built;
+}
+
+/**
+ * Approve a pending site request from the approval window. The caller has
+ * claimed it, so no other approval of it runs at the same time.
+ */
+async function approveSigningRequest(request: PendingRequest, payload: any): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  // Handle connection approval (no password needed)
+  if (request.type === 'connect' || payload.isConnection) {
+    try {
+      await connectionManager.approveConnection(payload.requestId);
+      return { success: true, data: { connected: true } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to approve connection'
+      };
+    }
+  }
+
+  // Authenticate with provided password for signing requests
+  const authSuccess = await signingSession.authenticate(
+    request.accountId,
+    payload.password
+  );
+  if (!authSuccess) {
+    return { success: false, error: 'Invalid password' };
+  }
+
+  try {
+    let result: { signature?: string; address?: string; txid?: string; fee?: number } | undefined;
+
+    if (!request.data) {
+      return { success: false, error: 'Request data missing' };
+    }
+
+    // The site may have been disconnected while the popup was open
+    const stillAllowed = await connectionManager.isConnected(request.origin, request.accountId);
+    if (!stillAllowed) {
+      return { success: false, error: 'Site is no longer connected' };
+    }
+
+    // Sign on the network the site asked on, and only while it is still
+    // the wallet's network, so the site gets what it asked for
+    const network = (await getSettings()).network;
+    if (request.data.network && request.data.network !== network) {
+      return { success: false, error: 'The wallet changed network since this request. Ask the site again.' };
+    }
+    const account = await accountManager.getAccount(request.accountId, network);
+    if (!account) {
+      return { success: false, error: 'Account not found' };
+    }
+
+    if (request.type === 'sign_message') {
+      if (!request.data.message) {
+        return { success: false, error: 'Message is required for sign_message' };
+      }
+      const signature = await signingSession.signMessage(
+        request.data.message,
+        request.data.addressIndex || 0,
+        account.network
+      );
+      result = { signature };
+    } else if (request.type === 'sign_game_tx') {
+      // Checked again against the account as it is now
+      const body = request.data.message;
+      const { tx } = checkGameTx(body, request.origin, account.network, account.addresses.map(a => a.address));
+      const signer = resolveAddress(account, tx.from);
+      const signature = await signingSession.signMessage(body!, signer.index, account.network);
+      result = { signature, address: signer.address, txid: gameTxid(body!) };
+    } else if (request.type === 'send_transaction') {
+      if (!request.data.to || request.data.amount === undefined) {
+        return { success: false, error: 'to and amount are required for send_transaction' };
+      }
+      // Rebuilt now, as the coins may have changed since the owner was
+      // asked; it must not cost more than the fee they were shown
+      if (typeof request.data.fee !== 'number' || !Number.isFinite(request.data.fee)) {
+        return { success: false, error: 'Request fee missing' };
+      }
+      result = await sendFromAccount(account, {
+        to: request.data.to,
+        amount: request.data.amount,
+        fromAddresses: request.data.fromAddresses,
+      }, diviToSatoshis(request.data.fee));
+    }
+
+    // Approve the request with the result; the site has now been
+    // allowed this kind of request
+    await connectionManager.grantPermission(request.origin, request.accountId, request.type);
+    connectionManager.approveRequest(payload.requestId, result);
+    return { success: true, data: result };
+  } catch (error) {
+    if (error instanceof FeeRoseError) {
+      // Tell the site at once, so it can ask again with the new fee
+      connectionManager.rejectRequest(payload.requestId, error.message);
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process request'
+    };
+  }
+
 }
 
 /**
@@ -793,100 +895,15 @@ async function handleMessage(
         if (!request) {
           return { success: false, error: 'Request not found' };
         }
-
-        // Handle connection approval (no password needed)
-        if (request.type === 'connect' || payload.isConnection) {
-          try {
-            await connectionManager.approveConnection(payload.requestId);
-            return { success: true, data: { connected: true } };
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : 'Failed to approve connection'
-            };
-          }
+        // Taken before the first await, so a second click or a second window
+        // cannot approve it again while the first approval is running
+        if (!connectionManager.claimRequest(payload.requestId)) {
+          return { success: false, error: 'This request is already being approved' };
         }
-
-        // Authenticate with provided password for signing requests
-        const authSuccess = await signingSession.authenticate(
-          request.accountId,
-          payload.password
-        );
-        if (!authSuccess) {
-          return { success: false, error: 'Invalid password' };
-        }
-
         try {
-          let result: { signature?: string; address?: string; txid?: string; fee?: number } | undefined;
-
-          if (!request.data) {
-            return { success: false, error: 'Request data missing' };
-          }
-
-          // The site may have been disconnected while the popup was open
-          const stillAllowed = await connectionManager.isConnected(request.origin, request.accountId);
-          if (!stillAllowed) {
-            return { success: false, error: 'Site is no longer connected' };
-          }
-
-          // Sign on the network the site asked on, and only while it is still
-          // the wallet's network, so the site gets what it asked for
-          const network = (await getSettings()).network;
-          if (request.data.network && request.data.network !== network) {
-            return { success: false, error: 'The wallet changed network since this request. Ask the site again.' };
-          }
-          const account = await accountManager.getAccount(request.accountId, network);
-          if (!account) {
-            return { success: false, error: 'Account not found' };
-          }
-
-          if (request.type === 'sign_message') {
-            if (!request.data.message) {
-              return { success: false, error: 'Message is required for sign_message' };
-            }
-            const signature = await signingSession.signMessage(
-              request.data.message,
-              request.data.addressIndex || 0,
-              account.network
-            );
-            result = { signature };
-          } else if (request.type === 'sign_game_tx') {
-            // Checked again against the account as it is now
-            const body = request.data.message;
-            const { tx } = checkGameTx(body, request.origin, account.network, account.addresses.map(a => a.address));
-            const signer = resolveAddress(account, tx.from);
-            const signature = await signingSession.signMessage(body!, signer.index, account.network);
-            result = { signature, address: signer.address, txid: gameTxid(body!) };
-          } else if (request.type === 'send_transaction') {
-            if (!request.data.to || request.data.amount === undefined) {
-              return { success: false, error: 'to and amount are required for send_transaction' };
-            }
-            // Rebuilt now, as the coins may have changed since the owner was
-            // asked; it must not cost more than the fee they were shown
-            if (typeof request.data.fee !== 'number' || !Number.isFinite(request.data.fee)) {
-              return { success: false, error: 'Request fee missing' };
-            }
-            result = await sendFromAccount(account, {
-              to: request.data.to,
-              amount: request.data.amount,
-              fromAddresses: request.data.fromAddresses,
-            }, diviToSatoshis(request.data.fee));
-          }
-
-          // Approve the request with the result; the site has now been
-          // allowed this kind of request
-          await connectionManager.grantPermission(request.origin, request.accountId, request.type);
-          connectionManager.approveRequest(payload.requestId, result);
-          return { success: true, data: result };
-        } catch (error) {
-          if (error instanceof FeeRoseError) {
-            // Tell the site at once, so it can ask again with the new fee
-            connectionManager.rejectRequest(payload.requestId, error.message);
-          }
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to process request'
-          };
+          return await approveSigningRequest(request, payload);
+        } finally {
+          connectionManager.releaseRequest(payload.requestId);
         }
       }
 

@@ -49,3 +49,28 @@ describe('EXT-5 a site is not told why a payment cannot be made', () => {
     expect(r.error).toMatch(/balance/);
   });
 });
+
+describe('EXT-6 a request is approved once', () => {
+  it('two approvals at the same time send one payment', async () => {
+    await h.connectPage();
+    const sent = h.provider().sendTransaction({ to: await foreignTestnetAddress(), amount: 1 });
+    const req = await h.waitForPending('send_transaction');
+    const approve = () => h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
+    const [a, b] = await Promise.all([approve(), approve()]);
+    expect([a.success, b.success].sort()).toEqual([false, true]);
+    expect((a.success ? b : a).error).toMatch(/already being approved|not found/);
+    await sent;
+    expect(h.broadcasts).toHaveLength(1);
+  });
+
+  it('a wrong password leaves the request open for another try', async () => {
+    await h.connectPage();
+    const signed = h.provider().signMessage('hello');
+    const req = await h.waitForPending('sign_message');
+    const bad = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: 'wrong-password' });
+    expect(bad.success).toBe(false);
+    const ok = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
+    expect(ok.success).toBe(true);
+    await signed;
+  });
+});
