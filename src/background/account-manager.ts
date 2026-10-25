@@ -1,4 +1,5 @@
 import { generateId, secureWipe } from '../shared/crypto-utils';
+import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-strength';
 import {
   getAccounts, saveAccounts,
   saveSecret, deleteSecret,
@@ -56,9 +57,9 @@ async function currentNetwork(): Promise<NetworkType> {
   return (await getSettings()).network;
 }
 
-// The popup asks for at least this many characters too, but the worker is the
-// one that encrypts the phrase, so it checks for itself
-export const MIN_PASSWORD_LENGTH = 8;
+// The popup checks the password too, but the worker is the one that encrypts
+// the phrase, so it checks for itself
+export { MIN_PASSWORD_LENGTH };
 
 export class AccountManager {
   /**
@@ -89,6 +90,8 @@ export class AccountManager {
     if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
       throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     }
+    const strength = passwordStrength(password);
+    if (strength.level === 0) throw new Error(`Password is too easy to guess: ${strength.hint}`);
     network ??= await currentNetwork();
     if (typeof mnemonic !== 'string') {
       throw new Error('Invalid mnemonic phrase');

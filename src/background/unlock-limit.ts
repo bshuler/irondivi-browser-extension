@@ -20,12 +20,14 @@ interface RateLimitEntry {
 const RATE_LIMIT_STATE_KEY = 'rate_limit_state';
 
 export const MAX_ATTEMPTS = 5;
-// Exponential backoff lockout durations (5 min, 15 min, 1 hour, 24 hours)
+// Lockout durations: 1, 5, then 15 minutes. Kept short on purpose (EXT-23):
+// anyone at the keyboard can trigger a lockout, so a long one only locks the
+// owner out, and the counter does nothing against a copied vault. The
+// password's strength is the defence against guessing.
 export const LOCKOUT_DURATIONS_MS = [
+  1 * 60 * 1000,
   5 * 60 * 1000,
   15 * 60 * 1000,
-  60 * 60 * 1000,
-  24 * 60 * 60 * 1000,
 ];
 // Failures and the tier they earned are forgotten this long after the last
 // wrong password, so a correct password alone does not reset the backoff

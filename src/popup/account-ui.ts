@@ -8,6 +8,7 @@ import { showLoading, hideLoading, showToast, showView, hideView, clearPasswordI
 import { sendMessage } from './message-api';
 import { showMnemonicModal, showPasswordModal } from './modals';
 import { MSG, NETWORKS } from '../shared/constants';
+import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-strength';
 import { Account } from './types';
 import { loadBalance, loadTransactions } from './wallet-ui';
 import { savePending, pendingState, unlockPending, clearPending } from './pending-account';
@@ -262,10 +263,7 @@ async function handleCreateSubmit(): Promise<void> {
   const confirm = confirmInput.value;
   const wordCount = parseInt(wordCountSelect.value);
 
-  if (!password || password.length < 8) {
-    showToast('Password must be at least 8 characters', 'error');
-    return;
-  }
+  if (!passwordAcceptable(password)) return;
 
   if (password !== confirm) {
     showToast('Passwords do not match', 'error');
@@ -279,6 +277,42 @@ async function handleCreateSubmit(): Promise<void> {
     clearPasswordInput(passwordInput);
     clearPasswordInput(confirmInput as HTMLInputElement);
   }
+}
+
+/**
+ * Whether a new wallet password is long enough and not too easy to guess,
+ * telling the user why not
+ */
+function passwordAcceptable(password: string): boolean {
+  if (!password || password.length < MIN_PASSWORD_LENGTH) {
+    showToast(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, 'error');
+    return false;
+  }
+  const strength = passwordStrength(password);
+  if (strength.level === 0) {
+    showToast(`Password is too easy to guess: ${strength.hint}`, 'error');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Show how strong a new password is under its input as it is typed
+ */
+function attachStrengthMeter(inputId: string, meterId: string): void {
+  const input = document.getElementById(inputId) as HTMLInputElement | null;
+  const meter = document.getElementById(meterId);
+  if (!input || !meter) return;
+  input.addEventListener('input', () => {
+    if (!input.value) {
+      meter.textContent = '';
+      meter.removeAttribute('data-level');
+      return;
+    }
+    const strength = passwordStrength(input.value);
+    meter.dataset.level = String(strength.level);
+    meter.textContent = strength.hint ? `${strength.label}: ${strength.hint}` : strength.label;
+  });
 }
 
 /**
@@ -298,10 +332,7 @@ async function handleImportSubmit(): Promise<void> {
     return;
   }
 
-  if (!password || password.length < 8) {
-    showToast('Password must be at least 8 characters', 'error');
-    return;
-  }
+  if (!passwordAcceptable(password)) return;
 
   try {
     await importAccount(name, mnemonic, password);
@@ -354,6 +385,8 @@ export function setupAccountUIHandlers(): void {
   });
 
   document.getElementById('create-submit-btn')?.addEventListener('click', handleCreateSubmit);
+  attachStrengthMeter('create-password', 'create-password-strength');
+  attachStrengthMeter('import-password', 'import-password-strength');
 
   // Import account view
   document.getElementById('import-back-btn')?.addEventListener('click', () => {

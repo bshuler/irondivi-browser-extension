@@ -22,11 +22,11 @@ beforeEach(async () => {
 });
 
 describe('L8 the worker enforces the password minimum', () => {
-  for (const password of ['', 'short', '1234567', undefined, 12345678, ['12345678']]) {
+  for (const password of ['', 'short', '1234567', '12345678901', undefined, 123456789012, ['123456789012']]) {
     it(`importing with ${JSON.stringify(password)} is refused and stores nothing`, async () => {
       const r = await h.popup('IMPORT_ACCOUNT', { name: 'A', mnemonic: TEST_MNEMONIC, password, network: 'testnet' });
       expect(r.success).toBe(false);
-      expect(r.error).toMatch(/at least 8 characters/);
+      expect(r.error).toMatch(/at least 12 characters/);
       expect(h.storage.accounts ?? []).toEqual([]);
       expect(h.storage.secrets ?? {}).toEqual({});
     });
@@ -35,12 +35,12 @@ describe('L8 the worker enforces the password minimum', () => {
   it('creating with a short password is refused and stores nothing', async () => {
     const r = await h.popup('CREATE_ACCOUNT', { name: 'A', password: 'abc', network: 'testnet' });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/at least 8 characters/);
+    expect(r.error).toMatch(/at least 12 characters/);
     expect(h.storage.secrets ?? {}).toEqual({});
   });
 
-  it('a password of exactly 8 characters is accepted', async () => {
-    const r = await h.popup('IMPORT_ACCOUNT', { name: 'A', mnemonic: TEST_MNEMONIC, password: '12345678', network: 'testnet' });
+  it('a password of exactly 12 characters is accepted', async () => {
+    const r = await h.popup('IMPORT_ACCOUNT', { name: 'A', mnemonic: TEST_MNEMONIC, password: 'abcd-efgh-ij', network: 'testnet' });
     expect(r.success).toBe(true);
     expect(Object.keys(h.storage.secrets)).toHaveLength(1);
   });

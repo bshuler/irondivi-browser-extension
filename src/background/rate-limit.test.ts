@@ -60,11 +60,11 @@ describe('L10 the lockout is kept across restarts', () => {
   it('after a lockout runs out the next one is longer', async () => {
     await failTimes(5);
     const first = h.storage.rate_limit_state[accountId];
-    expect(first.lockedUntil - Date.now()).toBeLessThanOrEqual(5 * 60 * 1000);
+    expect(first.lockedUntil - Date.now()).toBeLessThanOrEqual(60 * 1000);
     first.lockedUntil = Date.now() - 1;
     await failTimes(5);
     const second = h.storage.rate_limit_state[accountId];
-    expect(second.lockedUntil - Date.now()).toBeGreaterThan(14 * 60 * 1000);
+    expect(second.lockedUntil - Date.now()).toBeGreaterThan(4 * 60 * 1000);
   });
 
   it('the right password clears the count but keeps an earned tier', async () => {
@@ -93,7 +93,7 @@ describe('L10 the lockout is kept across restarts', () => {
     h.storage.rate_limit_state = { [accountId]: { count: 5, lockedUntil: Date.now() + 365 * 86400000, lockoutTier: 3, lastFailureAt: Date.now() } };
     const r = await auth(TEST_PASSWORD);
     const seconds = Number(/(\d+) seconds/.exec(r.error)![1]);
-    expect(seconds).toBeLessThanOrEqual(24 * 3600);
+    expect(seconds).toBeLessThanOrEqual(15 * 60);
   });
 
   it('an unknown account id is not counted', async () => {
@@ -144,5 +144,28 @@ describe('L10 every password path counts', () => {
         .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       expect(src, file).not.toMatch(/getDecryptedSecret/);
     }
+  });
+});
+
+describe('EXT-23 a lockout cannot keep the owner out for long', () => {
+  it('no lockout is longer than 15 minutes', async () => {
+    const { LOCKOUT_DURATIONS_MS } = await import('./unlock-limit');
+    expect(Math.max(...LOCKOUT_DURATIONS_MS)).toBeLessThanOrEqual(15 * 60 * 1000);
+  });
+
+  it('twenty wrong passwords in a row lock the owner out for at most 15 minutes', async () => {
+    for (let round = 0; round < 4; round++) {
+      await failTimes(5);
+      const entry = h.storage.rate_limit_state[accountId];
+      expect(entry.lockedUntil - Date.now()).toBeLessThanOrEqual(15 * 60 * 1000);
+      entry.lockedUntil = Date.now() - 1;
+    }
+  });
+
+  it('a 24-hour lockout left by 0.0.4 is cut to 15 minutes', async () => {
+    h.storage.rate_limit_state = { [accountId]: { count: 5, lockedUntil: Date.now() + 86400000, lockoutTier: 3, lastFailureAt: Date.now() } };
+    const r = await auth(TEST_PASSWORD);
+    expect(r.success).toBe(false);
+    expect(Number(/(\d+) seconds/.exec(r.error)![1])).toBeLessThanOrEqual(15 * 60);
   });
 });

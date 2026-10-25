@@ -130,8 +130,8 @@ test('should show receive view with QR code', async ({ extensionPage }) => {
   // First create a wallet
   await extensionPage.click('#onboard-create-btn');
   await extensionPage.fill('#create-name', 'QR Test Wallet');
-  await extensionPage.fill('#create-password', 'Password123!');
-  await extensionPage.fill('#create-password-confirm', 'Password123!');
+  await extensionPage.fill('#create-password', 'SecurePassword123!');
+  await extensionPage.fill('#create-password-confirm', 'SecurePassword123!');
 
   // Dismiss alert dialogs
   extensionPage.on('dialog', dialog => dialog.accept());
@@ -180,8 +180,8 @@ test('should navigate through send transaction flow', async ({ extensionPage }) 
   // First create a wallet
   await extensionPage.click('#onboard-create-btn');
   await extensionPage.fill('#create-name', 'Send Test Wallet');
-  await extensionPage.fill('#create-password', 'Password123!');
-  await extensionPage.fill('#create-password-confirm', 'Password123!');
+  await extensionPage.fill('#create-password', 'SecurePassword123!');
+  await extensionPage.fill('#create-password-confirm', 'SecurePassword123!');
 
   // Dismiss alert dialogs
   extensionPage.on('dialog', dialog => dialog.accept());
@@ -239,8 +239,8 @@ test('should add and manage contacts', async ({ extensionPage }) => {
   // First create a wallet
   await extensionPage.click('#onboard-create-btn');
   await extensionPage.fill('#create-name', 'Contacts Test Wallet');
-  await extensionPage.fill('#create-password', 'Password123!');
-  await extensionPage.fill('#create-password-confirm', 'Password123!');
+  await extensionPage.fill('#create-password', 'SecurePassword123!');
+  await extensionPage.fill('#create-password-confirm', 'SecurePassword123!');
 
   // Dismiss alert dialogs
   extensionPage.on('dialog', dialog => dialog.accept());
@@ -302,8 +302,8 @@ test('should toggle balance visibility', async ({ extensionPage }) => {
   // First create a wallet
   await extensionPage.click('#onboard-create-btn');
   await extensionPage.fill('#create-name', 'Balance Test Wallet');
-  await extensionPage.fill('#create-password', 'Password123!');
-  await extensionPage.fill('#create-password-confirm', 'Password123!');
+  await extensionPage.fill('#create-password', 'SecurePassword123!');
+  await extensionPage.fill('#create-password-confirm', 'SecurePassword123!');
 
   // Dismiss alert dialogs
   extensionPage.on('dialog', dialog => dialog.accept());
