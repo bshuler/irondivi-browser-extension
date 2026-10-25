@@ -15,12 +15,14 @@ const LEGACY_INSTALLATION_ID_KEY = 'installation_id';
 const LEGACY_SESSION_KEY = 'signingSession';
 
 /**
- * The unlocked phrase is held only in this service worker's memory, never in
- * any storage area. When the browser stops the worker (Chrome does so after
+ * The unlocked wallet is held only in this service worker's memory, never in
+ * any storage area, and only as its 64-byte seed: a phrase kept as text would
+ * be copied into a new string, which cannot be wiped, on every signature
+ * (EXT-26). When the browser stops the worker (Chrome does so after
  * about 30 seconds without events) the session ends and the owner unlocks again.
  */
 export class SigningSession {
-  private decryptedMnemonic: SecureString | null = null;
+  private seed: Uint8Array | null = null;
   private currentAccountId: string | null = null;
   private expiresAt = 0;
   /**
@@ -37,7 +39,9 @@ export class SigningSession {
       return false;
     }
 
-    this.decryptedMnemonic = new SecureString(mnemonic);
+    const seed = await Mnemonic.toSeed(mnemonic);
+    if (this.seed) secureWipe(this.seed);
+    this.seed = seed;
     this.currentAccountId = accountId;
 
     const settings = await getSettings();
@@ -71,7 +75,7 @@ export class SigningSession {
    * also ends the session, but alarms fire late, so every use checks the time.
    */
   private live(): boolean {
-    if (!this.decryptedMnemonic || !this.currentAccountId) return false;
+    if (!this.seed || !this.currentAccountId) return false;
     if (Date.now() >= this.expiresAt) {
       void this.clearSession();
       return false;
@@ -113,7 +117,7 @@ export class SigningSession {
       throw new Error('Not authenticated for this account - please enter password');
     }
 
-    const seed = await Mnemonic.toSeed(this.decryptedMnemonic!.toString());
+    const seed = this.seed!.slice();
     const coinType = NETWORKS[network].coinType;
     const path = `m/44'/${coinType}'/0'/0/${addressIndex}`;
 
@@ -135,11 +139,11 @@ export class SigningSession {
   }
 
   /**
-   * Get the current account's seed (for address derivation during signing)
+   * A copy of the current account's seed, for the caller to wipe
    */
   async getSeed(): Promise<Uint8Array | null> {
     if (!this.live()) return null;
-    return Mnemonic.toSeed(this.decryptedMnemonic!.toString());
+    return this.seed!.slice();
   }
 
   /**
@@ -148,10 +152,8 @@ export class SigningSession {
   async clearSession(): Promise<void> {
     // Clear memory first - wipe sensitive data - so nothing can use it while
     // the awaits below run
-    if (this.decryptedMnemonic) {
-      this.decryptedMnemonic.wipe();
-    }
-    this.decryptedMnemonic = null;
+    if (this.seed) secureWipe(this.seed);
+    this.seed = null;
     this.currentAccountId = null;
     this.expiresAt = 0;
     await alarms.clear(SESSION_ALARM_NAME);

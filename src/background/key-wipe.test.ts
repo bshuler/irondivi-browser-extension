@@ -54,13 +54,19 @@ async function foreignTestnetAddress(): Promise<string> {
   return a.address;
 }
 
-function expectAllWiped() {
+async function expectAllWiped() {
   expect(keys.length).toBeGreaterThan(0);
   for (const key of keys) {
     expect(key.privateKey).toBeNull();
     expect(key.chainCode).toBeNull();
   }
   expect(seeds.length).toBeGreaterThan(0);
+  // The unlocked session keeps its seed until it is locked (EXT-26); every
+  // other one is wiped at once, and that one on lock
+  const { signingSession } = await import('./signing-session');
+  const held = (signingSession as any).seed as Uint8Array | null;
+  for (const seed of seeds) if (seed !== held) expect(seed.every(b => b === 0)).toBe(true);
+  await signingSession.clearSession();
   for (const seed of seeds) expect(seed.every(b => b === 0)).toBe(true);
 }
 
@@ -71,7 +77,7 @@ describe('L3 every key and seed is wiped after use', () => {
     expect(r.success).toBe(true);
     // Master, the four hardened and normal steps, and the input key
     expect(keys.length).toBeGreaterThanOrEqual(6);
-    expectAllWiped();
+    await expectAllWiped();
   });
 
   it('a payment that fails after the keys are derived', async () => {
@@ -80,25 +86,25 @@ describe('L3 every key and seed is wiped after use', () => {
     vi.spyOn(walletCore, 'signTransaction').mockRejectedValue(new Error('boom'));
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 1 });
     expect(r.success).toBe(false);
-    expectAllWiped();
+    await expectAllWiped();
   });
 
   it('signing a message', async () => {
     const r = await h.popup('SIGN_MESSAGE', { password: TEST_PASSWORD, message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(true);
-    expectAllWiped();
+    await expectAllWiped();
   });
 
   it('adding an address', async () => {
     const r = await h.popup('GENERATE_NEW_ADDRESS', { accountId: account.id, password: TEST_PASSWORD });
     expect(r.success).toBe(true);
-    expectAllWiped();
+    await expectAllWiped();
   });
 
   it('importing an account', async () => {
     const r = await h.popup('IMPORT_ACCOUNT', { name: 'B', mnemonic: TEST_MNEMONIC, password: TEST_PASSWORD, network: 'testnet' });
     expect(r.success).toBe(true);
-    expectAllWiped();
+    await expectAllWiped();
   });
 });
 
