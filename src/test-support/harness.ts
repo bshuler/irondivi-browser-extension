@@ -44,6 +44,8 @@ export interface Harness {
   fromTab: (type: string, payload?: unknown) => Promise<any>;
   /** A page script posting the provider bridge message itself (bypassing window.irondivi). */
   pagePost: (method: string, params?: unknown) => Promise<any>;
+  windowPost: (data: unknown) => void;
+  onWindowMessage: (fn: (e: any) => void) => void;
   /** window.irondivi (undefined if the background registered no provider for this page). */
   provider: () => any;
   /** The content scripts the background has registered. */
@@ -294,16 +296,32 @@ export async function createHarness(
 
   // Fake page window for the content script and provider
   const windowListeners: Array<(e: any) => void> = [];
+  const windowEvents = new EventTarget();
   const injected: string[] = [];
   const fakeWindow: any = {
     location: { origin: pageOrigin, href: pageUrl },
-    addEventListener: (type: string, fn: (e: any) => void) => { if (type === 'message') windowListeners.push(fn); },
-    removeEventListener: () => {},
+    addEventListener: (type: string, fn: (e: any) => void) => {
+      if (type === 'message') windowListeners.push(fn);
+      else windowEvents.addEventListener(type, fn);
+    },
+    removeEventListener: (type: string, fn: (e: any) => void) => {
+      if (type === 'message') windowListeners.splice(windowListeners.indexOf(fn) >>> 0, 1);
+      else windowEvents.removeEventListener(type, fn);
+    },
     postMessage: (data: any, _target: string) => {
       const ev = { source: fakeWindow, data: structuredClone(data), origin: pageOrigin };
       queueMicrotask(() => windowListeners.slice().forEach(l => l(ev)));
     },
-    dispatchEvent: () => true,
+    dispatchEvent: (e: Event) => windowEvents.dispatchEvent(e),
+  };
+  // Node's ports would keep the test worker alive
+  const RealChannel: typeof MessageChannel = (globalThis as any).__realMessageChannel ??= globalThis.MessageChannel;
+  (globalThis as any).MessageChannel = class extends RealChannel {
+    constructor() {
+      super();
+      (this.port1 as any).unref?.();
+      (this.port2 as any).unref?.();
+    }
   };
   const fakeDocument: any = {
     readyState: 'complete',
@@ -341,16 +359,18 @@ export async function createHarness(
   if (runs('content-script.js')) await import('../content/content-script');
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
 
+  // A raw request over the provider's private port, as if the provider sent
+  // any method it liked: what the content script itself lets through
   const pagePost = (method: string, params?: unknown) => new Promise<any>((resolve) => {
+    const port: MessagePort | undefined = fakeWindow.irondivi?.port;
     const id = `raw-${Math.random()}`;
-    const onResp = (e: any) => {
-      if (e.data?.type === 'IRONDIVI_PROVIDER_RESPONSE' && e.data.id === id) resolve(e.data.response);
-    };
-    windowListeners.push(onResp);
-    fakeWindow.postMessage({ type: 'IRONDIVI_PROVIDER_MESSAGE', id, method, params }, pageOrigin);
+    port?.addEventListener('message', (e: MessageEvent) => { if (e.data?.id === id) resolve(e.data.response); });
+    port?.postMessage({ id, method, params });
     // A content script that drops the message never answers.
     setTimeout(() => resolve({ dropped: true }), 3000);
   });
+  // What any page script can do: post to the window as the old bridge did
+  const windowPost = (data: unknown) => fakeWindow.postMessage(data, pageOrigin);
 
   const h: Harness = {
     popup: (type, payload) => dispatch({ type, payload }, popupSender),
@@ -361,6 +381,8 @@ export async function createHarness(
     },
     fromTab: (type, payload) => dispatch({ type, payload, origin: pageOrigin }, tabSender),
     pagePost,
+    windowPost,
+    onWindowMessage: (fn: (e: any) => void) => windowListeners.push(fn),
     provider: () => fakeWindow.irondivi,
     registeredScripts,
     createdWindows,

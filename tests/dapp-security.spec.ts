@@ -51,7 +51,8 @@ test.afterAll(async () => {
   server.close();
 });
 
-/** A page script posting the provider bridge message itself. */
+/** A page script posting the old provider bridge message itself. Since EXT-28
+ * the bridge is a private port, so nothing on the window answers it. */
 async function rawPost(page: Page, method: string, params?: unknown): Promise<any> {
   return page.evaluate(([method, params]) => new Promise((resolve) => {
     const id = `raw-${Math.random()}`;
@@ -86,6 +87,9 @@ async function setup(context: BrowserContext, extensionId: string) {
   // against it before it signs
   const funding = new Transaction();
   funding.inputs.push({ txid: '01'.repeat(32), vout: 0, script: '', sequence: 0xffffffff });
+  // Two coins: a send holds the coins it spent until it confirms (EXT-27),
+  // and this mock node never confirms anything
+  funding.outputs.push({ value: 1000n * 100000000n, script: `76a914${hash}88ac` });
   funding.outputs.push({ value: 1000n * 100000000n, script: `76a914${hash}88ac` });
   const fundingTxid = funding.txid();
   await context.route('https://services.divi.domains/**', async (route) => {
@@ -95,10 +99,10 @@ async function setup(context: BrowserContext, extensionId: string) {
       case 'getblockcount': result = 1000; break;
       case 'getaddressutxos':
         result = body.params[0] === own
-          ? [{ address: own, txid: fundingTxid, outputIndex: 0, script: `76a914${hash}88ac`, satoshis: 1000e8, height: 990 }]
+          ? [0, 1].map(outputIndex => ({ address: own, txid: fundingTxid, outputIndex, script: `76a914${hash}88ac`, satoshis: 1000e8, height: 990 }))
           : [];
         break;
-      case 'getaddressbalance': result = { balance: body.params[0] === own ? 1000e8 : 0, received: 0 }; break;
+      case 'getaddressbalance': result = { balance: body.params[0] === own ? 2000e8 : 0, received: 0 }; break;
       case 'getaddresstxids': result = []; break;
       case 'validateaddress': result = { isvalid: true }; break;
       case 'getrawtransaction': result = body.params[0] === fundingTxid && body.params[1] === 0 ? funding.toHex() : null; break;
@@ -148,9 +152,7 @@ test('a hostile page is refused; popup-only messages, sign and send need the use
   expect(gen.success).not.toBe(true);
   expect(after.network).toBe(before.network);
   expect(after.allowedSites).toEqual(before.allowedSites);
-  expect(sign.success).toBe(false);
-  expect(sign.data?.signature).toBeUndefined();
-  expect(send.success).toBe(false);
+  for (const r of [upd, gen, sign, send]) expect(r).toEqual({ dropped: true });
   expect(broadcasts).toHaveLength(0);
 });
 

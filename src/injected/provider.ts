@@ -3,9 +3,17 @@
  * Similar to window.ethereum for Ethereum dApps
  */
 
-const PROVIDER_MESSAGE = 'IRONDIVI_PROVIDER_MESSAGE';
-const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
-const pageOrigin = window.location.origin;
+// The content script and this provider talk over a private MessageChannel,
+// never window.postMessage: every script on the page sees what is posted to
+// the window and could read a request id and answer first (a fake txid or
+// signature). Both run at document_start, before any page script, and the
+// port changes hands then. Which of the two runs first is not fixed, so:
+//   - the provider offers a port in an 'irondivi:port' event; a content script
+//     already listening takes it and cancels the event;
+//   - if nobody took it, the provider waits for the content script's
+//     'irondivi:ready' event and offers again, once.
+const PORT_EVENT = 'irondivi:port';
+const READY_EVENT = 'irondivi:ready';
 
 type EventCallback = (...args: any[]) => void;
 
@@ -35,16 +43,16 @@ class IronDiviProvider {
   }>();
   private eventListeners = new Map<string, Set<EventCallback>>();
 
-  constructor() {
-    // Listen for responses from content script
-    window.addEventListener('message', (event) => {
-      if (event.source !== window) return;
-      if (event.data?.type !== PROVIDER_RESPONSE) return;
+  private port: MessagePort;
 
-      const { id, response } = event.data;
+  constructor() {
+    const channel = new MessageChannel();
+    this.port = channel.port1;
+    this.port.onmessage = (event) => {
+      const { id, response } = event.data ?? {};
       const pending = this.pendingRequests.get(id);
 
-      if (pending) {
+      if (pending && response) {
         this.pendingRequests.delete(id);
         if (response.success) {
           pending.resolve(response.data);
@@ -52,7 +60,16 @@ class IronDiviProvider {
           pending.reject(new Error(response.error || 'Request failed'));
         }
       }
-    });
+    };
+
+    const offer = () => window.dispatchEvent(new MessageEvent(PORT_EVENT, { ports: [channel.port2], cancelable: true }));
+    if (offer()) {
+      // Not taken yet: hand it over when the content script says it is ready
+      const onReady = () => {
+        if (!offer()) window.removeEventListener(READY_EVENT, onReady);
+      };
+      window.addEventListener(READY_EVENT, onReady);
+    }
   }
 
   /**
@@ -80,12 +97,7 @@ class IronDiviProvider {
         },
       });
 
-      window.postMessage({
-        type: PROVIDER_MESSAGE,
-        id,
-        method,
-        params,
-      }, pageOrigin);
+      this.port.postMessage({ id, method, params });
     });
   }
 

@@ -1,9 +1,10 @@
 import { runtime } from '../shared/browser-polyfill';
 import { DAPP_METHODS, MSG } from '../shared/constants';
 
-// Message types for content script bridge
-const PROVIDER_MESSAGE = 'IRONDIVI_PROVIDER_MESSAGE';
-const PROVIDER_RESPONSE = 'IRONDIVI_PROVIDER_RESPONSE';
+// The provider in the page's world hands this script a private port
+// (provider.ts explains the handshake); requests and answers go only over it
+const PORT_EVENT = 'irondivi:port';
+const READY_EVENT = 'irondivi:ready';
 
 // Capture page origin once at initialization
 const pageOrigin = window.location.origin;
@@ -24,57 +25,55 @@ const siteAllowed: Promise<boolean> = (runtime.sendMessage({ type: MSG.SITE_ALLO
   .then(r => r?.success === true && r.data?.allowed === true)
   .catch(() => false);
 
+let port: MessagePort | null = null;
+
 /**
- * Listen for messages from the injected provider
+ * Answer one request from the provider
  */
-async function onPageMessage(event: MessageEvent) {
-  // Only accept messages from the same window
-  if (event.source !== window) return;
-
-  // Check for provider messages
-  if (event.data?.type !== PROVIDER_MESSAGE) return;
-
+async function onProviderMessage(event: MessageEvent) {
   // Forward nothing from a page that is not allowed to use the wallet
   if (!(await siteAllowed)) return;
 
   // Validate required message fields before forwarding
-  const { id, method, params } = event.data;
+  const { id, method, params } = event.data ?? {};
   if (!id || !method) return;
+  const reply = (response: unknown) => port?.postMessage({ id, response });
 
   // Forward only the methods the provider exposes; never popup messages
   if (typeof method !== 'string' || !DAPP_METHODS.includes(method)) {
-    window.postMessage({
-      type: PROVIDER_RESPONSE,
-      id,
-      response: { success: false, error: 'Unsupported method' },
-    }, pageOrigin);
+    reply({ success: false, error: 'Unsupported method' });
     return;
   }
 
   try {
     // Forward to background service worker, including origin for audit
-    const response = await runtime.sendMessage({
+    reply(await runtime.sendMessage({
       type: method,
       payload: params,
       origin: pageOrigin,
-    });
-
-    // Send response back to page
-    window.postMessage({
-      type: PROVIDER_RESPONSE,
-      id,
-      response,
-    }, pageOrigin);
+    }));
   } catch (error) {
-    window.postMessage({
-      type: PROVIDER_RESPONSE,
-      id,
-      response: {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      },
-    }, pageOrigin);
+    reply({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
 
-if (firstCopy) window.addEventListener('message', onPageMessage);
+// Take the first port offered, which is the provider's: both run before any
+// page script. A port offered later (by the page) is never taken.
+function onPortOffer(event: Event) {
+  const offered = (event as MessageEvent).ports?.[0];
+  if (port || !offered) return;
+  port = offered;
+  port.onmessage = onProviderMessage;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  window.removeEventListener(PORT_EVENT, onPortOffer);
+}
+
+if (firstCopy) {
+  window.addEventListener(PORT_EVENT, onPortOffer);
+  // The provider may have run first and be waiting for this
+  window.dispatchEvent(new Event(READY_EVENT));
+}

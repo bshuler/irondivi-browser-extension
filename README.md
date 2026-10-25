@@ -137,8 +137,7 @@ can serve as the RPC backend: the wallet calls `getaddressbalance`,
 ## dApp connections
 
 dApps connect through the injected provider, `window.irondivi` (`isIronDivi: true`).
-The content script runs on every page, but it adds the provider, and passes
-messages on to the wallet, only on a page that is
+The wallet registers its content script and the provider only on a page that is
 
 - `https:`, or `http:` on `localhost` or `127.0.0.1`, **and**
 - on a host in **Settings → Allowed Sites**. The default list names each
@@ -192,6 +191,14 @@ within 5 minutes rejects the request; nothing is signed or broadcast before
 approval. A send must also pass the transaction limits in Settings (by default
 at most 10% of the balance per send). A send below 0.0000546 DIVI (dust, which
 nodes do not relay) is refused, from a site or from the popup.
+
+The provider and the content script talk over a private `MessageChannel` port
+that changes hands at `document_start`, before any page script runs; nothing is
+posted to the window, so another script on the page cannot read a request or
+answer it first. Still, `window.irondivi` lives in the page, and a script that
+runs on the page shares its trust: **a dApp must confirm a txid, signature or
+address against the chain** (or check the signature itself) before it gives
+credit for it, never take the provider's word alone.
 
 The extension does **not** use WalletConnect or Reown, and must not. Divi's
 connection mechanism is its own: the injected provider first, then the
