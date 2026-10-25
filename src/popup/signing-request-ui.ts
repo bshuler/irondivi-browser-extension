@@ -36,6 +36,21 @@ export interface SigningRequest {
   createdAt: number;
 }
 
+/**
+ * A fee as shown for approval. A fee the background did not report is
+ * unknown, never a guess: a guessed fee understates the total (EXT-24).
+ */
+export function feeText(fee: unknown): { text: string; known: boolean } {
+  if (typeof fee !== 'number' || !Number.isFinite(fee) || fee < 0) return { text: 'unknown', known: false };
+  return { text: `${formatAmount(fee)} DIVI`, known: true };
+}
+
+// A request whose total cannot be shown cannot be approved
+let blocked = false;
+// Set while an approval is on its way to the background, so a second click
+// or Enter does not send a second one (EXT-6)
+let approving = false;
+
 // State
 let currentRequest: SigningRequest | null = null;
 let signingRequestViewElement: HTMLDivElement | null = null;
@@ -81,7 +96,7 @@ function armApprove(): void {
   armedAt = Date.now() + APPROVE_DELAY_MS;
   armTimer = setTimeout(() => {
     const { approveBtn } = getElements();
-    if (approveBtn && Date.now() >= armedAt) approveBtn.disabled = false;
+    if (approveBtn && Date.now() >= armedAt && !blocked && !approving) approveBtn.disabled = false;
   }, APPROVE_DELAY_MS);
 }
 
@@ -145,6 +160,7 @@ export function showSigningRequestView(request: SigningRequest): void {
     // The colour bar and accent follow the request's network
     document.body.dataset.network = network;
   }
+  blocked = false;
 
   // Set type label and warning message based on request type
   if (request.type === 'connect') {
@@ -216,15 +232,20 @@ export function showSigningRequestView(request: SigningRequest): void {
       rows.push(detailRow('Address:', el('span', 'signing-detail-value address', shown(request.data.address))));
     }
   } else if (request.type === 'send_transaction') {
-    const amount = request.data?.amount || 0;
-    const fee = request.data?.fee || 0.00005;
+    const amount = request.data?.amount ?? 0;
+    const fee = feeText(request.data?.fee);
     // Show the whole destination: a shortened one can hide a look-alike address
     rows.push(detailRow('To:', el('span', 'signing-detail-value address', shown(request.data?.to || ''))));
     rows.push(detailRow('Amount:', el('span', 'signing-detail-value amount', `${formatAmount(amount)} DIVI`)));
-    rows.push(detailRow('Fee:', el('span', 'signing-detail-value', `${formatAmount(fee)} DIVI`)));
-    const total = detailRow('Total:', el('span', 'signing-detail-value amount', `${formatAmount(amount + fee)} DIVI`));
+    rows.push(detailRow('Fee:', el('span', 'signing-detail-value', fee.text)));
+    const total = detailRow('Total:', el('span', 'signing-detail-value amount',
+      fee.known ? `${formatAmount(amount + (request.data?.fee as number))} DIVI` : 'unknown'));
     total.classList.add('total');
     rows.push(total);
+    if (!fee.known) {
+      blocked = true;
+      rows.push(warningRow('fee-unknown', 'The wallet could not work out the fee, so this payment cannot be approved. Reject it and try again.'));
+    }
     if (request.data?.opReturn) {
       const value = el('span', 'signing-detail-value', shown(request.data.opReturn));
       value.style.fontSize = '11px';
@@ -263,11 +284,22 @@ export function showSigningRequestView(request: SigningRequest): void {
  * Handle approve button click
  */
 async function handleApprove(): Promise<void> {
-  if (!currentRequest) return;
+  if (!currentRequest || approving || blocked) return;
   // The button may be disabled, but Enter in the password field reaches here too
   if (Date.now() < armedAt) return;
 
   const elements = getElements();
+  approving = true;
+  elements.approveBtn.disabled = true;
+  try {
+    await approveCurrent(elements);
+  } finally {
+    approving = false;
+  }
+}
+
+async function approveCurrent(elements: ReturnType<typeof getElements>): Promise<void> {
+  if (!currentRequest) return;
 
   // Connection requests don't need password
   if (currentRequest.type === 'connect') {
@@ -294,6 +326,7 @@ async function handleApprove(): Promise<void> {
     } catch (error) {
       hideLoading();
       showToast(error instanceof Error ? error.message : 'Failed to connect', 'error');
+      elements.approveBtn.disabled = false;
     }
     return;
   }
@@ -303,6 +336,7 @@ async function handleApprove(): Promise<void> {
 
   if (!password) {
     showToast('Please enter your password', 'error');
+    elements.approveBtn.disabled = false;
     return;
   }
 
@@ -339,6 +373,7 @@ async function handleApprove(): Promise<void> {
     // Clear password on failure for security
     elements.password.value = '';
     showToast(error instanceof Error ? error.message : 'Failed to approve request', 'error');
+    elements.approveBtn.disabled = false;
   }
 }
 

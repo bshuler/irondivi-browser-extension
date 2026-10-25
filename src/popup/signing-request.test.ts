@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { pickRequest } from './signing-request-ui';
+import { feeText, pickRequest } from './signing-request-ui';
 
 // Regression tests for the security review's M4: an approval window opened
 // for one request showed the first pending request instead when its own was
@@ -47,13 +47,44 @@ describe('the approval window acts on the wallet\'s reply', () => {
   };
 
   it('every approve and reject message checks success before showing it', () => {
-    for (const name of ['handleApprove', 'handleReject']) {
+    for (const name of ['approveCurrent', 'handleReject']) {
       const fn = body(name);
       const sends = fn.match(/await sendMessage\(/g) ?? [];
       const checked = fn.match(/const response = await sendMessage\([\s\S]*?\}\);\s*(\/\/.*\n\s*)*if \(!response\?\.success\) throw/g) ?? [];
       expect(sends.length).toBeGreaterThan(0);
       expect(checked).toHaveLength(sends.length);
     }
+  });
+});
+
+// EXT-24: a fee the background did not report was shown as 0.00005 DIVI, so
+// the total understated what the payment would cost
+describe('EXT-24 a fee that is not known is not guessed', () => {
+  it.each([undefined, null, NaN, -1, '0.1', Infinity])('%s is unknown', (fee) => {
+    expect(feeText(fee)).toEqual({ text: 'unknown', known: false });
+  });
+
+  it('a reported fee, 0 included, is shown as it is', () => {
+    expect(feeText(0)).toEqual({ text: '0 DIVI', known: true });
+    expect(feeText(0.0002).known).toBe(true);
+  });
+
+  it('there is no default fee, and an unknown fee blocks Approve', () => {
+    const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/0\.00005/);
+    expect(src).toMatch(/if \(!fee\.known\) \{\s*blocked = true;/);
+    expect(src).toMatch(/!blocked && !approving\) approveBtn\.disabled = false/);
+  });
+});
+
+// EXT-6: a second click while the first approval was in flight sent it again
+describe('EXT-6 the approval window sends one approval at a time', () => {
+  const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+  it('handleApprove returns while one is in flight and clears the flag after', () => {
+    const fn = src.slice(src.indexOf('async function handleApprove'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/if \(!currentRequest \|\| approving \|\| blocked\) return;/);
+    expect(body).toMatch(/approving = true;[\s\S]*finally \{\s*approving = false;/);
   });
 });
 
