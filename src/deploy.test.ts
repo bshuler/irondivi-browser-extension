@@ -46,3 +46,45 @@ describe('EXT-13 deploy.sh stages privately and checks the whole site', () => {
     expect(remote).toContain('sudo cp "$conf_src" "$conf"');
   });
 });
+
+// Regression tests for the security review's EXT-31: the download page loaded
+// Google Fonts, so a third party saw every visitor and could change the CSS
+// that styles the install instructions
+describe('EXT-31 the site loads nothing from another origin', () => {
+  const site = (file: string) => readFileSync(fileURLToPath(new URL(`../site/${file}`, import.meta.url)), 'utf8');
+  const nginx = site('deploy/nginx/browser.divi.domains.conf');
+  const pages = ['index.html', '404.html'];
+
+  for (const page of pages) {
+    it(`${page} links and allows only its own origin`, () => {
+      const html = site(page);
+      expect(html).not.toMatch(/googleapis|gstatic/);
+      for (const [, url] of html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)="([^"]+)"/g)) {
+        const own = url.startsWith('https://browser.divi.domains/') || (url.startsWith('/') && !url.startsWith('//'));
+        expect(own, url).toBe(true);
+      }
+      const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)![1];
+      expect(csp).toMatch(/style-src 'self';/);
+      expect(csp).toMatch(/font-src 'self';/);
+      expect(csp).not.toMatch(/https?:/);
+    });
+  }
+
+  it('the nginx policy names no other origin', () => {
+    expect(nginx).not.toMatch(/googleapis|gstatic/);
+    for (const [, csp] of nginx.matchAll(/Content-Security-Policy "([^"]+)"/g)) expect(csp).not.toMatch(/https?:/);
+  });
+
+  it('the fonts the stylesheet names are in the site, as woff2, with their licence', () => {
+    const css = site('styles.css');
+    expect(css).not.toMatch(/@import|url\((?!"\/fonts\/)/);
+    const fonts = [...css.matchAll(/url\("\/(fonts\/[^"]+)"\)/g)].map((m) => m[1]);
+    expect(fonts.length).toBe(2);
+    for (const f of fonts) {
+      const bytes = readFileSync(fileURLToPath(new URL(`../site/${f}`, import.meta.url)));
+      expect(bytes.subarray(0, 4).toString('latin1')).toBe('wOF2');
+    }
+    expect(site('fonts/OFL-Inter.txt')).toMatch(/SIL Open Font License/);
+    expect(site('fonts/OFL-JetBrainsMono.txt')).toMatch(/SIL Open Font License/);
+  });
+});
