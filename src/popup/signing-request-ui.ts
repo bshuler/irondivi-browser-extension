@@ -142,6 +142,8 @@ export function showSigningRequestView(request: SigningRequest): void {
   if (elements.network && network && NETWORKS[network]) {
     elements.network.textContent = NETWORKS[network].name;
     elements.network.dataset.network = network;
+    // The colour bar and accent follow the request's network
+    document.body.dataset.network = network;
   }
 
   // Set type label and warning message based on request type

@@ -56,3 +56,23 @@ describe('the approval window acts on the wallet\'s reply', () => {
     }
   });
 });
+
+// The network the wallet is on, on every view, in that network's colour
+describe('the network colour bar', () => {
+  const html = readFileSync(new URL('./popup.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  it('is the first thing in the popup', () => {
+    expect(html).toMatch(/<div id="app">\s*(<!--[^>]*-->\s*)?<div class="network-bar"/);
+  });
+
+  it('says which network, and follows the network colour', () => {
+    expect(css).toMatch(/\.network-bar \{[^}]*background: var\(--accent\)/);
+    expect(css).toMatch(/\.network-bar::after \{\s*content: "Mainnet/);
+    expect(css).toMatch(/body\[data-network="testnet"\] \.network-bar::after \{\s*content: "Testnet/);
+  });
+
+  it('the approval window colours itself by the request\'s network', () => {
+    const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/document\.body\.dataset\.network = network;/);
+  });
+});

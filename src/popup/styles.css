@@ -1745,6 +1745,31 @@ body {
   background: var(--text-muted);
 }
 
+/* Which network the wallet is on, across the top of every view */
+.network-bar {
+  height: 18px;
+  line-height: 18px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-align: center;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+}
+
+.network-bar::after {
+  content: "Mainnet · real DIVI";
+}
+
+body[data-network="testnet"] .network-bar::after {
+  content: "Testnet · test coins only";
+}
+
+body:not([data-network]) .network-bar {
+  display: none;
+}
+
 /* Network name in the approval window header */
 .network-pill {
   margin-left: auto;
