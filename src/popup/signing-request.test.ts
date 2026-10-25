@@ -88,6 +88,16 @@ describe('EXT-6 the approval window sends one approval at a time', () => {
   });
 });
 
+// EXT-8: what the approval window shows
+describe('EXT-8 the approval window', () => {
+  const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+  it('shows the account it is from, the recipient note and what is left', () => {
+    expect(src).toMatch(/detailRow\('From:'/);
+    expect(src).toMatch(/recipient-note \$\{request\.recipient\.level\}/);
+    expect(src).toMatch(/detailRow\('Left after:'/);
+  });
+});
+
 // The network the wallet is on, on every view, in that network's colour
 describe('the network colour bar', () => {
   const html = readFileSync(new URL('./popup.html', import.meta.url), 'utf8');

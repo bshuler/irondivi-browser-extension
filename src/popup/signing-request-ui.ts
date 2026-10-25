@@ -24,6 +24,8 @@ export interface SigningRequest {
     to?: string;
     amount?: number;
     fee?: number;
+    // What the account holds after this payment, as text (EXT-8)
+    balanceAfter?: string;
     addressIndex?: number;
     opReturn?: string;
     // A Divi Games transaction, as the background checked and read it
@@ -33,6 +35,10 @@ export interface SigningRequest {
   };
   // The site has not had a request of this type approved before
   firstUse?: boolean;
+  // Which account and address the request would sign or pay from (EXT-8)
+  from?: { name: string; address: string; addressCount: number };
+  // What the wallet knows about the recipient of a payment (EXT-8)
+  recipient?: { text: string; level: 'ok' | 'warn' | 'danger' };
   createdAt: number;
 }
 
@@ -198,6 +204,16 @@ export function showSigningRequestView(request: SigningRequest): void {
     return v.text;
   };
 
+  // Which account it is from: with several accounts, the one selected in the
+  // popup need not be the one the site connected to
+  if (request.from && request.type !== 'connect') {
+    const from = el('span', 'signing-detail-value address', shown(`${request.from.name} · ${request.from.address}`));
+    rows.push(detailRow('From:', from));
+    if (request.type === 'send_transaction' && request.from.addressCount > 1) {
+      rows.push(detailRow('', el('span', 'signing-detail-value', `Paid from any of this account's ${request.from.addressCount} addresses`)));
+    }
+  }
+
   if (request.type === 'connect') {
     // Keep it simple - the warning text explains what happens
     const row = el('div', 'signing-detail-row');
@@ -236,12 +252,18 @@ export function showSigningRequestView(request: SigningRequest): void {
     const fee = feeText(request.data?.fee);
     // Show the whole destination: a shortened one can hide a look-alike address
     rows.push(detailRow('To:', el('span', 'signing-detail-value address', shown(request.data?.to || ''))));
+    if (request.recipient) {
+      rows.push(el('div', `signing-detail-row recipient-note ${request.recipient.level}`, request.recipient.text));
+    }
     rows.push(detailRow('Amount:', el('span', 'signing-detail-value amount', `${formatAmount(amount)} DIVI`)));
     rows.push(detailRow('Fee:', el('span', 'signing-detail-value', fee.text)));
     const total = detailRow('Total:', el('span', 'signing-detail-value amount',
       fee.known ? `${formatAmount(amount + (request.data?.fee as number))} DIVI` : 'unknown'));
     total.classList.add('total');
     rows.push(total);
+    if (request.data?.balanceAfter !== undefined) {
+      rows.push(detailRow('Left after:', el('span', 'signing-detail-value', `${shown(request.data.balanceAfter)} DIVI`)));
+    }
     if (!fee.known) {
       blocked = true;
       rows.push(warningRow('fee-unknown', 'The wallet could not work out the fee, so this payment cannot be approved. Reject it and try again.'));

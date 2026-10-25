@@ -1,6 +1,6 @@
 
 import { runtime, alarms, idle, browserAPI } from '../shared/browser-polyfill';
-import { MSG, NETWORKS, DAPP_METHODS, UI_PORT } from '../shared/constants';
+import { MSG, NETWORKS, DAPP_METHODS, UI_PORT, type NetworkType } from '../shared/constants';
 import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
@@ -17,6 +17,7 @@ import { isAllowedDappOrigin } from '../shared/origin';
 import { checkGameTx, checkMessageShape, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
+import { checkRecipient, recipientNote } from '../popup/recipient-check';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning } from './records-seal';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
@@ -73,7 +74,7 @@ function diviText(sats: bigint): string {
  * on what leaves the wallet: the amount plus the fee.
  * Throws with a user-facing message if the send is not allowed.
  */
-async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction> {
+async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction & { balanceSats: bigint }> {
   const addresses = account.addresses.map(a => a.address);
   const utxos = await rpcClient.getUtxos(addresses);
 
@@ -120,7 +121,26 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
     }
   }
 
-  return built;
+  return { ...built, balanceSats: reported };
+}
+
+/**
+ * Which account a request pays or signs from, and for a payment what the
+ * popup's own send screen says about the recipient (EXT-8)
+ */
+async function requestContext(request: PendingRequest, network: NetworkType, accounts: Account[]) {
+  const account = accounts.find(a => a.id === request.accountId);
+  const own = (a: Account) => (a.networks?.[network]?.addresses ?? (a.network === network ? a.addresses : []));
+  const addresses = account ? own(account) : [];
+  const from = account ? {
+    name: account.name,
+    address: request.data?.address ?? addresses[0]?.address ?? '',
+    addressCount: addresses.length,
+  } : undefined;
+  if (request.type !== 'send_transaction' || typeof request.data?.to !== 'string') return { from };
+  const contacts = await addressBook.listContacts(network);
+  const check = checkRecipient(request.data.to, contacts, accounts.flatMap(a => own(a).map(x => x.address)));
+  return { from, recipient: recipientNote(check) };
 }
 
 /**
@@ -655,7 +675,7 @@ async function handleMessage(
           // Why it cannot be made (the balance, the limits, which coins) is
           // the owner's to know, not the site's
           walletCore.checkRequest(request, account.network);
-          let built: BuiltTransaction;
+          let built: Awaited<ReturnType<typeof buildSend>>;
           try {
             built = await buildSend(account, request);
           } catch {
@@ -667,7 +687,14 @@ async function handleMessage(
               'send_transaction',
               origin,
               account.id,
-              { ...request, fee: built.fee, network: account.network }
+              // What the approval window shows besides the request: the real
+              // fee and what the account holds after it (EXT-8)
+              {
+                ...request,
+                fee: built.fee,
+                network: account.network,
+                balanceAfter: diviText(built.balanceSats - built.amountSats - built.feeSats),
+              }
             );
             return { success: true, data: result };
           } catch (error) {
@@ -887,16 +914,21 @@ async function handleMessage(
       case MSG.GET_PENDING_SIGNING_REQUESTS: {
         // Include all pending requests (connect, sign_message, send_transaction).
         // Each shows the network the site asked on (a connect asks on the current one).
-        const { network } = await getSettings();
-        const requests = connectionManager.getAllPendingRequests().map(r => ({
-          id: r.id,
-          type: r.type,
-          origin: r.origin,
-          accountId: r.accountId,
-          network: r.data?.network ?? network,
-          data: r.data,
-          firstUse: r.firstUse,
-          createdAt: r.createdAt,
+        const settings = await getSettings();
+        const accounts = await getAccounts();
+        const requests = await Promise.all(connectionManager.getAllPendingRequests().map(async r => {
+          const network = r.data?.network ?? settings.network;
+          return {
+            id: r.id,
+            type: r.type,
+            origin: r.origin,
+            accountId: r.accountId,
+            network,
+            data: r.data,
+            firstUse: r.firstUse,
+            createdAt: r.createdAt,
+            ...(await requestContext(r, network, accounts)),
+          };
         }));
         return { success: true, data: { requests } };
       }

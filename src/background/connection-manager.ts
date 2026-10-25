@@ -17,6 +17,8 @@ export interface SigningRequestData {
   gameTx?: GameTxSummary;
   // A Divi Games session grant, when the message is one
   session?: SessionGrant;
+  // What the account holds after a payment, in DIVI, for the window
+  balanceAfter?: string;
 }
 
 export type SigningRequestType = 'sign_message' | 'sign_game_tx' | 'send_transaction';

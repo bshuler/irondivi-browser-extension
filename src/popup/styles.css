@@ -1770,6 +1770,29 @@ body:not([data-network]) .network-bar {
   display: none;
 }
 
+/* What the wallet knows about a payment's recipient (EXT-8) */
+.recipient-note {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.recipient-note.ok {
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.recipient-note.warn {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.recipient-note.danger {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+  font-weight: 700;
+}
+
 /* Network name in the approval window header */
 .network-pill {
   margin-left: auto;
