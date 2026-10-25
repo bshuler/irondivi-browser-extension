@@ -1422,6 +1422,12 @@ body {
   white-space: nowrap;
 }
 
+.connected-site-networks {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .disconnect-btn {
   padding: 6px 12px;
   background: rgba(239, 68, 68, 0.1);

@@ -160,13 +160,14 @@ export class ConnectionManager {
   }
 
   /**
-   * Check if a site is connected to an account
+   * Check if a site is connected to an account on a network: a site
+   * connected on testnet must ask again before it can ask for mainnet
    */
-  async isConnected(origin: string, accountId: string): Promise<boolean> {
+  async isConnected(origin: string, accountId: string, network: NetworkType): Promise<boolean> {
     const connections = await getConnections();
     const accountConnections = connections[accountId] || {};
     const connection = accountConnections[origin];
-    return connection?.connected === true;
+    return connection?.connected === true && (connection.networks ?? []).includes(network);
   }
 
   /**
@@ -185,11 +186,12 @@ export class ConnectionManager {
    */
   async requestConnection(
     origin: string,
-    accountId: string
+    accountId: string,
+    network: NetworkType
   ): Promise<{ connected: boolean }> {
     // Check for existing pending connection request for this origin
     const existingRequest = Array.from(this.pendingRequests.values()).find(
-      r => r.type === 'connect' && r.origin === origin && r.accountId === accountId
+      r => r.type === 'connect' && r.origin === origin && r.accountId === accountId && r.data?.network === network
     );
 
     if (existingRequest) {
@@ -218,6 +220,8 @@ export class ConnectionManager {
         type: 'connect',
         origin,
         accountId,
+        // The network the connection is for, shown in the window
+        data: { network },
         createdAt: Date.now(),
         resolve: (value) => {
           this.pendingRequests.delete(requestId);
@@ -266,11 +270,12 @@ export class ConnectionManager {
         connections[request.accountId] = {};
       }
 
-      connections[request.accountId][request.origin] = {
-        connected: true,
-        connectedAt: Date.now(),
-        permissions,
-      };
+      // Connecting on a second network keeps what was granted on the first
+      const before = connections[request.accountId][request.origin];
+      const network = request.data!.network!;
+      connections[request.accountId][request.origin] = before?.connected
+        ? { ...before, networks: [...new Set([...(before.networks ?? []), network])] }
+        : { connected: true, connectedAt: Date.now(), permissions, networks: [network] };
 
       await saveConnections(connections);
 
@@ -361,7 +366,7 @@ export class ConnectionManager {
   ): Promise<unknown> {
     // A connected site may ask; the owner's approval, with the password, is
     // what lets it sign or send
-    if (!(await this.isConnected(origin, accountId))) {
+    if (!data.network || !(await this.isConnected(origin, accountId, data.network))) {
       throw new Error('Site is not connected');
     }
     const firstUse = !(await this.hasPermission(origin, accountId, type));

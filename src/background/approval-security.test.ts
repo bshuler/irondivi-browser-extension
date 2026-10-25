@@ -3,7 +3,7 @@ import { createHarness, TEST_MNEMONIC, TEST_PASSWORD, type Harness } from '../te
 import { Mnemonic } from '../lib/mnemonic';
 import { deriveAddresses } from '../lib/derivation';
 
-// Regression tests for the security review's EXT-5, EXT-6, EXT-7, EXT-9 and EXT-10:
+// Regression tests for the security review's EXT-5, EXT-6, EXT-7, EXT-9, EXT-10 and EXT-11:
 // how the background answers sites and approves their requests
 
 vi.setConfig({ testTimeout: 30000 });
@@ -122,5 +122,41 @@ describe('EXT-10 a message to sign must be text of a sane length', () => {
   it('the popup refuses the same', async () => {
     const r = await h.popup('SIGN_MESSAGE', { accountId: account.id, password: TEST_PASSWORD, message: 'x'.repeat(9000) });
     expect(r).toEqual({ success: false, error: 'The message is too long (8 KB at most)' });
+  });
+});
+
+describe('EXT-11 a connection holds only on the network it was made on', () => {
+  async function toMainnet() {
+    const r = await h.popup('UPDATE_SETTINGS', { network: 'mainnet', password: TEST_PASSWORD });
+    expect(r.error).toBeUndefined();
+    expect((await h.popup('AUTHENTICATE', { accountId: account.id, password: TEST_PASSWORD })).success).toBe(true);
+  }
+
+  it('a site connected on testnet must ask again after the switch to mainnet', async () => {
+    await h.connectPage();
+    await toMainnet();
+    const windows = h.createdWindows.length;
+    expect((await h.fromTab('SIGN_MESSAGE', { message: 'hello' })).error).toMatch(/NOT_CONNECTED|not connected/i);
+    expect((await h.fromTab('IS_CONNECTED')).data.connected).toBe(false);
+    expect(h.createdWindows).toHaveLength(windows);
+  });
+
+  it('connecting again on mainnet asks the owner, and then both networks are listed', async () => {
+    await h.connectPage();
+    await toMainnet();
+    const windows = h.createdWindows.length;
+    await h.connectPage();
+    expect(h.createdWindows.length).toBeGreaterThan(windows);
+    const sites = await h.popup('GET_CONNECTED_SITES', { accountId: account.id });
+    expect(sites.data[0].networks.sort()).toEqual(['mainnet', 'testnet']);
+  });
+
+  it('a connection from before networks were recorded must be made again', async () => {
+    await h.connectPage();
+    for (const conns of Object.values<any>(h.storage.connections)) {
+      for (const c of Object.values<any>(conns)) delete c.networks;
+    }
+    await h.restartWorker();
+    expect((await h.fromTab('IS_CONNECTED')).data.connected).toBe(false);
   });
 });

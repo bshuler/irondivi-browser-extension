@@ -38,6 +38,8 @@ export interface Contact {
 export interface ConnectedSite {
   origin: string;
   connectedAt: number;
+  // The networks the site may ask on (EXT-11)
+  networks: NetworkType[];
 }
 
 export interface TransactionLimits {

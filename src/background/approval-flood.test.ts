@@ -69,7 +69,7 @@ describe('M5 a site cannot flood the owner with approval windows', () => {
     h.fromTab('SIGN_MESSAGE', { message: 'one' });
     await h.waitForPending('sign_message');
     const { connectionManager } = await import('./connection-manager');
-    const other = connectionManager.requestConnection('https://other.example', 'x');
+    const other = connectionManager.requestConnection('https://other.example', 'x', 'testnet');
     other.catch(() => {});
     const all = connectionManager.getAllPendingRequests();
     expect(all.map(r => r.origin).sort()).toEqual(['https://games.divi.domains', 'https://other.example']);

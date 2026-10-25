@@ -117,6 +117,13 @@ export function updateConnectedSitesList(sites: ConnectedSite[]): void {
     const originSpan = document.createElement('span');
     originSpan.className = 'connected-site-origin';
     originSpan.textContent = site.origin;
+    // A site connected on testnet asks again before it can ask on mainnet
+    const networksSpan = document.createElement('span');
+    networksSpan.className = 'connected-site-networks';
+    networksSpan.textContent = (site.networks ?? []).length
+      ? site.networks.map(n => NETWORKS[n]?.name ?? n).join(', ')
+      : 'asks again';
+    originSpan.append(' ', networksSpan);
 
     const disconnectBtn = document.createElement('button');
     disconnectBtn.className = 'disconnect-btn';

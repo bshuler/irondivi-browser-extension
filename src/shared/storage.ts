@@ -77,6 +77,9 @@ export interface Connection {
   connected: boolean;
   connectedAt: number;
   permissions: string[];
+  // The networks the owner connected the site on (EXT-11). A connection
+  // made before 0.0.5 has none, so the site asks again on either network
+  networks?: NetworkType[];
 }
 
 export interface CachedBalance {

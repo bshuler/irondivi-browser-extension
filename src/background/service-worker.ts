@@ -157,17 +157,17 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
       return { success: false, error: 'Request data missing' };
     }
 
-    // The site may have been disconnected while the popup was open
-    const stillAllowed = await connectionManager.isConnected(request.origin, request.accountId);
-    if (!stillAllowed) {
-      return { success: false, error: 'Site is no longer connected' };
-    }
-
     // Sign on the network the site asked on, and only while it is still
     // the wallet's network, so the site gets what it asked for
     const network = (await getSettings()).network;
     if (request.data.network && request.data.network !== network) {
       return { success: false, error: 'The wallet changed network since this request. Ask the site again.' };
+    }
+
+    // The site may have been disconnected while the popup was open
+    const stillAllowed = await connectionManager.isConnected(request.origin, request.accountId, network);
+    if (!stillAllowed) {
+      return { success: false, error: 'Site is no longer connected' };
     }
     const account = await accountManager.getAccount(request.accountId, network);
     if (!account) {
@@ -468,7 +468,7 @@ async function handleMessage(
       case MSG.GET_BALANCE: {
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
-        if (origin && !(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
+        if (origin && !(await connectionManager.isConnected(origin, account.id, account.network))) return NOT_CONNECTED;
 
         // One address if asked for (it must be ours), else the whole account
         const addresses = payload?.address
@@ -484,7 +484,7 @@ async function handleMessage(
       case MSG.GET_ADDRESSES: {
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
-        if (origin && !(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
+        if (origin && !(await connectionManager.isConnected(origin, account.id, account.network))) return NOT_CONNECTED;
         return { success: true, data: account.addresses };
       }
 
@@ -548,7 +548,7 @@ async function handleMessage(
           const account = await accountManager.getSelectedAccount();
           if (!account) return { success: false, error: 'No account selected' };
 
-          const isConnected = await connectionManager.isConnected(origin, account.id);
+          const isConnected = await connectionManager.isConnected(origin, account.id, account.network);
           if (!isConnected) return NOT_CONNECTED;
           if (account.addresses.length === 0) return noAddressesOn(account);
 
@@ -605,7 +605,7 @@ async function handleMessage(
         if (!origin) return { success: false, error: 'Game transactions come from the Divi Games site' };
         const account = await accountManager.getSelectedAccount();
         if (!account) return { success: false, error: 'No account selected' };
-        if (!(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
+        if (!(await connectionManager.isConnected(origin, account.id, account.network))) return NOT_CONNECTED;
         if (account.addresses.length === 0) return noAddressesOn(account);
 
         try {
@@ -648,7 +648,7 @@ async function handleMessage(
 
         // From a dApp (has origin): needs a connection, then the user's approval
         if (origin) {
-          const isConnected = await connectionManager.isConnected(origin, account.id);
+          const isConnected = await connectionManager.isConnected(origin, account.id, account.network);
           if (!isConnected) return NOT_CONNECTED;
 
           // Check the send can be made before asking, and show the real fee.
@@ -801,7 +801,8 @@ async function handleMessage(
         const selected = await accountManager.getAccount(accountId);
         if (selected && selected.addresses.length === 0) return noAddressesOn(selected);
 
-        const isConnected = await connectionManager.isConnected(origin, accountId);
+        if (!selected) return { success: false, error: 'No account selected' };
+        const isConnected = await connectionManager.isConnected(origin, accountId, selected.network);
         if (isConnected) {
           return {
             success: true,
@@ -814,7 +815,7 @@ async function handleMessage(
 
         // Create connection request and wait for approval
         try {
-          await connectionManager.requestConnection(origin, accountId);
+          await connectionManager.requestConnection(origin, accountId, selected.network);
           // Connection approved - return the address of the account the site
           // was connected to, even if the owner chose another meanwhile
           return {
@@ -837,7 +838,7 @@ async function handleMessage(
         const accountId = await getSelectedAccountId();
         if (!accountId) return { success: true, data: { connected: false } };
 
-        const connected = await connectionManager.isConnected(origin, accountId);
+        const connected = await connectionManager.isConnected(origin, accountId, (await getSettings()).network);
         return { success: true, data: { connected } };
       }
 
@@ -846,7 +847,12 @@ async function handleMessage(
         if (!accountId) return { success: true, data: [] };
 
         const sites = await connectionManager.getConnectedSites(accountId);
-        return { success: true, data: sites };
+        return {
+          success: true,
+          data: sites.map(({ origin, connection }) => ({
+            origin, connectedAt: connection.connectedAt, networks: connection.networks ?? [],
+          })),
+        };
       }
 
       case MSG.REVOKE_SITE: {
