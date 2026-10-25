@@ -121,14 +121,14 @@ Also changed in this round:
 The four incomplete fixes are now complete:
 - **M1** by EXT-3: the records are sealed, and on Chromium 140+ content scripts cannot read local storage. Since 0.0.5 the scripts run on every https page again (site access), so on Firefox and Safari, and older Chromium, the seal is what protects the records, not where the scripts run.
 - **L7** by EXT-10.
-- **L14** by EXT-19 and EXT-1. The release key's approval and the store listings are still pending.
+- **L14** by EXT-19 and EXT-1. The release key's approval and the store submissions are still pending; the listings, answers and screenshots are ready in `docs/store/`.
 - **L15** by EXT-7.
 
 Residual risks that remain after these fixes:
 - **Rollback.** Someone who can write `storage.local` can put back an older encrypted blob together with its seal. Nothing on the machine records which version is current.
 - **First unlock after the upgrade.** The first unlock seals whatever records are stored at that moment, trusting them on first use.
 - **Deleting a secret.** Deleting the encrypted secret denies the owner the wallet until they restore it from the phrase. The spend ledger and cached balances are not sealed, so changing them only affects the limits shown, not what is signed.
-- **Safari and Firefox storage.** `storage.session` is visible to content scripts there. The wallet's scripts now run only on allowed sites.
+- **Safari and Firefox storage.** `storage.session` is visible to content scripts there, and since 0.0.5 the content script runs on every https page; since 0.0.6 the IronDivi Connect pairing keys are kept there too. Page scripts cannot read it; a bug in the content script could.
 - **Addresses.** Every unlock derives the addresses again, and at most 1000 addresses per network are kept.
 - **Chinese phrases.** Some phrases are valid in both Chinese wordlists. Either one gives the same seed.
 - **Reconnecting.** Connections made before networks were recorded must be made again.
@@ -142,6 +142,12 @@ Residual risks that remain after these fixes:
   - A second `requestAccess` while one is open fails with -32603 rather than a specific code.
   - Unblocking a site from the settings needs no password, while sends and signatures do.
   - `sendTransaction` memos up to 512 bytes go in one OP_RETURN output; most nodes relay at most 80 bytes of OP_RETURN data by default, so a longer memo may not relay.
+- **IronDivi Connect (0.0.6, ADR 0003)**: the wallet side of the relay protocol (0c03324, 229dbc0, d20d4db, b414125; connect-relay.test.ts, irondivi-connect.test.ts, connect-pairing.test.ts, connect-pairing.spec.ts). Points for the owner to weigh:
+  - The site in a pairing code is only what the page claims. Approval windows for a relayed request say so and name the relay host, and relayed grants are kept under `relay:<origin>`, apart from the real site's connection. A phishing page can still show a code that claims `https://games.divi.domains`; the owner must read the window.
+  - The relay sees when the wallet polls, the topic, and the size and timing of sealed messages, but not their contents (AES-GCM under keys derived with HKDF from the code's key, one per direction; checked against envelopes the reference library sealed).
+  - The relay is whatever host the code names. The extension's `https://*/*` host permission lets it reach any https relay, so a code can point the wallet's polling at a host of the page's choosing; it learns only the above.
+  - At most two pairings; they live in `storage.session` and end when the browser closes or the owner presses End. A code's expiry does not end a pairing already made (SPEC §5).
+  - Relayed requests pass the same network, memo, limit and password checks as in-page ones; a request for the other network is refused with 4901.
 
 ## Findings
 
