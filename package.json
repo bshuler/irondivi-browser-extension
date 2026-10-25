@@ -3,6 +3,9 @@
   "version": "0.0.4",
   "description": "IronDivi Wallet Browser Extension",
   "type": "module",
+  "engines": {
+    "node": "26.6.0"
+  },
   "scripts": {
     "build": "node scripts/build.js chrome",
     "build:all": "node scripts/build.js all",
@@ -18,7 +21,8 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:unit": "vitest",
-    "check:remote": "scripts/remote-check.sh"
+    "check:remote": "scripts/remote-check.sh",
+    "reproduce": "scripts/reproduce.sh"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

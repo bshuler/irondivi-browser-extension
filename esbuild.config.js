@@ -1,6 +1,7 @@
 import esbuild from 'esbuild';
 import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { dirname, join } from 'path';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,17 @@ const commonConfig = {
   minify: !isWatch,
   define: { __IRONDIVI_DEV__: String(isDev) },
 };
+
+// The commit this build comes from; a tree with uncommitted changes to
+// tracked files gets "-dirty", which package.js will not accept
+function sourceCommit() {
+  try {
+    const git = (...args) => execFileSync('git', args, { cwd: __dirname, encoding: 'utf-8' }).trim();
+    return git('rev-parse', 'HEAD') + (git('status', '--porcelain', '--untracked-files=no') ? '-dirty' : '');
+  } catch {
+    return 'unknown';
+  }
+}
 
 async function build() {
   // IRONDIVI_OUTDIR lets the packaging tests build somewhere other than dist/
@@ -81,7 +93,8 @@ async function build() {
   }
   writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(baseManifest, null, 2));
   // scripts/package.js reads this and refuses to package a development build
-  writeFileSync(join(outdir, 'build-info.json'), JSON.stringify({ dev: isDev }, null, 2) + '\n');
+  // and checks that it was built from the commit it names in releases.json
+  writeFileSync(join(outdir, 'build-info.json'), JSON.stringify({ dev: isDev, commit: sourceCommit() }, null, 2) + '\n');
 
   console.log(`Built for ${browser} in dist/${browser}/`);
 }

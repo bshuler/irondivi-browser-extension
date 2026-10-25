@@ -40,7 +40,7 @@ describe('L14 packaging writes checksums', () => {
       writeFileSync(join(dir, 'irondivi-wallet-firefox-v9.9.9.xpi'), 'firefox bytes');
       writeFileSync(join(dir, 'irondivi-wallet-chrome-v9.9.8.zip'), 'old version');
       const lines = writeChecksums(dir, '9.9.9');
-      writeReleases(lines, dir, '9.9.9');
+      writeReleases(lines, dir, '9.9.9', { commit: 'abc123', time: 1798761600 });
 
       const sha = (s: string) => createHash('sha256').update(s).digest('hex');
       expect(readFileSync(join(dir, 'SHA256SUMS-v9.9.9'), 'utf8')).toBe(
@@ -60,7 +60,7 @@ describe('L14 packaging writes checksums', () => {
   it('main() writes the checksums after every package, Safari included', () => {
     const src = read('scripts/package.js');
     const body = src.slice(src.indexOf('async function main()'));
-    expect(body.indexOf('packageSafari()')).toBeGreaterThan(0);
-    expect(body.indexOf('writeChecksums(')).toBeGreaterThan(body.indexOf('packageSafari()'));
+    expect(body.indexOf('packageSafari(')).toBeGreaterThan(0);
+    expect(body.indexOf('writeChecksums(')).toBeGreaterThan(body.indexOf('packageSafari('));
   });
 });
