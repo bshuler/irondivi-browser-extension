@@ -43,7 +43,7 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 | C1, H1, H2, H3, M9, L4, L5 | Fixed | 04039f2 | `send-security.test.ts`, `wallet-core.test.ts` |
 | H4 | Fixed | 54dcd7f | `import-security.test.ts` |
 | M10 | Fixed | 5125ecd | the live Firefox run (no unit test) |
-| M1, M11 | Fixed | da46c0c | `injection-security.test.ts` |
+| M1, M11 | Fixed. M1 was incomplete (it held only on Chromium 140+) and is completed by EXT-3 below | da46c0c, 36d3414, 7edb478 | `injection-security.test.ts`, `site-scripts.test.ts`, `records-seal.test.ts` |
 | M2 | Fixed: the unlocked phrase is held only in the background's memory. A worker restart, or the timeout even without the alarm, locks the wallet, and an unlock deletes what older versions stored | c3e6b6a | `session-security.test.ts` |
 | M3 | Fixed: a wallet being created keeps its phrase in session storage only encrypted with the chosen password, and the password is never stored. Resuming asks for the password, an approval window never resumes a setup, and a plain-text record from an older version is deleted | 750d25a | `pending-account.test.ts` |
 | M4 | Fixed: an approval window shows only the request it was opened for; if that one is gone it says so and closes. Rejecting there closes the window instead of loading another site's request | 98bf5e5 | `signing-request.test.ts` |
@@ -53,7 +53,7 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 | M8 | Fixed: unlock waits for the upgrade. The new blob is decrypted and checked against the phrase before it is written, and it replaces the old one only if the old one is still what is stored. Every change to the secrets map now runs one at a time, so a migration can no longer put back a deleted secret or drop a new one. A separate pointer key was not needed: one `storage.local.set` replaces the map whole, so a crash leaves the old blob or the new one | d98e70c | `secret-migration.test.ts` (5 of its 7 tests fail on the old code) |
 | L1 | Fixed: patterns are matched label by label. `*.` is exactly one label, `**.` one or more, and neither matches the bare domain. A pattern without a port allows only the default port; `:8080` allows that port and `:*` any. `?` is no longer a wildcard. Over-broad patterns such as `*.com`, malformed ones and more than 50 are refused; an invalid pattern matches nothing | a8d8810 | `site-patterns.test.ts` |
 | L2 | Fixed: UPDATE_SETTINGS takes only known keys with checked values, and allowing a new site, raising or removing a limit, or a longer lock time needs the password. The popup checks the sites list and asks for the password first | 39e941d | settings-security.test.ts |
-| L7 | Fixed: the approval window shows the whole message in a scrollable box, built from text nodes with no innerHTML. Control, bidi, zero-width and separator characters in the message, address, destination and OP_RETURN are shown as ⟨U+XXXX⟩ with a warning row | 7fb2aea | visible-text.test.ts |
+| L7 | Fixed: the approval window shows the whole message in a scrollable box, built from text nodes with no innerHTML. Control, bidi, zero-width and separator characters in the message, address, destination and OP_RETURN are shown as ⟨U+XXXX⟩ with a warning row. Completed by EXT-10 below: a message must be text of 1 byte to 8 KB | 7fb2aea, eb101c6 | visible-text.test.ts, approval-security.test.ts |
 | L8 | Fixed: `importAccount`, the only path that encrypts a phrase, refuses a password that is not a string of at least 8 characters before anything is derived or stored | 347ab5b | account-input.test.ts |
 | L9 | Fixed: `addContact` refuses an unknown network and any address that `Address.validate` rejects for the contact's own network; names and notes are type- and length-checked on add and update, and an update still cannot change the address | 347ab5b | account-input.test.ts |
 | L10 | Fixed: every password check (unlock, approve, verify, export, delete, new address, network set-up) goes through `unlockSecret` in unlock-limit.ts, which keeps the count in `storage.local` so a browser or worker restart does not reset it. Attempts run one at a time, so parallel guesses cannot pass the limit; unknown account ids are not counted; the tier is kept for 24 h after the last failure; a lockout read from storage is capped at 24 h. Residual: setting the system clock forward ends a lockout early, since an extension has no monotonic clock that survives a restart | 60aac9d | rate-limit.test.ts |
@@ -61,8 +61,8 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 | L6 | Fixed: the Copy Words button is gone and the phrase modal says why: other apps can read the clipboard, and clipboard history keeps it after it is cleared | ce616f5 | recovery-phrase.test.ts |
 | L11 | Fixed: the input script is rebuilt from the coin's own address with `p2pkhScript(input.address)`; the script the node reports is ignored | 04039f2, e96efa6 | send-security.test.ts |
 | L12, L13 | Fixed: on Chrome and Edge, provider.js is served at a URL that changes each session (`use_dynamic_url`), so a site cannot probe a fixed path to learn the wallet is installed; Firefox and Safari already use a random per-install id. Source maps are written only for a dev build, and each build empties its output folder first | 48d674d | build-config.test.ts |
-| L14 | Fixed: every dependency is pinned to an exact version that matches the lockfile, `.npmrc` saves new ones exactly, and packaging writes `SHA256SUMS-v<version>` for every package. Residual: the extension is not yet in the browser stores, so it has no store review or auto-update, and the checksum file is not signed | c0a63e9 | supply-chain.test.ts |
-| L15 | Fixed: popup message signing takes an account id and refuses it unless the session unlocked that account; it signs from an address the account owns on its own network and returns that address | ffa421f, 9245ef7 | sign-message-account.test.ts |
+| L14 | Fixed: every dependency is pinned to an exact version that matches the lockfile, `.npmrc` saves new ones exactly, and packaging writes `SHA256SUMS-v<version>` for every package. Residual: the extension is not yet in the browser stores, so it has no store review or auto-update. Completed by EXT-19 and EXT-1 below: the checksum file is signed and `deploy.sh` refuses an unsigned release; the release key waits for the owner's approval | c0a63e9, a2cf867, d8ecd67 | supply-chain.test.ts, release-signing.test.ts |
+| L15 | Fixed: popup message signing takes an account id and refuses it unless the session unlocked that account; it signs from an address the account owns on its own network and returns that address. Completed by EXT-7 below: dApp signing checks the session's account too | ffa421f, 9245ef7, e0a33b3 | sign-message-account.test.ts, approval-security.test.ts |
 | I2, I3 | Fixed: `isValidPrivateKey` checks that a key is 32 bytes from 1 to n - 1. Transaction and message signing refuse any other key and refuse s = 0; BIP32 refuses a master key outside that range, IL of n or more, and a child key of 0 | 7f40d75 | key-range.test.ts |
 | T1 | Fixed: the approval window checks the wallet's reply to approve and reject, and shows an error and keeps the window open when it is refused | 25f0b53 | signing-request.test.ts, dapp-security.spec.ts |
 | I1, I4, I5, I6, I7 | Accepted as they stand; see each finding for why | | |
@@ -70,6 +70,67 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 Checked against the live networks on 2026-10-24:
 - H2's check needs the node's raw transaction to hash to the txid it reports. On mainnet and testnet, every transaction in the last 15 blocks of each, 62 in all and including coinbase and coinstake, parses and re-serialises byte for byte, and hashes to its txid. Divi's `baretxid` is a different hash and is not used.
 - H4 normalises at the import boundary: the phrase is normalised, then validated, then stored, so `Mnemonic.toSeed` only ever sees the canonical form. `toSeed` itself stays plain BIP39, because normalising inside it would change the seed of a wallet imported before the fix.
+
+## Second review (2026-10-25): EXT-1 to EXT-31
+
+A second adversarial review of `main` at `4d84d32` found no Critical or High issue, and 4 Medium, 14 Low and 13 Info findings (EXT-1 to EXT-31). It also found four fixes above incomplete: M1, L7, L14 and L15. Each fix below has regression tests that fail on the old code.
+
+| Finding | Status | Commit | Tests |
+|---|---|---|---|
+| EXT-1 Install path turns off browser integrity checks; checksums unsigned | Fixed in code: `scripts/sign-release.sh` signs `SHA256SUMS-v<version>` through the 1Password SSH agent, so the key never touches disk; `scripts/verify-release.sh` checks the signature and every package; `deploy.sh` refuses an unsigned release and publishes the `.sig`; the page no longer tells Firefox users to turn off `xpinstall.signatures.required`. The release key itself and its published fingerprint wait for the owner's 1Password approval, and store listings (signed, auto-updating installs) need the owner's store accounts | d8ecd67 | release-signing.test.ts |
+| EXT-2 Sends and signatures need no password inside the auto-lock window | Fixed: every send and signature carries the password; the wallet locks when its last window closes and when the screen locks | 593fedc, 7654b11 | session-security.test.ts, send-security.test.ts, sign-message-account.test.ts, injection-security.test.ts |
+| EXT-3 M1 works only on Chromium 140+; unencrypted records can be changed | Fixed: the wallet's scripts run only on allowed sites, and accounts, settings, connections and contacts are sealed with an HMAC key kept inside the encrypted secret; changes made outside the wallet are undone on unlock, and a failed `setAccessLevel` is reported | 36d3414, 7edb478 | site-scripts.test.ts, records-seal.test.ts, unlock-retry.test.ts |
+| EXT-4 `signMessage` is the Divi Games spend key but shown as plain text | Fixed: `signGameTx` shows a game transaction as a transaction (kind, recipient, amount, token), only for the Divi Games origin, and `signMessage` refuses text that parses as one | e68435e | game-tx-signing.test.ts, game-tx.test.ts |
+| EXT-5 A site learns the spendable balance | Fixed: a site gets one plain refusal for over-limit and over-balance payments | a3b3f12 | approval-security.test.ts |
+| EXT-6 A second approval can run while the first is in flight | Fixed | 813f128, 2b92fe0 | approval-security.test.ts, signing-request.test.ts |
+| EXT-7 dApp signing does not check the session's account (L15 residual) | Fixed | e0a33b3 | approval-security.test.ts |
+| EXT-8 The approval window hides the paying account and skips recipient checks | Fixed | 61caf4b | approval-context.test.ts, signing-request.test.ts |
+| EXT-9 CONNECT can return another account's address | Fixed | c19d20a | approval-security.test.ts |
+| EXT-10 `sign_message` takes any type and length (L7 residual) | Fixed: text of 1 byte to 8 KB | eb101c6 | approval-security.test.ts |
+| EXT-11 Connections are not scoped to a network | Fixed | 12d4e0a | approval-security.test.ts, approval-flood.test.ts |
+| EXT-12 Packaging ships a development build | Fixed | 724d448 | packaging.test.ts |
+| EXT-13 deploy.sh stages through fixed `/tmp` names | Fixed | 703a5af | deploy.test.ts |
+| EXT-14 Builds are not reproducible | Fixed: a release rebuilds byte for byte and `releases.json` names its commit. Residual: the Safari zip (Xcode output) is not reproducible | 35e87ea | packaging.test.ts, supply-chain.test.ts |
+| EXT-15 The RPC host is also a default dApp | Fixed in the extension: `services.divi.domains` is no longer a default site. Moving the RPC off the VPS that hosts the other trust roles is infrastructure work | 7eac1b5 | allowed-sites.test.ts |
+| EXT-16 Limits use the node's balance and default to nearly none | Fixed: a 25% daily limit by default, percentages of the highest balance seen | 6801549 | send-security.test.ts, settings-security.test.ts |
+| EXT-17 Hand-rolled secp256k1, no BIP32 vectors | Fixed: pinned `@noble/secp256k1`, `@scure/bip32`, `@scure/bip39`; BIP32/BIP39 vectors and fixtures from 0.0.4 wallets, whose addresses and signatures do not change | c2ae7b7 | vectors.test.ts, key-range.test.ts |
+| EXT-18 A site can open a look-alike approval window | Fixed: approval windows show the owner's security phrase | 153cbd3 | approval-context.test.ts, signing-request.test.ts |
+| EXT-19 The supply-chain test fails at HEAD | Fixed | a2cf867 | supply-chain.test.ts |
+| EXT-20 Firefox serves `provider.js` at a fixed per-install URL | Fixed: it is injected only on allowed sites | 36d3414 | site-scripts.test.ts, build-config.test.ts |
+| EXT-21 The content script wakes the worker on every page | Fixed: it runs only on allowed sites | 36d3414 | site-scripts.test.ts |
+| EXT-22 The faucet reply is not validated | Fixed | 7772ced | faucet.test.ts |
+| EXT-23 The unlock limiter can lock the owner out | Fixed: lockouts last at most 15 minutes, and new passwords need 12 characters or a strong passphrase | 26642da | rate-limit.test.ts, password-strength.test.ts, extension.spec.ts |
+| EXT-24 The approval window shows a made-up fee | Fixed | 813f128 | signing-request.test.ts |
+| EXT-25 Amounts pass through `Number` | Fixed: amounts are parsed to satoshis exactly | d760c16 | amounts.test.ts |
+| EXT-26 The decrypted phrase is copied into strings | Fixed: the unlocked seed is kept as bytes. Residual: the phrase string exists briefly at unlock | c0e8e58 | session-seed.test.ts, key-wipe.test.ts |
+| EXT-27 Coins spent in the mempool are offered again | Fixed. Residual: coins of a dropped transaction stay locked for up to 24 h | 0375e27 | pending-spends.test.ts |
+| EXT-28 In-page provider spoofing | Fixed: requests go over a private MessageChannel port. Residual: if the content script never runs, a page could take the port by sending `irondivi:ready` first; `window.irondivi` still shares the page's trust | 741e2b0 | provider-channel.test.ts, dapp-security.spec.ts |
+| EXT-29 The Divi Games SDK keeps a session key in `localStorage` | Fixed in `divi_games` (not this repository): 8bcd8aa keeps the session key in the tab's `sessionStorage` for one day and deletes the old `localStorage` entry; 89410d1 caps what a session key can stake at 5000 GOLD; the chain still refuses withdrawals signed by a session key | divi_games 8bcd8aa, 89410d1 | divi_games tests |
+| EXT-30 The test image is pinned by tag | Fixed: pinned by sha256 digest | 7825235 | supply-chain.test.ts |
+| EXT-31 The download page loads Google Fonts | Fixed: fonts are self-hosted and the CSP allows only the site. Residual: only the Latin subset is hosted | bbd9e8e | deploy.test.ts |
+
+Also changed in this round:
+- A coloured bar across the top of the popup and approval windows names the network (d862735, signing-request.test.ts).
+- The popup opens even when the browser cannot connect a port to the background (86c399e).
+- Until the store reviews are done, sites may use the wallet on testnet only. On mainnet a site can read the network, and nothing else; the owner can still use mainnet from the popup (de92354, testnet-only.test.ts).
+
+The four incomplete fixes are now complete:
+- **M1** by EXT-3: the scripts run only on allowed sites, and the records are sealed.
+- **L7** by EXT-10.
+- **L14** by EXT-19 and EXT-1. The release key's approval and the store listings are still pending.
+- **L15** by EXT-7.
+
+Residual risks that remain after these fixes:
+- **Rollback.** Someone who can write `storage.local` can put back an older encrypted blob together with its seal. Nothing on the machine records which version is current.
+- **First unlock after the upgrade.** The first unlock seals whatever records are stored at that moment, trusting them on first use.
+- **Deleting a secret.** Deleting the encrypted secret denies the owner the wallet until they restore it from the phrase. The spend ledger and cached balances are not sealed, so changing them only affects the limits shown, not what is signed.
+- **Safari and Firefox storage.** `storage.session` is visible to content scripts there. The wallet's scripts now run only on allowed sites.
+- **Addresses.** Every unlock derives the addresses again, and at most 1000 addresses per network are kept.
+- **Chinese phrases.** Some phrases are valid in both Chinese wordlists. Either one gives the same seed.
+- **Reconnecting.** Connections made before networks were recorded must be made again.
+- **The security phrase.** The approval windows show a security phrase, which is stored unencrypted: it only helps the owner spot a fake window.
+- **Releases.** `releases.json` is replaced at each release, so each release is tagged in git.
+- **Mainnet in the popup.** The testnet-only rule covers sites, not the popup.
 
 ## Findings
 
