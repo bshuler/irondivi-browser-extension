@@ -64,6 +64,8 @@ export interface Harness {
    * service worker: storage survives, the worker's memory does not.
    */
   restartWorker: () => Promise<void>;
+  /** Whether the running worker's signing session is open (for the account) */
+  isAuthenticated: (accountId?: string) => Promise<boolean>;
   /** Import TEST_MNEMONIC on testnet and unlock a signing session. Returns the account. */
   setupWallet: () => Promise<any>;
   /** Approve the connect request for this page from the approval window. */
@@ -326,6 +328,8 @@ export async function createHarness(
     storage: local,
     sessionStorage: session,
     restartWorker,
+    isAuthenticated: async (accountId?: string) =>
+      (await import('../background/signing-session')).signingSession.isAuthenticated(accountId),
     setupWallet: async () => {
       const r = await h.popup('IMPORT_ACCOUNT', { name: 'Test', mnemonic: TEST_MNEMONIC, password: TEST_PASSWORD, network: 'testnet' });
       if (!r?.success) throw new Error(`import failed: ${r?.error}`);

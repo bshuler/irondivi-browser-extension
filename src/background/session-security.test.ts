@@ -45,30 +45,55 @@ describe('M2 the unlocked wallet lives only in the background\'s memory', () => 
     expect(h.storage.installation_id).toBeUndefined();
   });
 
-  it('after the browser restarts the service worker, the popup cannot send without a new unlock', async () => {
-    const to = await foreignTestnetAddress();
-    expect((await h.popup('SEND_TRANSACTION', { to, amount: 1 })).success).toBe(true);
+  it('after the browser restarts the service worker, the phrase is gone from memory', async () => {
+    expect(await h.isAuthenticated(account.id)).toBe(true);
     await h.restartWorker();
-    const r = await h.popup('SEND_TRANSACTION', { to, amount: 1 });
-    expect(r.success).toBe(false);
-    expect(r.error).toMatch(/not authenticated/i);
-    expect(h.broadcasts).toHaveLength(1);
+    expect(await h.isAuthenticated(account.id)).toBe(false);
   });
 
   it('the session ends at its timeout even if the alarm never fires', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 6 * 60 * 1000); // default timeout is 5 minutes
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
-    expect(r.success).toBe(false);
-    expect(r.error).toMatch(/not authenticated/i);
+    expect(await h.isAuthenticated(account.id)).toBe(false);
   });
 
-  it('within the timeout the popup can still sign', async () => {
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
+  it('within the timeout the popup can still sign, with the password', async () => {
+    const r = await h.popup('SIGN_MESSAGE', { password: TEST_PASSWORD, message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(true);
     expect(r.data.signature).toBeTruthy();
   });
+});
 
+describe('EXT-2 every send and signature from the popup needs the password', () => {
+  it('a send without the password is refused while the session is open', async () => {
+    expect(await h.isAuthenticated(account.id)).toBe(true);
+    const r = await h.popup('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 1 });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/password/i);
+    expect(h.broadcasts).toHaveLength(0);
+  });
+
+  it('a send with a wrong password is refused and counts as a failed unlock', async () => {
+    const r = await h.popup('SEND_TRANSACTION', { password: 'wrong-password-1', to: await foreignTestnetAddress(), amount: 1 });
+    expect(r.success).toBe(false);
+    expect(h.broadcasts).toHaveLength(0);
+    expect(h.storage.rate_limit_state).toBeTruthy();
+  });
+
+  it('a signature without the password is refused while the session is open', async () => {
+    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/password/i);
+  });
+
+  it('the popup sends the password with each send, not a separate unlock', () => {
+    const src = readFileSync(new URL('../popup/send-ui.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/MSG\.AUTHENTICATE/);
+    expect(src).toMatch(/SEND_TRANSACTION, \{\s*password,/);
+  });
+});
+
+describe('M2 (code)', () => {
   it('the signing session has no code that stores or wraps the phrase', () => {
     const src = readFileSync(new URL('./signing-session.ts', import.meta.url), 'utf8');
     expect(src).not.toMatch(/wrapSessionKey|unwrapSessionKey|encryptWithKey|set\(\{\s*(signingSession|\[LEGACY)/);

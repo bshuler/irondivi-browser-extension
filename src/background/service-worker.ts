@@ -17,6 +17,17 @@ import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
+const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
+
+/**
+ * Unlock with the password given for one send or signature from the popup.
+ * The signing session stays open for the auto-lock time, but nothing that
+ * moves funds or signs uses it without the password (EXT-2).
+ */
+async function authenticateAction(accountId: string, password: unknown): Promise<boolean> {
+  if (typeof password !== 'string' || !password) return false;
+  return signingSession.authenticate(accountId, password);
+}
 
 // A wallet made by 0.0.1 on one network has no addresses on the other until
 // its owner unlocks it there once.
@@ -451,16 +462,14 @@ async function handleMessage(
           }
         }
 
-        // From the popup (no origin), after AUTHENTICATE - sign directly. The
-        // popup names the account, which must be the one the session unlocked,
-        // and the address and network come from that account
+        // From the popup (no origin). The popup names the account, and the
+        // address and network come from that account. Every signature needs
+        // the password, so an open session alone signs nothing
         const account = typeof payload?.accountId === 'string'
           ? await accountManager.getAccount(payload.accountId)
           : null;
         if (!account) return { success: false, error: 'Name the account to sign with' };
-        if (!(await signingSession.isAuthenticated(account.id))) {
-          return { success: false, error: 'Not authenticated for this account - please enter password' };
-        }
+        if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
         if (account.addresses.length === 0) return noAddressesOn(account);
         const signer = resolveAddress(account, payload.address, payload.addressIndex);
         const signature = await signingSession.signMessage(payload.message, signer.index, account.network);
@@ -537,7 +546,9 @@ async function handleMessage(
           }
         }
 
-        // From the popup, after AUTHENTICATE
+        // From the popup: every send needs the password, so an open session
+        // alone sends nothing
+        if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
         const sent = await sendFromAccount(account, request);
         return { success: true, data: sent };
       }

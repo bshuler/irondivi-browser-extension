@@ -23,7 +23,7 @@ beforeEach(async () => {
   expect((await h.popup('AUTHENTICATE', { accountId: a.id, password: TEST_PASSWORD })).success).toBe(true);
 });
 
-const sign = (payload: Record<string, unknown>) => h.popup('SIGN_MESSAGE', { message: 'hello', ...payload });
+const sign = (payload: Record<string, unknown>) => h.popup('SIGN_MESSAGE', { password: TEST_PASSWORD, message: 'hello', ...payload });
 
 describe('L15 the popup names the account that signs', () => {
   it('signs with the unlocked account it names, from that account\'s address', async () => {
@@ -41,15 +41,8 @@ describe('L15 the popup names the account that signs', () => {
     });
   }
 
-  it('an account other than the unlocked one is refused', async () => {
-    const r = await sign({ accountId: b.id });
-    expect(r.success).toBe(false);
-    expect(r.error).toMatch(/not authenticated for this account/i);
-  });
-
-  it('after unlocking the other account, the first is refused', async () => {
-    expect((await h.popup('AUTHENTICATE', { accountId: b.id, password: TEST_PASSWORD })).success).toBe(true);
-    expect((await sign({ accountId: a.id })).success).toBe(false);
+  it('another account signs only with its own password', async () => {
+    expect((await sign({ accountId: b.id, password: 'not-b-password' })).success).toBe(false);
     const r = await sign({ accountId: b.id });
     expect(r.success).toBe(true);
     expect(r.data.address).toBe(b.addresses[0].address);

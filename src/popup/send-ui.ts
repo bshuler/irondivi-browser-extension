@@ -172,11 +172,9 @@ async function sendTransaction(password: string): Promise<void> {
   try {
     showLoading('Sending transaction...');
 
-    // First authenticate
-    await sendMessage(MSG.AUTHENTICATE, { accountId: state.currentAccount?.id, password });
-
-    // Then send transaction
+    // The password goes with the send: the background asks for it every time
     const response = await sendMessage<{ txid: string }>(MSG.SEND_TRANSACTION, {
+      password,
       to: toAddress,
       amount: state.pendingSendTx.amount,
       fee: state.pendingSendTx.fee,

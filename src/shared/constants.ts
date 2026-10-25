@@ -144,8 +144,10 @@ export interface GenerateNewAddressPayload { accountId: string; password: string
 export interface AuthenticatePayload { accountId: string; password: string }
 export interface SignMessagePayload {
   message: string;
-  // From the popup: the account to sign with, which must be the unlocked one
+  // From the popup: the account to sign with, and its password, which every
+  // signature needs
   accountId?: string;
+  password?: string;
   address?: string;
   addressIndex?: number;
 }
@@ -160,6 +162,8 @@ export interface SendTransactionPayload {
   fee?: number;
   fromAddresses?: string[];
   opReturn?: string;
+  // From the popup: the password, which every send needs
+  password?: string;
 }
 
 // Faucet

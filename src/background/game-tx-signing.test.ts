@@ -13,7 +13,7 @@ vi.setConfig({ testTimeout: 30000 });
 
 let h: Harness;
 
-beforeEach(() => vi.resetModules());
+beforeEach(() => { vi.resetModules(); });
 
 function txBody(from: string, action: Record<string, unknown>): string {
   return JSON.stringify({ v: 1, chain: 'divi-games-testnet-1', from, nonce: 0, action });

@@ -67,7 +67,7 @@ describe('transactions show before they are mined', () => {
 
   it('a send from the popup shows at once as pending', async () => {
     const to = await foreignTestnetAddress();
-    const r = await h.popup('SEND_TRANSACTION', { to, amount: 1 });
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 1 });
     expect(r?.success).toBe(true);
     const txid = 'ab'.repeat(32);
     h.rawTxs[txid] = { txid, confirmations: 0, vin: [{ address: ours, value: 1000 }], vout: [{ value: 1, scriptPubKey: { addresses: [to] } }] };

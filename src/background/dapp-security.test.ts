@@ -148,7 +148,7 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
   it('the popup\'s own send still works after AUTHENTICATE', async () => {
     h = await createHarness();
     await h.setupWallet();
-    const r = await h.popup('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 1 });
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 1 });
     expect(r.success).toBe(true);
     expect(h.broadcasts).toHaveLength(1);
   });
@@ -279,11 +279,11 @@ describe('#8 sends below the dust threshold are refused', () => {
     h = await createHarness();
     await h.setupWallet();
     const to = await foreignTestnetAddress();
-    const low = await h.popup('SEND_TRANSACTION', { to, amount: 0.0000545 });
+    const low = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 0.0000545 });
     expect(low.success).toBe(false);
     expect(low.error).toMatch(/dust/i);
     expect(h.broadcasts).toHaveLength(0);
-    const ok = await h.popup('SEND_TRANSACTION', { to, amount: 0.0000546 });
+    const ok = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 0.0000546 });
     expect(ok.success).toBe(true);
     expect(h.broadcasts).toHaveLength(1);
   });

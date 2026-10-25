@@ -67,7 +67,7 @@ function expectAllWiped() {
 describe('L3 every key and seed is wiped after use', () => {
   it('sending a payment', async () => {
     const to = await foreignTestnetAddress();
-    const r = await h.popup('SEND_TRANSACTION', { to, amount: 1 });
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 1 });
     expect(r.success).toBe(true);
     // Master, the four hardened and normal steps, and the input key
     expect(keys.length).toBeGreaterThanOrEqual(6);
@@ -78,13 +78,13 @@ describe('L3 every key and seed is wiped after use', () => {
     const to = await foreignTestnetAddress();
     const { walletCore } = await import('./wallet-core');
     vi.spyOn(walletCore, 'signTransaction').mockRejectedValue(new Error('boom'));
-    const r = await h.popup('SEND_TRANSACTION', { to, amount: 1 });
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 1 });
     expect(r.success).toBe(false);
     expectAllWiped();
   });
 
   it('signing a message', async () => {
-    const r = await h.popup('SIGN_MESSAGE', { message: 'hello', accountId: account.id, addressIndex: 0 });
+    const r = await h.popup('SIGN_MESSAGE', { password: TEST_PASSWORD, message: 'hello', accountId: account.id, addressIndex: 0 });
     expect(r.success).toBe(true);
     expectAllWiped();
   });
