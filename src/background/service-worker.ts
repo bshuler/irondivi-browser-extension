@@ -627,6 +627,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           payload.accountId,
           payload.password
         );
+        // Swaps left open by a closed browser go on from here: the browser may
+        // have dropped the tick alarm, and a locked wallet could not tick anyway
+        if (authenticated) void swapTick();
         return { success: authenticated, error: authenticated ? undefined : 'Invalid password' };
 
       case MSG.SIGN_MESSAGE: {
@@ -1170,10 +1173,14 @@ alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
     // The browser stopped the worker: the pairings' long polls start again
     await connectRelay.resume();
   } else if (alarm.name === SWAP_TICK_ALARM) {
-    // Message only: an engine error may quote a transaction, never a key
-    await swapService.tick().catch((e: unknown) => console.warn('swap tick:', e instanceof Error ? e.message : e));
+    await swapTick();
   }
 });
+
+function swapTick(): Promise<unknown> {
+  // Message only: an engine error may quote a transaction, never a key
+  return swapService.tick().catch((e: unknown) => console.warn('swap tick:', e instanceof Error ? e.message : e));
+}
 
 // The wallet's open windows. The phrase stays in memory only while one is
 // open: closing the last popup or approval window locks the wallet.
