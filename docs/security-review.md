@@ -77,7 +77,7 @@ A second adversarial review of `main` at `4d84d32` found no Critical or High iss
 
 | Finding | Status | Commit | Tests |
 |---|---|---|---|
-| EXT-1 Install path turns off browser integrity checks; checksums unsigned | Fixed in code: `scripts/sign-release.sh` signs `SHA256SUMS-v<version>` through the 1Password SSH agent, so the key never touches disk; `scripts/verify-release.sh` checks the signature and every package; `deploy.sh` refuses an unsigned release and publishes the `.sig`; the page no longer tells Firefox users to turn off `xpinstall.signatures.required`. The release key itself and its published fingerprint wait for the owner's 1Password approval, and store listings (signed, auto-updating installs) need the owner's store accounts | d8ecd67 | release-signing.test.ts |
+| EXT-1 Install path turns off browser integrity checks; checksums unsigned | Fixed in code: `scripts/sign-release.sh` signs `SHA256SUMS-v<version>` through the 1Password SSH agent, so the key never touches disk; `scripts/verify-release.sh` checks the signature and every package; `deploy.sh` refuses an unsigned release and publishes the `.sig`; the page no longer tells Firefox users to turn off `xpinstall.signatures.required`. The release key is an Ed25519 SSH key made in 1Password (item `irondivi_release_signing_ssh`, never on vps1, never on disk); its public key and `allowed_signers` are in `site/release-signing/`, and the README and the page publish its fingerprint `SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ`, pointing at the repository so the site cannot vouch for itself. Pending: the 1Password SSH agent must be told to serve the key before the first signed release, and store listings (signed, auto-updating installs) need the owner's store accounts | d8ecd67, 34b7238 | release-signing.test.ts |
 | EXT-2 Sends and signatures need no password inside the auto-lock window | Fixed: every send and signature carries the password; the wallet locks when its last window closes and when the screen locks | 593fedc, 7654b11 | session-security.test.ts, send-security.test.ts, sign-message-account.test.ts, injection-security.test.ts |
 | EXT-3 M1 works only on Chromium 140+; unencrypted records can be changed | Fixed: the wallet's scripts run only on allowed sites, and accounts, settings, connections and contacts are sealed with an HMAC key kept inside the encrypted secret; changes made outside the wallet are undone on unlock, and a failed `setAccessLevel` is reported | 36d3414, 7edb478 | site-scripts.test.ts, records-seal.test.ts, unlock-retry.test.ts |
 | EXT-4 `signMessage` is the Divi Games spend key but shown as plain text | Fixed: `signGameTx` shows a game transaction as a transaction (kind, recipient, amount, token), only for the Divi Games origin, and `signMessage` refuses text that parses as one | e68435e | game-tx-signing.test.ts, game-tx.test.ts |
@@ -91,13 +91,13 @@ A second adversarial review of `main` at `4d84d32` found no Critical or High iss
 | EXT-12 Packaging ships a development build | Fixed | 724d448 | packaging.test.ts |
 | EXT-13 deploy.sh stages through fixed `/tmp` names | Fixed | 703a5af | deploy.test.ts |
 | EXT-14 Builds are not reproducible | Fixed: a release rebuilds byte for byte and `releases.json` names its commit. Residual: the Safari zip (Xcode output) is not reproducible | 35e87ea | packaging.test.ts, supply-chain.test.ts |
-| EXT-15 The RPC host is also a default dApp | Fixed in the extension: `services.divi.domains` is no longer a default site. Moving the RPC off the VPS that hosts the other trust roles is infrastructure work | 7eac1b5 | allowed-sites.test.ts |
+| EXT-15 The RPC host is also a default dApp | Reopened by the 0.0.5 default list, which the owner set and which includes `https://services.divi.domains` again (as an exact origin). 7eac1b5 had removed it. Moving the RPC off the VPS that hosts the other trust roles is infrastructure work | 7eac1b5 | allowed-sites.test.ts |
 | EXT-16 Limits use the node's balance and default to nearly none | Fixed: a 25% daily limit by default, percentages of the highest balance seen | 6801549 | send-security.test.ts, settings-security.test.ts |
 | EXT-17 Hand-rolled secp256k1, no BIP32 vectors | Fixed: pinned `@noble/secp256k1`, `@scure/bip32`, `@scure/bip39`; BIP32/BIP39 vectors and fixtures from 0.0.4 wallets, whose addresses and signatures do not change | c2ae7b7 | vectors.test.ts, key-range.test.ts |
 | EXT-18 A site can open a look-alike approval window | Fixed: approval windows show the owner's security phrase | 153cbd3 | approval-context.test.ts, signing-request.test.ts |
 | EXT-19 The supply-chain test fails at HEAD | Fixed | a2cf867 | supply-chain.test.ts |
-| EXT-20 Firefox serves `provider.js` at a fixed per-install URL | Fixed: it is injected only on allowed sites | 36d3414 | site-scripts.test.ts, build-config.test.ts |
-| EXT-21 The content script wakes the worker on every page | Fixed: it runs only on allowed sites | 36d3414 | site-scripts.test.ts |
+| EXT-20 Firefox serves `provider.js` at a fixed per-install URL | Fixed in 36d3414 (injected only on allowed sites), then reopened by design in 2db4815: so that any site can ask with `requestAccess`, the scripts run on every https page again, and a page on Firefox can again tell that the wallet is installed | 36d3414, 2db4815 | site-scripts.test.ts, build-config.test.ts |
+| EXT-21 The content script wakes the worker on every page | Fixed in 36d3414, then reopened by design in 2db4815: the content script runs on every https page and asks the background `SITE_ALLOWED` once per page. The background answers a page that is not allowed only with its access status | 36d3414, 2db4815 | site-scripts.test.ts |
 | EXT-22 The faucet reply is not validated | Fixed | 7772ced | faucet.test.ts |
 | EXT-23 The unlock limiter can lock the owner out | Fixed: lockouts last at most 15 minutes, and new passwords need 12 characters or a strong passphrase | 26642da | rate-limit.test.ts, password-strength.test.ts, extension.spec.ts |
 | EXT-24 The approval window shows a made-up fee | Fixed | 813f128 | signing-request.test.ts |
@@ -112,10 +112,14 @@ A second adversarial review of `main` at `4d84d32` found no Critical or High iss
 Also changed in this round:
 - A coloured bar across the top of the popup and approval windows names the network (d862735, signing-request.test.ts).
 - The popup opens even when the browser cannot connect a port to the background (86c399e).
-- Until the store reviews are done, sites may use the wallet on testnet only. On mainnet a site can read the network, and nothing else; the owner can still use mainnet from the popup (de92354, testnet-only.test.ts).
+- ~~Until the store reviews are done, sites may use the wallet on testnet only~~ (de92354). Replaced by site access in 0.0.5 (2db4815, site-access.test.ts):
+  - A compiled default list of exact https origins (`site-access/default-sites.json`), the same on both networks; no wildcards, subdomains, other ports or http.
+  - Any other site sees `window.irondivi` but gets only its access status (`getAccessStatus`) or code 4300 until it asks with `requestAccess({reason})` and the owner chooses Allow, Not now (no new window for 24 hours) or Never, per network. The reason is shown cut to 200 characters; one request per origin is open at a time.
+  - A compiled denylist (`site-access/blocked-sites.json`) and the owner's own blocks override everything, give code 4301 and never open a window. Revoking or blocking a site drops its connection and any open request.
+  - Only the popup and the approval window may change site access. The choices are in the settings, which the records seal covers. Allowed sites from 0.0.4 are carried over; wildcard patterns cannot be and the owner is told.
 
 The four incomplete fixes are now complete:
-- **M1** by EXT-3: the scripts run only on allowed sites, and the records are sealed.
+- **M1** by EXT-3: the records are sealed, and on Chromium 140+ content scripts cannot read local storage. Since 0.0.5 the scripts run on every https page again (site access), so on Firefox and Safari, and older Chromium, the seal is what protects the records, not where the scripts run.
 - **L7** by EXT-10.
 - **L14** by EXT-19 and EXT-1. The release key's approval and the store listings are still pending.
 - **L15** by EXT-7.
@@ -130,7 +134,14 @@ Residual risks that remain after these fixes:
 - **Reconnecting.** Connections made before networks were recorded must be made again.
 - **The security phrase.** The approval windows show a security phrase, which is stored unencrypted: it only helps the owner spot a fake window.
 - **Releases.** `releases.json` is replaced at each release, so each release is tagged in git.
-- **Mainnet in the popup.** The testnet-only rule covers sites, not the popup.
+- **Site access (0.0.5), points for the owner to weigh:**
+  - The scripts run on every https page, so every page can tell the wallet is installed and the browser shows a broader "read and change data on all websites" warning at install. This reopens EXT-20 and EXT-21 by design.
+  - The default sites are always in the scripts' match patterns, so they work even when the owner withholds all-sites access in the browser.
+  - `services.divi.domains`, the RPC host, is a default site (EXT-15).
+  - A closed approval window, a timeout or the wallet locking counts as Not now, so the site cannot ask again for 24 hours.
+  - A second `requestAccess` while one is open fails with -32603 rather than a specific code.
+  - Unblocking a site from the settings needs no password, while sends and signatures do.
+  - `sendTransaction` memos up to 512 bytes go in one OP_RETURN output; most nodes relay at most 80 bytes of OP_RETURN data by default, so a longer memo may not relay.
 
 ## Findings
 
