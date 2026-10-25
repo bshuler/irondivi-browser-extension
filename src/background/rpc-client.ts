@@ -414,11 +414,31 @@ export class RPCClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address }),
       });
-      return response.json();
+      return checkFaucetReply(await response.json());
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
+}
+
+const FAUCET_BAD_REPLY = { success: false, error: 'The faucet sent an unexpected answer' };
+
+/**
+ * Keep only what a faucet reply may hold: the popup shows its error and the
+ * wallet tracks its txid, so a faulty or hostile faucet must not hand either
+ * anything else
+ */
+export function checkFaucetReply(reply: unknown): { success: boolean; txid?: string; error?: string } {
+  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) return FAUCET_BAD_REPLY;
+  const { success, txid, error } = reply as Record<string, unknown>;
+  if (typeof success !== 'boolean') return FAUCET_BAD_REPLY;
+  if (success) {
+    if (typeof txid !== 'string' || !/^[0-9a-f]{64}$/i.test(txid)) return FAUCET_BAD_REPLY;
+    return { success: true, txid: txid.toLowerCase() };
+  }
+  if (error === undefined) return { success: false, error: 'The faucet could not send coins' };
+  if (typeof error !== 'string' || error.length > 200) return FAUCET_BAD_REPLY;
+  return { success: false, error };
 }
 
 // Singleton instance
