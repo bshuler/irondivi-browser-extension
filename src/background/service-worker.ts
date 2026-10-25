@@ -10,7 +10,7 @@ import { Transaction, bytesToHex } from '../lib/transaction';
 import { recordSpend, spentToday } from './spend-ledger';
 import { highWaterBalance, recordBalance } from './balance-record';
 import { rpcClient } from './rpc-client';
-import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
+import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePendingTxs } from './pending-txs';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
@@ -76,14 +76,26 @@ function diviText(sats: bigint): string {
  */
 async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction & { balanceSats: bigint }> {
   const addresses = account.addresses.map(a => a.address);
-  const utxos = await rpcClient.getUtxos(addresses);
+  // The node lists a coin as unspent until the send that spends it is mined,
+  // so coins this wallet already spent are left out (EXT-27)
+  const pendingSpends = await getPendingSpends(account.network);
+  const listed = await rpcClient.getUtxos(addresses);
+  const utxos = listed.filter(u => !pendingSpends.has(outpoint(u)));
 
-  const built = walletCore.buildTransaction(utxos, account.addresses, {
-    to: request.to,
-    amount: request.amount,
-    fee: request.fee,
-    fromAddresses: request.fromAddresses,
-  }, account.network);
+  let built: BuiltTransaction;
+  try {
+    built = walletCore.buildTransaction(utxos, account.addresses, {
+      to: request.to,
+      amount: request.amount,
+      fee: request.fee,
+      fromAddresses: request.fromAddresses,
+    }, account.network);
+  } catch (error) {
+    if (utxos.length < listed.length && error instanceof Error && /^Insufficient funds/.test(error.message)) {
+      throw new Error(`${error.message}. Some coins are held by an earlier send until it confirms`);
+    }
+    throw error;
+  }
 
   const limits = (await getSettings()).transactionLimits;
   const spend = built.amountSats + built.feeSats;
@@ -323,7 +335,7 @@ async function sendFromAccount(
     });
     const txid = await rpcClient.broadcastTransaction(signedHex);
     await recordSpend(account.id, account.network, built.amountSats + built.feeSats);
-    await addPendingTx(account.network, txid);
+    await addPendingTx(account.network, txid, built.inputs);
     return { txid, fee: built.fee };
   } finally {
     secureWipe(seed);

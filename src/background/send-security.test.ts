@@ -131,6 +131,8 @@ describe('H3 transaction limits', () => {
 
   it('the daily absolute limit counts earlier sends', async () => {
     await setLimits(h, { dailyLimitAbsolute: 3 });
+    // A second coin, so the second send is not refused for reusing the first (EXT-27)
+    h.fund(h.utxos[0].address, 1000 * 1e8);
     const to = await foreignTestnetAddress();
     const first = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 2 });
     expect(first.success).toBe(true);
@@ -192,7 +194,11 @@ describe('EXT-16 limits that a node cannot switch off', () => {
 
   it('the daily default stops the fourth send of just under 10%', async () => {
     // The fake node does not take spent coins away, so the balance stays at
-    // 1000 and the day's share is spent / (balance + spent)
+    // 1000 and the day's share is spent / (balance + spent). The 1000 is in
+    // ten coins, since a coin a pending send spent is not used again (EXT-27)
+    const own = h.utxos[0].address;
+    h.utxos.length = 0;
+    for (let i = 0; i < 10; i++) h.fund(own, 100 * 1e8);
     const to = await foreignTestnetAddress();
     for (let i = 0; i < 3; i++) {
       expect((await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 95 })).success).toBe(true);

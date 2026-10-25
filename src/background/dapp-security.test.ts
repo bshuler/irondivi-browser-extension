@@ -4,6 +4,7 @@ import { Mnemonic } from '../lib/mnemonic';
 import { HDKey } from '../lib/hdkey';
 import { Signer } from '../lib/signer';
 import { deriveAddresses } from '../lib/derivation';
+import { Transaction } from '../lib/transaction';
 
 // A testnet destination that the wallet does not own (other account of the test mnemonic).
 async function foreignTestnetAddress(): Promise<string> {
@@ -104,8 +105,8 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
 
     const ok = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
     expect(ok.success).toBe(true);
-    await expect(sent).resolves.toBe('ab'.repeat(32));
     expect(h.broadcasts).toHaveLength(1);
+    await expect(sent).resolves.toBe(Transaction.fromHex(h.broadcasts[0]).txid());
   });
 
   it('a rejected send is not broadcast', async () => {

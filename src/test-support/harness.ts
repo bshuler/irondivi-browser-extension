@@ -276,7 +276,7 @@ export async function createHarness(
       }
       case 'sendrawtransaction':
         broadcasts.push(params[0]);
-        result = 'ab'.repeat(32);
+        result = Transaction.fromHex(params[0]).txid();
         break;
       case 'validateaddress': result = { isvalid: true }; break;
       case 'getaddresstxids': result = [...addressTxids]; break;

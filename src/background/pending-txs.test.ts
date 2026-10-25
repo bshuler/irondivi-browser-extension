@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHarness, TEST_MNEMONIC, TEST_PASSWORD, type Harness } from '../test-support/harness';
 import { Mnemonic } from '../lib/mnemonic';
 import { deriveAddresses } from '../lib/derivation';
+import { Transaction } from '../lib/transaction';
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -69,7 +70,7 @@ describe('transactions show before they are mined', () => {
     const to = await foreignTestnetAddress();
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 1 });
     expect(r?.success).toBe(true);
-    const txid = 'ab'.repeat(32);
+    const txid = Transaction.fromHex(h.broadcasts[0]).txid();
     h.rawTxs[txid] = { txid, confirmations: 0, vin: [{ address: ours, value: 1000 }], vout: [{ value: 1, scriptPubKey: { addresses: [to] } }] };
 
     const [first] = await history();
