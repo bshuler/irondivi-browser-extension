@@ -137,6 +137,72 @@ export async function decryptWithPassword(
   }
 }
 
+// A version 3 vault is bound to its label: the label is the AES-GCM
+// additional data, so rewriting "3" to "2" makes the vault fail to open
+// under that label instead of quietly reading as an older one.
+const VAULT_V3_AAD = new TextEncoder().encode('IronDivi vault v3');
+
+const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const unb64 = (text: string) => Uint8Array.from(atob(text), c => c.charCodeAt(0));
+
+/** Encrypt as a version 3 vault: 600K iterations, label-bound */
+export async function encryptVault(data: string, password: string): Promise<{
+  encrypted: string;
+  iv: string;
+  salt: string;
+  version: number;
+}> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: VAULT_V3_AAD },
+    key,
+    new TextEncoder().encode(data)
+  );
+  return { encrypted: b64(new Uint8Array(encrypted)), iv: b64(iv), salt: b64(salt), version: 3 };
+}
+
+/**
+ * Open a vault of any version. `version` is the version the vault really is,
+ * found by which way it opens; `relabeled` says its stored label was changed
+ * (a version 3 vault labelled older, or the reverse).
+ */
+export async function decryptVault(
+  vault: { encrypted: string; iv: string; salt: string; version?: number },
+  password: string
+): Promise<{ plaintext: string; version: number; relabeled: boolean }> {
+  const label = vault.version ?? 1;
+  const encrypted = unb64(vault.encrypted);
+  const iv = unb64(vault.iv);
+  const salt = unb64(vault.salt);
+  const keys = new Map<number, Promise<CryptoKey>>();
+  const keyFor = (iterations: number) => {
+    if (!keys.has(iterations)) keys.set(iterations, deriveKey(password, salt, iterations));
+    return keys.get(iterations)!;
+  };
+  // Each real version, its iterations and whether it is label-bound
+  const ways = [
+    { version: 3, iterations: PBKDF2_ITERATIONS, aad: true },
+    { version: 2, iterations: PBKDF2_ITERATIONS, aad: false },
+    { version: 1, iterations: PBKDF2_ITERATIONS_LEGACY, aad: false },
+  ];
+  const labelled = label >= 3 ? 3 : label >= 2 ? 2 : 1;
+  // The labelled way first: with the right password and an untouched label
+  // it is the only one tried
+  ways.sort((a, b) => Number(b.version === labelled) - Number(a.version === labelled));
+  for (const way of ways) {
+    try {
+      const params: AesGcmParams = way.aad ? { name: 'AES-GCM', iv, additionalData: VAULT_V3_AAD } : { name: 'AES-GCM', iv };
+      const decrypted = await crypto.subtle.decrypt(params, await keyFor(way.iterations), encrypted);
+      return { plaintext: new TextDecoder().decode(decrypted), version: way.version, relabeled: way.version !== labelled };
+    } catch {
+      // Try the next way
+    }
+  }
+  throw new Error('Decryption failed - incorrect password');
+}
+
 // Generate UUID v4
 export function generateId(): string {
   return crypto.randomUUID();

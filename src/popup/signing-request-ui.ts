@@ -8,6 +8,7 @@
 import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constants';
 import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
 import { visibleText } from './visible-text';
+import { retryAfterUnlock } from './unlock-retry';
 import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
 
 // Type for a pending request (connection, signing, or transaction)
@@ -271,13 +272,14 @@ async function handleApprove(): Promise<void> {
     showLoading('Connecting...');
 
     try {
-      const response = await sendMessage({
+      const request = currentRequest;
+      const response = await retryAfterUnlock(() => sendMessage({
         type: MSG.APPROVE_SIGNING_REQUEST,
         payload: {
-          requestId: currentRequest.id,
+          requestId: request.id,
           isConnection: true,
         },
-      });
+      }), request.accountId);
       if (!response?.success) throw new Error(response?.error || 'Failed to connect');
 
       hideLoading();

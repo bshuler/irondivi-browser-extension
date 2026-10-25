@@ -24,7 +24,7 @@ function isLimit(v: unknown, percent: boolean): v is number {
 }
 
 // 0 means no limit, so the loosest value; otherwise a bigger number is looser
-function looser(next: number, current: number): boolean {
+export function looser(next: number, current: number): boolean {
   if (next === current) return false;
   if (next === 0) return true;
   return current !== 0 && next > current;

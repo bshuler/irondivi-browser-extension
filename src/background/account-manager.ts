@@ -1,4 +1,4 @@
-import { generateId, secureWipe } from '../shared/crypto-utils';
+import { generateId } from '../shared/crypto-utils';
 import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-strength';
 import {
   getAccounts, saveAccounts,
@@ -10,48 +10,10 @@ import { Mnemonic, type WordlistLanguage } from '../lib/mnemonic';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 import { deriveAddresses } from '../lib/derivation';
 import { unlockSecret } from './unlock-limit';
-
-// Run fn with the seed for a phrase, then wipe the seed
-async function withSeed<T>(mnemonic: string, fn: (seed: Uint8Array) => Promise<T>): Promise<T> {
-  const seed = await Mnemonic.toSeed(mnemonic);
-  try {
-    return await fn(seed);
-  } finally {
-    secureWipe(seed);
-  }
-}
+import { withSeed, addressesOn, setAddressesOn, viewOn } from '../shared/account-addresses';
+import { recordsKeyForNewAccount, forgetRecordsIfEmpty } from './records-seal';
 
 const GAP_LIMIT = 20;
-
-/**
- * An account's addresses on a network. A 0.0.1 account only has addresses
- * for the network it was created on; on any other it has none yet.
- */
-function addressesOn(account: Account, network: NetworkType): NetworkAddresses {
-  const entry = account.networks?.[network];
-  if (entry) return entry;
-  if (account.network === network) {
-    return { addresses: account.addresses, addressIndex: account.addressIndex };
-  }
-  return { addresses: [], addressIndex: 0 };
-}
-
-function setAddressesOn(account: Account, network: NetworkType, entry: NetworkAddresses): void {
-  account.networks = { ...account.networks, [network]: entry };
-  if (account.network === network) {
-    account.addresses = entry.addresses;
-    account.addressIndex = entry.addressIndex;
-  }
-}
-
-/**
- * The account as seen on one network: `network`, `addresses` and
- * `addressIndex` are that network's. Never save a view back to storage.
- */
-function viewOn(account: Account, network: NetworkType): Account {
-  const { addresses, addressIndex } = addressesOn(account, network);
-  return { ...account, network, addresses, addressIndex };
-}
 
 async function currentNetwork(): Promise<NetworkType> {
   return (await getSettings()).network;
@@ -122,13 +84,22 @@ export class AccountManager {
       networks,
     };
 
+    // The key that seals the records goes into the new secret too. Asked
+    // for first: it throws if the wallet must be unlocked before adding one.
+    const recordsKey = await recordsKeyForNewAccount(id);
+
+    // Save mnemonic (encrypted with password)
+    await saveSecret(id, mnemonic, password, recordsKey);
+
     // Save account metadata (unencrypted)
     const accounts = await getAccounts();
     accounts.push(account);
-    await saveAccounts(accounts);
-
-    // Save mnemonic (encrypted with password)
-    await saveSecret(id, mnemonic, password);
+    try {
+      await saveAccounts(accounts);
+    } catch (error) {
+      await deleteSecret(id);
+      throw error;
+    }
 
     // Select this account if it's the first one
     if (accounts.length === 1) {
@@ -152,6 +123,7 @@ export class AccountManager {
 
     // Remove encrypted secret
     await deleteSecret(accountId);
+    await forgetRecordsIfEmpty();
 
     // If this was selected account, select another
     const selectedId = await getSelectedAccountId();
@@ -204,12 +176,13 @@ export class AccountManager {
    */
   async setUpNetwork(accountId: string, password: string): Promise<Account> {
     const network = await currentNetwork();
+    // Unlocked before the records are read: unlocking may repair them
+    const mnemonic = await unlockSecret(accountId, password);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
 
     if (addressesOn(account, network).addresses.length === 0) {
-      const mnemonic = await unlockSecret(accountId, password);
       setAddressesOn(account, network, {
         addresses: await withSeed(mnemonic, seed => deriveAddresses(seed, network, 0, 1)),
         addressIndex: 1,
@@ -245,13 +218,14 @@ export class AccountManager {
     password: string,
     checkHasTransactions: (address: string) => Promise<boolean>
   ): Promise<AccountAddress[]> {
+    // Unlocked before the records are read: unlocking may repair them
+    const mnemonic = await unlockSecret(accountId, password);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
 
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
-    const mnemonic = await unlockSecret(accountId, password);
     let emptyCount = 0;
     let currentIndex = entry.addressIndex;
     const newAddresses: AccountAddress[] = [];
@@ -284,13 +258,14 @@ export class AccountManager {
    * Add a new receiving address on the current network
    */
   async generateNewAddress(accountId: string, password: string): Promise<AccountAddress> {
+    // Unlocked before the records are read: unlocking may repair them
+    const mnemonic = await unlockSecret(accountId, password);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
 
     const network = await currentNetwork();
     const entry = addressesOn(account, network);
-    const mnemonic = await unlockSecret(accountId, password);
     const [newAddr] = await withSeed(mnemonic, seed => deriveAddresses(seed, network, entry.addressIndex, 1));
 
     setAddressesOn(account, network, {

@@ -80,6 +80,22 @@ export function updateContactList(filter = ''): void {
     addressEl.textContent = contact.address;
     mainArea.appendChild(nameEl);
     mainArea.appendChild(addressEl);
+    if (contact.unverified) {
+      // The wallet found its records changed outside it: this address may
+      // not be the one the owner saved
+      const flag = document.createElement('div');
+      flag.className = 'contact-unverified';
+      flag.textContent = 'Unverified: check this address with its owner before sending to it';
+      const checkedBtn = document.createElement('button');
+      checkedBtn.className = 'link-btn';
+      checkedBtn.textContent = 'I checked it';
+      checkedBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        markContactChecked(contact.id);
+      });
+      flag.appendChild(checkedBtn);
+      mainArea.appendChild(flag);
+    }
     mainArea.addEventListener('click', () => {
       const sendToInput = document.getElementById('send-to') as HTMLInputElement;
       sendToInput.value = contact.address;
@@ -124,6 +140,18 @@ export function updateContactList(filter = ''): void {
 // ============================================================
 // Contact Actions
 // ============================================================
+
+/**
+ * Clear the unverified mark once the owner has checked the address
+ */
+async function markContactChecked(contactId: string): Promise<void> {
+  try {
+    await sendMessage(MSG.UPDATE_CONTACT, { contactId, updates: { checked: true } });
+    await loadContacts();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'Failed to update contact', 'error');
+  }
+}
 
 /**
  * Add a new contact

@@ -78,6 +78,9 @@ export const MSG = {
   GET_SETTINGS: 'GET_SETTINGS',
   GET_NETWORK: 'GET_NETWORK',
   UPDATE_SETTINGS: 'UPDATE_SETTINGS',
+  // The notice left when the records were found changed outside the wallet
+  GET_RECORDS_WARNING: 'GET_RECORDS_WARNING',
+  DISMISS_RECORDS_WARNING: 'DISMISS_RECORDS_WARNING',
 
   // dApp connection
   CONNECT: 'CONNECT',
@@ -184,7 +187,8 @@ export interface AddContactPayload {
 }
 export interface UpdateContactPayload {
   contactId: string;
-  updates?: Partial<{ name: string; notes: string }>;
+  // checked: the owner has checked an address the records seal marked unverified
+  updates?: Partial<{ name: string; notes: string; checked: boolean }>;
   // Legacy flat format (backward compat)
   id?: string;
   name?: string;
@@ -246,6 +250,8 @@ export type WalletMessage =
   | { type: typeof MSG.VALIDATE_ADDRESS; payload: ValidateAddressPayload }
   | { type: typeof MSG.GET_SETTINGS; payload?: GetSettingsPayload }
   | { type: typeof MSG.UPDATE_SETTINGS; payload: UpdateSettingsPayload }
+  | { type: typeof MSG.GET_RECORDS_WARNING; payload?: undefined }
+  | { type: typeof MSG.DISMISS_RECORDS_WARNING; payload?: undefined }
   | { type: typeof MSG.CONNECT; payload?: ConnectPayload }
   | { type: typeof MSG.DISCONNECT; payload?: DisconnectPayload }
   | { type: typeof MSG.IS_CONNECTED; payload?: IsConnectedPayload }
@@ -258,6 +264,10 @@ export type WalletMessage =
 // ============================================================
 // Generic response wrapper
 // ============================================================
+// The start of the error a records write returns when it needs the records
+// key (records-seal.ts): the popup asks for the password and tries again
+export const UNLOCK_NEEDED = 'UNLOCK_NEEDED:';
+
 export interface MessageResponse<T = unknown> {
   success: boolean;
   data?: T;

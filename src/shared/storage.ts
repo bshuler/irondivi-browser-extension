@@ -1,5 +1,5 @@
 import { storage } from './browser-polyfill';
-import { encryptWithPassword, decryptWithPassword } from './crypto-utils';
+import { encryptWithPassword, decryptWithPassword, encryptVault, decryptVault } from './crypto-utils';
 import type { NetworkType } from './constants';
 import { defaultAllowedSites, effectiveAllowedSites } from './origin';
 
@@ -43,6 +43,9 @@ export interface Contact {
   notes?: string;
   createdAt: number;
   lastUsed?: number;
+  // Set when the records were found changed outside the wallet and this
+  // contact could not be checked; the owner is asked to check its address
+  unverified?: boolean;
 }
 
 export interface TransactionLimits {
@@ -82,6 +85,22 @@ export interface CachedBalance {
   lastUpdated: number;
 }
 
+// The records a page could change on a browser that lets content scripts
+// write storage.local. The background seals them (records-seal.ts) and
+// installs its writer here; until then they are written as they are.
+export interface RecordsPatch {
+  accounts?: Account[];
+  settings?: Settings;
+  connections?: Record<string, Record<string, Connection>>;
+  addressBook?: Contact[];
+}
+
+let recordsWriter: (patch: RecordsPatch) => Promise<void> = patch => storage.local.set(patch);
+
+export function setRecordsWriter(writer: (patch: RecordsPatch) => Promise<void>): void {
+  recordsWriter = writer;
+}
+
 // Storage access functions
 export async function getAccounts(): Promise<Account[]> {
   const { accounts } = await storage.local.get<{ accounts: Account[] }>('accounts');
@@ -89,7 +108,7 @@ export async function getAccounts(): Promise<Account[]> {
 }
 
 export async function saveAccounts(accounts: Account[]): Promise<void> {
-  await storage.local.set({ accounts });
+  await recordsWriter({ accounts });
 }
 
 export async function getSecrets(): Promise<Record<string, EncryptedSecrets>> {
@@ -109,13 +128,52 @@ function withSecretsLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export async function saveSecret(accountId: string, mnemonic: string, password: string): Promise<void> {
-  const blob = await encryptWithPassword(mnemonic, password);
+// A version 3 secret holds the records key with the phrase, so the key is
+// only ever stored where the password guards it (records-seal.ts)
+function secretPayload(mnemonic: string, recordsKey?: string): string {
+  return JSON.stringify({ m: mnemonic, k: recordsKey });
+}
+
+async function encryptSecret(mnemonic: string, password: string, recordsKey?: string): Promise<EncryptedSecrets> {
+  return recordsKey
+    ? encryptVault(secretPayload(mnemonic, recordsKey), password)
+    : encryptWithPassword(mnemonic, password);
+}
+
+export async function saveSecret(accountId: string, mnemonic: string, password: string, recordsKey?: string): Promise<void> {
+  const blob = await encryptSecret(mnemonic, password, recordsKey);
   await withSecretsLock(async () => {
     const secrets = await getSecrets();
     secrets[accountId] = blob;
     await storage.local.set({ secrets });
   });
+}
+
+/**
+ * Store the records key in a secret that was opened as `before`, if it is
+ * still what is stored. The new blob is checked to open to the same phrase
+ * and key before it replaces the old one.
+ */
+export async function storeRecordsKey(
+  accountId: string, password: string, mnemonic: string, recordsKey: string, before: EncryptedSecrets,
+): Promise<void> {
+  const blob = await encryptSecret(mnemonic, password, recordsKey);
+  const check = await decryptVault(blob, password);
+  if (check.plaintext !== secretPayload(mnemonic, recordsKey)) {
+    throw new Error('Re-encrypted secret did not decrypt to the original');
+  }
+  await withSecretsLock(async () => {
+    const secrets = await getSecrets();
+    const current = secrets[accountId];
+    if (!current || current.encrypted !== before.encrypted || current.salt !== before.salt) return;
+    secrets[accountId] = blob;
+    await storage.local.set({ secrets });
+  });
+}
+
+/** Whether any account's secret holds a records key, by its label */
+export async function anySecretHoldsRecordsKey(): Promise<boolean> {
+  return Object.values(await getSecrets()).some(s => (s?.version ?? 0) >= 3);
 }
 
 /**
@@ -146,20 +204,59 @@ export async function migrateSecret(accountId: string, password: string): Promis
   });
 }
 
-export async function getDecryptedSecret(accountId: string, password: string): Promise<string> {
+export interface OpenedSecret {
+  mnemonic: string;
+  // The records key the secret holds (version 3), base64
+  recordsKey?: string;
+  // The secret's label did not match how it opened
+  relabeled: boolean;
+  // The blob that was opened, for a compare-and-swap rewrite
+  blob: EncryptedSecrets;
+}
+
+export async function openSecret(accountId: string, password: string): Promise<OpenedSecret> {
   const secrets = await getSecrets();
   const secret = secrets[accountId];
   if (!secret) throw new Error('Account not found');
 
-  const plaintext = await decryptWithPassword(secret, password);
+  const { plaintext, version, relabeled } = await decryptVault(secret, password);
+  let mnemonic = plaintext;
+  let recordsKey: string | undefined;
+  if (version >= 3) {
+    const payload = JSON.parse(plaintext);
+    mnemonic = payload.m;
+    recordsKey = typeof payload.k === 'string' ? payload.k : undefined;
+  }
 
   // Upgrade a legacy secret before returning, so the worker cannot be stopped
   // part way through. A failure is not fatal: the legacy secret still opens.
-  if (!secret.version || secret.version < 2) {
+  if (version < 2 && !relabeled) {
     await migrateSecret(accountId, password).catch(() => {});
   }
 
-  return plaintext;
+  return { mnemonic, recordsKey, relabeled, blob: (await getSecrets())[accountId] ?? secret };
+}
+
+/**
+ * Open a secret with a password without changing anything: no migration,
+ * no lockout count. For checking whether one password also opens another
+ * account (records-seal.ts); null if it does not.
+ */
+export async function openSecretQuietly(accountId: string, password: string): Promise<OpenedSecret | null> {
+  const secret = (await getSecrets())[accountId];
+  if (!secret) return null;
+  try {
+    const { plaintext, version, relabeled } = await decryptVault(secret, password);
+    if (version < 3) return { mnemonic: plaintext, relabeled, blob: secret };
+    const payload = JSON.parse(plaintext);
+    return { mnemonic: payload.m, recordsKey: typeof payload.k === 'string' ? payload.k : undefined, relabeled, blob: secret };
+  } catch {
+    return null;
+  }
+}
+
+export async function getDecryptedSecret(accountId: string, password: string): Promise<string> {
+  return (await openSecret(accountId, password)).mnemonic;
 }
 
 export async function deleteSecret(accountId: string): Promise<void> {
@@ -176,7 +273,7 @@ export async function getAddressBook(): Promise<Contact[]> {
 }
 
 export async function saveAddressBook(addressBook: Contact[]): Promise<void> {
-  await storage.local.set({ addressBook });
+  await recordsWriter({ addressBook });
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -198,6 +295,11 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export async function getSettings(): Promise<Settings> {
   const { settings } = await storage.local.get<{ settings: Settings }>('settings');
+  return normalizeSettings(settings);
+}
+
+/** Stored settings (or none) as the wallet uses them */
+export function normalizeSettings(settings: Partial<Settings> | undefined): Settings {
   // Merge with defaults to ensure new fields are present
   const merged = { ...DEFAULT_SETTINGS, ...settings };
   const limits = { ...DEFAULT_SETTINGS.transactionLimits, ...settings?.transactionLimits };
@@ -215,7 +317,7 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
-  await storage.local.set({ settings });
+  await recordsWriter({ settings });
 }
 
 export async function getSelectedAccountId(): Promise<string | null> {
@@ -233,7 +335,7 @@ export async function getConnections(): Promise<Record<string, Record<string, Co
 }
 
 export async function saveConnections(connections: Record<string, Record<string, Connection>>): Promise<void> {
-  await storage.local.set({ connections });
+  await recordsWriter({ connections });
 }
 
 export async function getCachedBalance(accountId: string): Promise<CachedBalance | null> {

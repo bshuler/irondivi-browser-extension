@@ -31,6 +31,8 @@ export interface Contact {
   name: string;
   address: string;
   notes?: string;
+  // Set when the wallet found its records changed outside it (records-seal.ts)
+  unverified?: boolean;
 }
 
 export interface ConnectedSite {

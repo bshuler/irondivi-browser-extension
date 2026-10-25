@@ -1765,3 +1765,46 @@ body {
   color: #818cf8;
   border: 1px solid rgba(99, 102, 241, 0.3);
 }
+
+/* The records seal found changes made outside the wallet (records-seal.ts) */
+.records-warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.records-warning.hidden {
+  display: none;
+}
+
+.records-warning span {
+  flex: 1;
+}
+
+.contact-unverified {
+  margin-top: 4px;
+  color: var(--warning);
+  font-size: 11px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent-glow);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.contact-unverified .link-btn {
+  margin-left: 6px;
+}

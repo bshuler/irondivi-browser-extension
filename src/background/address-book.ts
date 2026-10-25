@@ -71,7 +71,7 @@ export class AddressBook {
    */
   async updateContact(
     contactId: string,
-    updates: Partial<Pick<Contact, 'name' | 'notes'>>
+    updates: Partial<Pick<Contact, 'name' | 'notes'>> & { checked?: boolean }
   ): Promise<Contact> {
     const contacts = await getAddressBook();
     const contact = contacts.find(c => c.id === contactId);
@@ -82,6 +82,7 @@ export class AddressBook {
 
     if (updates.name !== undefined) contact.name = checkName(updates.name);
     if (updates.notes !== undefined) contact.notes = checkNotes(updates.notes);
+    if (updates.checked === true) delete contact.unverified;
 
     await saveAddressBook(contacts);
     return contact;

@@ -8,10 +8,12 @@
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
-import { sendMessage } from './message-api';
+import { sendMessage, onPasswordAccepted } from './message-api';
 import { MSG, UI_PORT } from '../shared/constants';
 import { runtime } from '../shared/browser-polyfill';
-import { setupMnemonicModalHandlers } from './modals';
+import { setupMnemonicModalHandlers, showPasswordModal } from './modals';
+import { setUnlockDeps } from './unlock-retry';
+import { showRecordsWarning } from './records-warning-ui';
 import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensureNetworkAddresses } from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
@@ -91,6 +93,16 @@ function updateBalanceButtonIcon(): void {
 function setupEventListeners(): void {
   // Core UI modules
   setupMnemonicModalHandlers();
+  setUnlockDeps({
+    ask: reason => showPasswordModal(reason),
+    currentAccountId: () => state.currentAccount?.id,
+    authenticate: async (accountId, password) => {
+      const reply = await runtime.sendMessage({ type: MSG.AUTHENTICATE, payload: { accountId, password } });
+      if (reply?.success) void showRecordsWarning();
+      return reply;
+    },
+  });
+  onPasswordAccepted(() => void showRecordsWarning());
   setupAccountUIHandlers();
   setupWalletUIHandlers();
   setupSendUIHandlers();
@@ -158,6 +170,8 @@ async function init(): Promise<void> {
     }
 
     await loadAccounts();
+    // Every unlock can find the records changed; an approval window shows it too
+    void showRecordsWarning();
 
     if (approvalParams) {
       // This is an approval popup - check for the specific pending request

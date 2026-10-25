@@ -1,5 +1,6 @@
 import { storage } from '../shared/browser-polyfill';
-import { getDecryptedSecret, getSecrets } from '../shared/storage';
+import { openSecret, getSecrets, type OpenedSecret } from '../shared/storage';
+import { openRecords } from './records-seal';
 
 /**
  * The limit on wrong passwords. Every way of opening an account's phrase with
@@ -128,9 +129,9 @@ export function unlockSecret(accountId: string, password: string): Promise<strin
     // A lockout that has run out starts a fresh count, at the next tier
     if (entry && entry.count >= MAX_ATTEMPTS) entry.count = 0;
 
-    let mnemonic: string;
+    let opened: OpenedSecret;
     try {
-      mnemonic = await getDecryptedSecret(accountId, password);
+      opened = await openSecret(accountId, password);
     } catch (error) {
       const failed = entry ?? { count: 0, lockedUntil: 0, lockoutTier: 0, lastFailureAt: now };
       failed.count++;
@@ -153,6 +154,16 @@ export function unlockSecret(accountId: string, password: string): Promise<strin
       state.delete(accountId);
     }
     await saveState(state);
-    return mnemonic;
+
+    // Check and seal the unencrypted records with the key the secret holds.
+    // The password was right, so a problem here does not fail the unlock,
+    // except an account whose addresses were changed and cannot be checked.
+    try {
+      await openRecords(accountId, password, opened);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('addresses were changed outside the wallet')) throw error;
+      console.error('IronDivi: could not check the wallet records', error);
+    }
+    return opened.mnemonic;
   });
 }

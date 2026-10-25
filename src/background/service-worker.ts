@@ -17,6 +17,10 @@ import { isAllowedDappOrigin } from '../shared/origin';
 import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
+import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning } from './records-seal';
+
+// Every write of the unencrypted records goes through the seal (EXT-3)
+installRecordsSeal();
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
@@ -614,6 +618,13 @@ async function handleMessage(
         return { success: true, data: { settings: currentSettings } };
       }
 
+      case MSG.GET_RECORDS_WARNING:
+        return { success: true, data: { warning: await getRecordsWarning() } };
+
+      case MSG.DISMISS_RECORDS_WARNING:
+        await dismissRecordsWarning();
+        return { success: true };
+
       case MSG.GET_NETWORK: {
         // The network the wallet is set to; all a dApp needs from the settings
         const { network } = await getSettings();
@@ -642,7 +653,10 @@ async function handleMessage(
           }
         }
 
-        const newSettings = { ...currentSettings, ...updates };
+        // Checking the password also checks the records, and may have put
+        // back settings changed outside the wallet: build on what is stored now
+        const base = accountId ? await getSettings() : currentSettings;
+        const newSettings = { ...base, ...updates };
         await saveSettings(newSettings);
 
         // Update RPC client network if changed
