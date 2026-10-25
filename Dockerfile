@@ -1,5 +1,7 @@
 # Use official Playwright image with browsers pre-installed
-FROM mcr.microsoft.com/playwright:v1.58.2-jammy
+# Pinned by digest (security review EXT-30): a retagged upstream image cannot change the test
+# environment unnoticed. The tag must match the @playwright/test version in package.json.
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy@sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565
 
 # Install Xvfb for virtual display (needed for headed browser/extension testing)
 RUN apt-get update && apt-get install -y \

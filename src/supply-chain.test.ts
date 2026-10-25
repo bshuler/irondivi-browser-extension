@@ -64,3 +64,16 @@ describe('L14 packaging writes checksums', () => {
     expect(body.indexOf('writeChecksums(')).toBeGreaterThan(body.indexOf('packageSafari('));
   });
 });
+
+// Regression test for the security review's EXT-30: the test image was pinned
+// by tag, which upstream can move to another image
+describe('EXT-30 the test image is pinned by digest', () => {
+  it('every FROM names a sha256 digest, and the Playwright tag matches package.json', () => {
+    const froms = read('Dockerfile').split('\n').filter((l) => /^FROM\s/i.test(l));
+    expect(froms.length).toBeGreaterThan(0);
+    for (const from of froms) expect(from).toMatch(/@sha256:[0-9a-f]{64}(\s|$)/);
+    const pkg = JSON.parse(read('package.json'));
+    const playwright = pkg.devDependencies['@playwright/test'];
+    expect(froms[0]).toContain(`playwright:v${playwright}-`);
+  });
+});
