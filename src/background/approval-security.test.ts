@@ -74,3 +74,11 @@ describe('EXT-6 a request is approved once', () => {
     await signed;
   });
 });
+
+describe('EXT-7 the session signs only for its own account', () => {
+  it('signMessage refuses an account the session was not opened for', async () => {
+    const { signingSession } = await import('./signing-session');
+    await expect(signingSession.signMessage('hello', 0, 'testnet', 'another-account')).rejects.toThrow(/this account/);
+    await expect(signingSession.signMessage('hello', 0, 'testnet', account.id)).resolves.toMatch(/\S/);
+  });
+});

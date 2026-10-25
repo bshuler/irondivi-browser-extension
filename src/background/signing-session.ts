@@ -101,10 +101,16 @@ export class SigningSession {
   async signMessage(
     message: string,
     addressIndex: number,
-    network: NetworkType
+    network: NetworkType,
+    accountId: string
   ): Promise<string> {
     if (!this.live()) {
       throw new Error('Not authenticated - please enter password');
+    }
+    // Only the account the session was opened for signs: a request for one
+    // account must never be signed with another's key
+    if (accountId !== this.currentAccountId) {
+      throw new Error('Not authenticated for this account - please enter password');
     }
 
     const seed = await Mnemonic.toSeed(this.decryptedMnemonic!.toString());

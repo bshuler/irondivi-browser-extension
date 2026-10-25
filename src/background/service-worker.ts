@@ -181,7 +181,8 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
       const signature = await signingSession.signMessage(
         request.data.message,
         request.data.addressIndex || 0,
-        account.network
+        account.network,
+        request.accountId
       );
       result = { signature };
     } else if (request.type === 'sign_game_tx') {
@@ -189,7 +190,7 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
       const body = request.data.message;
       const { tx } = checkGameTx(body, request.origin, account.network, account.addresses.map(a => a.address));
       const signer = resolveAddress(account, tx.from);
-      const signature = await signingSession.signMessage(body!, signer.index, account.network);
+      const signature = await signingSession.signMessage(body!, signer.index, account.network, request.accountId);
       result = { signature, address: signer.address, txid: gameTxid(body!) };
     } else if (request.type === 'send_transaction') {
       if (!request.data.to || request.data.amount === undefined) {
@@ -590,7 +591,7 @@ async function handleMessage(
         if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
         if (account.addresses.length === 0) return noAddressesOn(account);
         const signer = resolveAddress(account, payload.address, payload.addressIndex);
-        const signature = await signingSession.signMessage(payload.message, signer.index, account.network);
+        const signature = await signingSession.signMessage(payload.message, signer.index, account.network, account.id);
         return { success: true, data: { signature, address: signer.address } };
       }
 
