@@ -5,7 +5,7 @@ import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Acco
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
 import { addressBook } from './address-book';
-import { walletCore, diviToSatoshis, satoshisToDivi, p2pkhScript, type BuiltTransaction, type TransactionRequest } from './wallet-core';
+import { walletCore, diviToSatoshis, parseDiviAmount, satoshisText, p2pkhScript, type BuiltTransaction, type TransactionRequest } from './wallet-core';
 import { Transaction, bytesToHex } from '../lib/transaction';
 import { recordSpend, spentToday } from './spend-ledger';
 import { highWaterBalance, recordBalance } from './balance-record';
@@ -66,7 +66,7 @@ function basisPoints(percent: number): bigint {
 }
 
 function diviText(sats: bigint): string {
-  return satoshisToDivi(sats).toFixed(8).replace(/\.?0+$/, '');
+  return satoshisText(sats);
 }
 
 /**
@@ -317,7 +317,7 @@ async function sendFromAccount(
     // Sign what the owner asked for, and only that, then broadcast
     const signedHex = await walletCore.signTransaction(built, privateKeys, {
       to: request.to,
-      amountSats: diviToSatoshis(request.amount),
+      amountSats: parseDiviAmount(request.amount),
       ownAddresses: account.addresses.map(a => a.address),
       network: account.network,
     });
@@ -691,6 +691,10 @@ async function handleMessage(
               // fee and what the account holds after it (EXT-8)
               {
                 ...request,
+                // The exact amount, as text, so it is shown and later
+                // signed without passing through a double (EXT-25)
+                amount: diviText(built.amountSats),
+                total: diviText(built.amountSats + built.feeSats),
                 fee: built.fee,
                 network: account.network,
                 balanceAfter: diviText(built.balanceSats - built.amountSats - built.feeSats),

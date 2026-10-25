@@ -11,7 +11,9 @@ type EventCallback = (...args: any[]) => void;
 
 interface TransactionRequest {
   to: string;
-  amount: number;
+  // DIVI: a decimal string ("1234.5") is exact; a number must have at
+  // most 8 decimals and be below 90,000,000
+  amount: number | string;
   fee?: number;
   fromAddresses?: string[];
 }

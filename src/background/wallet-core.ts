@@ -18,7 +18,8 @@ export interface UTXO {
 
 export interface TransactionRequest {
   to: string;
-  amount: number;
+  // DIVI, as a decimal string ("1234.5") or a number; see parseDiviAmount
+  amount: number | string;
   // Only honoured from the wallet's own popup; a site never sets the fee
   fee?: number;
   fromAddresses?: string[];
@@ -76,6 +77,43 @@ export function diviToSatoshis(divi: number): bigint {
   return isNegative ? -result : result;
 }
 
+// Above this a double no longer holds every satoshi (2^53 / 1e8)
+const MAX_EXACT_NUMBER_DIVI = 90_000_000;
+
+/**
+ * An amount a site or the popup asked to send, in satoshis, exactly. A
+ * decimal string is parsed straight to BigInt; a number is accepted only
+ * where a double holds it to the satoshi and it has at most 8 decimals, so
+ * the amount signed is never a rounded version of the one asked for.
+ */
+export function parseDiviAmount(amount: unknown): bigint {
+  let text: string;
+  if (typeof amount === 'string') {
+    text = amount;
+  } else if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) {
+    if (amount > MAX_EXACT_NUMBER_DIVI) throw new Error('Invalid amount: send amounts this large as a decimal string');
+    text = amount.toFixed(8);
+    if (Number(text) !== amount) throw new Error('Invalid amount: at most 8 decimal places');
+  } else {
+    throw new Error('Invalid amount');
+  }
+  const m = /^(\d{1,12})(?:\.(\d{1,8}))?$/.exec(text);
+  if (!m) throw new Error('Invalid amount');
+  const sats = BigInt(m[1]) * SATOSHIS_PER_COIN + BigInt((m[2] ?? '').padEnd(8, '0'));
+  if (sats <= 0n) throw new Error('Invalid amount');
+  return sats;
+}
+
+/**
+ * Satoshis as exact DIVI text, with no trailing zeros
+ */
+export function satoshisText(satoshis: bigint): string {
+  const negative = satoshis < 0n;
+  const abs = negative ? -satoshis : satoshis;
+  const frac = (abs % SATOSHIS_PER_COIN).toString().padStart(8, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${abs / SATOSHIS_PER_COIN}${frac ? '.' + frac : ''}`;
+}
+
 /**
  * Convert satoshis to DIVI for display
  */
@@ -121,14 +159,11 @@ export class WalletCore {
   ): { amountSats: bigint; requestedFeeSats: bigint | undefined } {
     const { to, amount, fee: requestedFee } = request;
 
-    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
-      throw new Error('Invalid amount');
-    }
+    const amountSats = parseDiviAmount(amount);
     if (requestedFee !== undefined &&
         (typeof requestedFee !== 'number' || !Number.isFinite(requestedFee) || requestedFee < 0)) {
       throw new Error('Invalid fee');
     }
-    const amountSats = diviToSatoshis(amount);
     // Compare in satoshis: an output below dust is never relayed
     if (amountSats < diviToSatoshis(DUST_THRESHOLD)) {
       throw new Error(`Amount is below the dust threshold of ${DUST_THRESHOLD} DIVI`);

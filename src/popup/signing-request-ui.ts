@@ -22,7 +22,9 @@ export interface SigningRequest {
     message?: string;
     address?: string;
     to?: string;
-    amount?: number;
+    // Exact DIVI text, with the total worked out by the wallet (EXT-25)
+    amount?: number | string;
+    total?: string;
     fee?: number;
     // What the account holds after this payment, as text (EXT-8)
     balanceAfter?: string;
@@ -257,10 +259,13 @@ export function showSigningRequestView(request: SigningRequest): void {
     if (request.recipient) {
       rows.push(el('div', `signing-detail-row recipient-note ${request.recipient.level}`, request.recipient.text));
     }
-    rows.push(detailRow('Amount:', el('span', 'signing-detail-value amount', `${formatAmount(amount)} DIVI`)));
+    const amountText = typeof amount === 'string' ? shown(amount) : formatAmount(amount);
+    rows.push(detailRow('Amount:', el('span', 'signing-detail-value amount', `${amountText} DIVI`)));
     rows.push(detailRow('Fee:', el('span', 'signing-detail-value', fee.text)));
     const total = detailRow('Total:', el('span', 'signing-detail-value amount',
-      fee.known ? `${formatAmount(amount + (request.data?.fee as number))} DIVI` : 'unknown'));
+      !fee.known ? 'unknown'
+        : typeof request.data?.total === 'string' ? `${shown(request.data.total)} DIVI`
+        : `${formatAmount(Number(amount) + (request.data?.fee as number))} DIVI`));
     total.classList.add('total');
     rows.push(total);
     if (request.data?.balanceAfter !== undefined) {

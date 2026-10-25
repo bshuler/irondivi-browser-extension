@@ -50,7 +50,8 @@ export function handleSendMax(): void {
   const feeInput = document.getElementById('send-fee') as HTMLInputElement;
   const fee = parseFloat(feeInput.value) || 0.00005;
   const maxAmount = Math.max(0, state.balance - fee);
-  amountInput.value = String(maxAmount);
+  // At most 8 decimals, rounded down, so the text parses exactly (EXT-25)
+  amountInput.value = (Math.floor(maxAmount * 1e8) / 1e8).toFixed(8).replace(/\.?0+$/, '');
 }
 
 /**
@@ -97,7 +98,7 @@ export async function handleSendConfirm(): Promise<void> {
   const fromValue = fromSelect.value;
   const fromAddresses = fromValue === 'auto' ? undefined : [fromValue];
 
-  state.pendingSendTx = { to, amount, fee, fromAddresses };
+  state.pendingSendTx = { to, amount, amountText: amountInput.value.trim(), fee, fromAddresses };
 
   // Update confirm view
   showRecipient(to, await loadRecipientContacts());
@@ -176,7 +177,7 @@ async function sendTransaction(password: string): Promise<void> {
     const response = await sendMessage<{ txid: string }>(MSG.SEND_TRANSACTION, {
       password,
       to: toAddress,
-      amount: state.pendingSendTx.amount,
+      amount: state.pendingSendTx.amountText,
       fee: state.pendingSendTx.fee,
       fromAddresses: state.pendingSendTx.fromAddresses,
     });

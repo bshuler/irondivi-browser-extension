@@ -95,7 +95,7 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
 
     const sent = h.provider().sendTransaction({ to, amount: 1.5 });
     const req = await h.waitForPending('send_transaction');
-    expect(req.data).toMatchObject({ to, amount: 1.5 });
+    expect(req.data).toMatchObject({ to, amount: '1.5' });
     expect(typeof req.data.fee).toBe('number');
     expect(h.createdWindows.length).toBe(windowsBefore + 1);
     expect(h.createdWindows.at(-1)!.url).toContain('approve=sign');

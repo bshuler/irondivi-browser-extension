@@ -63,6 +63,8 @@ export interface Settings {
 export interface PendingSendTx {
   to: string;
   amount: number;
+  // What the owner typed, sent as text so it is parsed exactly (EXT-25)
+  amountText: string;
   fee: number;
   fromAddresses?: string[]; // If set, only use UTXOs from these addresses
 }

@@ -167,6 +167,11 @@ pages.
 | `signGameTx(body)` | `irondivi_signGameTx` | yes, and only `https://games.divi.domains` | yes, always; returns `{ signature, address, txid }` |
 | `sendTransaction({ to, amount, fee?, fromAddresses? })` | `irondivi_sendTransaction` | yes | yes, always |
 
+`sendTransaction`'s `amount` is in DIVI. Pass it as a decimal string
+(`'1234.5'`, at most 8 decimals) and it is used to the satoshi; a number is
+accepted only below 90,000,000 and with at most 8 decimals, and anything else is
+refused rather than rounded. A site's `fee` is ignored: the wallet works it out.
+
 `signMessage` signs with the key of `address` (the account's first address if
 none is given). `getBalance` and `signMessage` refuse an address the wallet does
 not own.

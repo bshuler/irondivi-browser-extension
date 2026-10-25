@@ -7,7 +7,9 @@ export interface SigningRequestData {
   address?: string;
   addressIndex?: number;
   to?: string;
-  amount?: number;
+  // Exact DIVI text from a site's send (EXT-25)
+  amount?: number | string;
+  total?: string;
   fee?: number;
   fromAddresses?: string[];
   opReturn?: string;
