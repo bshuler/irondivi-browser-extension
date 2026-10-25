@@ -23,7 +23,7 @@ const TICK_PERIOD_MINUTES = 0.5;
 export const SWAP_CONFIG = {
   maker_url: 'https://divi.cx/swap',
   divi_rpc: NETWORKS.testnet.rpcUrl,
-  btc_endpoints: ['https://mempool.space/signet/api', 'https://blockstream.info/signet/api'],
+  btc_endpoints: ['https://mempool.space/testnet/api', 'https://blockstream.info/testnet/api'],
   ltc_endpoints: ['https://litecoinspace.org/testnet/api'],
   index: 0,
 };
