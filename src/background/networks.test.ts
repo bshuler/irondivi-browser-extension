@@ -52,9 +52,9 @@ describe('each network has its own addresses', () => {
     h.storage.settings = { ...h.storage.settings, network: 'mainnet' };
     expect((await selected()).addresses).toEqual([]);
 
-    // A site asking to connect is told to set the wallet up on mainnet first.
+    // A site asking to connect is refused: sites are testnet only for now
     const refused = await h.fromTab('CONNECT');
-    expect(refused).toEqual({ success: false, error: expect.stringContaining('no Mainnet address yet') });
+    expect(refused).toEqual({ success: false, error: 'Sites can use IronDivi on testnet only' });
 
     const wrong = await h.popup('ADD_NETWORK_ADDRESSES', { accountId: account.id, password: 'wrong password' });
     expect(wrong?.success).toBe(false);

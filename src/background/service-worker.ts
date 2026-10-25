@@ -24,6 +24,12 @@ import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning } from './
 installRecordsSeal();
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
+// Until the wallet has been through a store review and notarization, sites
+// may use it on testnet only; the owner keeps full use of mainnet in the popup
+const SITES_TESTNET_ONLY = true;
+const TESTNET_ONLY = { success: false, error: 'Sites can use IronDivi on testnet only' };
+// What a site may still ask on mainnet: nothing that reveals or moves funds
+const MAINNET_SITE_METHODS: readonly string[] = [MSG.GET_NETWORK, MSG.IS_CONNECTED, MSG.DISCONNECT];
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
@@ -415,6 +421,11 @@ async function handleMessage(
     if (!isAllowedDappOrigin(origin, allowedSites)) {
       return { success: false, error: 'Invalid origin' };
     }
+  }
+
+  if (origin && SITES_TESTNET_ONLY && !MAINNET_SITE_METHODS.includes(type)
+      && (await getSettings()).network === 'mainnet') {
+    return TESTNET_ONLY;
   }
 
   // Connection messages only make sense for a web page
