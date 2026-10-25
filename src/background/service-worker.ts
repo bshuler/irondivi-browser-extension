@@ -19,6 +19,7 @@ import { checkGameTx, checkMessageShape, checkMessageToSign, gameTxid } from './
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
 import { checkRecipient, recipientNote } from '../popup/recipient-check';
+import { connectRelay, RELAY_ALARM, RELAY_PREFIX } from './connect-relay';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
@@ -469,6 +470,12 @@ async function handleMessage(
     return { success: false, error: 'Invalid origin' };
   }
 
+  return dispatch(type, payload, origin);
+}
+
+// What each message does, once handleMessage has checked who sent it. The
+// relay (connect-relay.ts) calls this directly with its "relay:<o>" grant key
+async function dispatch(type: string, payload: any, origin: string): Promise<MessageResponse> {
   try {
     switch (type) {
       // ============ Account Operations ============
@@ -948,6 +955,8 @@ async function handleMessage(
           success: true,
           data: sites.map(({ origin, connection }) => ({
             origin, connectedAt: connection.connectedAt, networks: connection.networks ?? [],
+            // A pairing through IronDivi Connect: the site is what its code claims
+            ...(origin.startsWith(RELAY_PREFIX) ? { via: 'relay', site: origin.slice(RELAY_PREFIX.length) } : {}),
           })),
         };
       }
@@ -957,6 +966,25 @@ async function handleMessage(
         if (!accountId) return { success: false, error: 'No account selected' };
 
         await connectionManager.revokeConnection(payload.origin, accountId);
+        if (typeof payload.origin === 'string' && payload.origin.startsWith(RELAY_PREFIX)) {
+          await connectRelay.endOrigin(payload.origin.slice(RELAY_PREFIX.length));
+        }
+        return { success: true };
+      }
+
+      // ============ IronDivi Connect (popup only) ============
+      case MSG.CONNECT_PAIR: {
+        const session = await connectRelay.pair(payload?.uri);
+        return { success: true, data: session };
+      }
+
+      case MSG.CONNECT_SESSIONS: {
+        await connectRelay.resume();
+        return { success: true, data: connectRelay.list() };
+      }
+
+      case MSG.CONNECT_END: {
+        await connectRelay.end(String(payload?.topic ?? ''));
         return { success: true };
       }
 
@@ -998,6 +1026,7 @@ async function handleMessage(
             firstUse: r.firstUse,
             createdAt: r.createdAt,
             ...(await requestContext(r, network, accounts)),
+            ...(r.origin.startsWith(RELAY_PREFIX) ? { relay: connectRelay.forOrigin(r.origin) ?? null } : {}),
           };
         }));
         // The owner's security phrase, so the window shows it is the wallet's (EXT-18)
@@ -1073,6 +1102,8 @@ async function handleMessage(
           // The site loses its connections and anything it has waiting
           await connectionManager.revokeOriginEverywhere(site);
           connectionManager.rejectRequestsFrom(site);
+          // and its IronDivi Connect pairings, which hold their own grant
+          await connectRelay.endOrigin(site);
         }
         await syncSiteScripts();
         return { success: true, data: { siteAccess } };
@@ -1094,9 +1125,11 @@ async function handleMessage(
         return { success: false, error: `Unknown message type: ${type}` };
     }
   } catch (error) {
+    const code = (error as { code?: unknown })?.code;
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      ...(typeof code === 'number' ? { code } : {}),
     };
   }
 }
@@ -1113,6 +1146,9 @@ runtime.onMessage.addListener((message: Message, sender: chrome.runtime.MessageS
 alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'signing-session-timeout') {
     await signingSession.handleAlarmTimeout();
+  } else if (alarm.name === RELAY_ALARM) {
+    // The browser stopped the worker: the pairings' long polls start again
+    await connectRelay.resume();
   }
 });
 
@@ -1144,6 +1180,7 @@ async function initialize() {
   // Registered scripts persist, but a browser that dropped them (or an
   // update that changed the scripts) gets them back here
   await syncSiteScripts();
+  await connectRelay.start(dispatch);
 }
 
 browserAPI.runtime.onInstalled?.addListener(() => { void syncSiteScripts(); });

@@ -208,6 +208,7 @@ export async function createHarness(
     runtime: {
       id: EXT_ID,
       getURL: (p: string) => EXT_BASE + p.replace(/^\//, ''),
+      getManifest: () => ({ version: '0.0.0-test' }),
       onMessage,
       onConnect,
       lastError: undefined,

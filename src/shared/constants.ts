@@ -102,6 +102,11 @@ export const MSG = {
   GET_PENDING_SIGNING_REQUESTS: 'GET_PENDING_SIGNING_REQUESTS',
   APPROVE_SIGNING_REQUEST: 'APPROVE_SIGNING_REQUEST',
   REJECT_SIGNING_REQUEST: 'REJECT_SIGNING_REQUEST',
+
+  // IronDivi Connect: the popup pairs with a page through the relay
+  CONNECT_PAIR: 'CONNECT_PAIR',
+  CONNECT_SESSIONS: 'CONNECT_SESSIONS',
+  CONNECT_END: 'CONNECT_END',
 } as const;
 
 export type MessageType = typeof MSG[keyof typeof MSG];
@@ -271,7 +276,10 @@ export type WalletMessage =
   | { type: typeof MSG.APPROVE_SIGNING_REQUEST; payload: ApproveSigningRequestPayload }
   | { type: typeof MSG.REJECT_SIGNING_REQUEST; payload: RejectSigningRequestPayload }
   | { type: typeof MSG.ANSWER_ACCESS_REQUEST; payload: { requestId: string; choice: 'allowed' | 'not_now' | 'denied' } }
-  | { type: typeof MSG.SET_SITE_ACCESS; payload: { action: 'revoke' | 'block' | 'unblock'; origin: string } };
+  | { type: typeof MSG.SET_SITE_ACCESS; payload: { action: 'revoke' | 'block' | 'unblock'; origin: string } }
+  | { type: typeof MSG.CONNECT_PAIR; payload: { uri: string } }
+  | { type: typeof MSG.CONNECT_SESSIONS; payload?: undefined }
+  | { type: typeof MSG.CONNECT_END; payload: { topic: string } };
 
 // ============================================================
 // Generic response wrapper
