@@ -54,10 +54,14 @@ test('the release: create a wallet, connect on games.divi.domains, example.com i
   await games.goto('https://games.divi.domains/', { waitUntil: 'domcontentloaded' });
   await games.waitForFunction(() => !!(window as any).irondivi, null, { timeout: 15000 });
   expect(await games.evaluate(() => (window as any).irondivi.getAccessStatus())).toBe('default');
+  // The site may ask on load as well; requests share one approval window, so
+  // take any approval window, whether it was already open or opens now
   const win = (async () => {
-    const p = await context.waitForEvent('page', { timeout: 20000 });
-    await p.waitForURL(/approve=/, { timeout: 20000 });
-    return p;
+    for (const end = Date.now() + 20000; Date.now() < end; await new Promise(r => setTimeout(r, 250))) {
+      const p = context.pages().find(x => /approve=/.test(x.url()));
+      if (p) { await p.waitForLoadState('domcontentloaded'); return p; }
+    }
+    throw new Error('no approval window opened; pages: ' + context.pages().map(x => x.url()).join(' '));
   })();
   const connected = games.evaluate(() => (window as any).irondivi.connect());
   const w = await win;
