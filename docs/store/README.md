@@ -78,7 +78,7 @@ used for unrelated purposes, not used for creditworthiness or lending.
 
 ## Firefox Add-ons (AMO)
 
-Upload `packages/irondivi-wallet-firefox-v<version>.zip`. The add-on ID is
+Upload `packages/irondivi-wallet-firefox-v<version>.xpi`. The add-on ID is
 `irondivi-wallet@divi.domains` and the manifest declares
 `data_collection_permissions: { required: ["none"] }`.
 
@@ -98,7 +98,7 @@ git archive --format=zip -o packages/store/irondivi-wallet-source-v$(node -p "re
 
 > Build: Node 26.6.0 (see .nvmrc and package.json "engines"), npm 11.
 > `npm ci && npm run build:firefox` writes the add-on to dist/firefox; the
-> uploaded zip is that folder, zipped by `node scripts/package.js`
+> uploaded .xpi is that folder, zipped by `node scripts/package.js`
 > (the build is reproducible: two builds of one commit give identical bytes,
 > and dist/firefox/build-info.json names the commit).
 >
