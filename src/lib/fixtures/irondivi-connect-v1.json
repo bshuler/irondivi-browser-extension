@@ -1,0 +1,132 @@
+{
+  "upstream": "bshuler/irondivi-connect src/irondivi-connect.js @ 353eb2f",
+  "k": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+  "uri": "irondivi-connect:v1?k=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&r=https%3A%2F%2Fdivi.cx%2Fconnect&o=https%3A%2F%2Fgames.divi.domains&n=testnet&e=4102444800",
+  "topic": "a32dd3f1ecfa07d0ff5dc6c00e04ac1e7d29cf86adbd1f8a3c50172049c9d3a5",
+  "url": "https://divi.cx/connect/v1/topics/a32dd3f1ecfa07d0ff5dc6c00e04ac1e7d29cf86adbd1f8a3c50172049c9d3a5/messages",
+  "messages": [
+    {
+      "envelope": {
+        "v": 1,
+        "d": "d",
+        "n": "7fxTGBBzUEbzS0t3",
+        "c": "h65deFLGqYNk5dTny04ch5OTph5q-ot1_LtHQdc7xgH82u1CGFtNnAxFfjUI7PtSdizDEiPn3hDITZpsWZgrWbV6X1UMhKZFbyh9lSbabL-QC58QFMf0aXmC-OE4RaYF6ZjFA9D4zrCf6qne7pofDnBmNY2qIO0xareFPJBbmxdO2qBkJ1AfiK1ykDMMV7swm0jeWdAeUJDRl_QyPONBYgYC7v_kb0XyfZrXGh96MEmHmYySNc0HTDnGXmYME7j0"
+      },
+      "plaintext": {
+        "seq": 1,
+        "ts": 1790000000000,
+        "rpc": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "irondivi_connect",
+          "params": {
+            "origin": "https://games.divi.domains",
+            "name": "Divi Games",
+            "network": "testnet"
+          }
+        }
+      }
+    },
+    {
+      "envelope": {
+        "v": 1,
+        "d": "w",
+        "n": "VwfsamHFXHg0yE7d",
+        "c": "3FodNQvnEcGVc9iyh1hUY7nb4EqqnhFU5rGs7L_iLbxMYTE036JZEAJaks2hVNav274Hp4cSItqpcc00kHp7u4RK5nptgBJoGd8mVXQR1ryNrscGr9bjeWgOJoaEYWA07npmyiMjMZamkFDGHwO_jT39g1X0MAOfgmOFzEMNVJlz0o2gOLE35q0BKQHUPGOzfGgkTEOoETbPkuspF9eWcIct1mAt4pFSu9JT2lMwQMSmoaB_N2-yn0DAC3R8q3J3u16BPwZCDreTnCtT757kFewGoeth0O050C1UKiZ4NGmt8WClesGb2YXJScV0jzsu0UqqODiYMQ09Wg"
+      },
+      "plaintext": {
+        "seq": 1,
+        "ts": 1790000000000,
+        "rpc": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "address": "yGpZVzXypG13pEhNkieYBiEvpXsf5PqXnY",
+            "accounts": [
+              "yGpZVzXypG13pEhNkieYBiEvpXsf5PqXnY"
+            ],
+            "network": "testnet",
+            "wallet": {
+              "name": "IronDivi",
+              "version": "0.0.6"
+            }
+          }
+        }
+      }
+    },
+    {
+      "envelope": {
+        "v": 1,
+        "d": "d",
+        "n": "MCcCYESsWExL-v8c",
+        "c": "MZNuZg_aDuR0hdZ1cxqmiqjnRcYXe3gfAMItXBCXGlY_q0SS5qHwaYgwRpWAiiWdWQ1eSRATcRiTujMch1w2RWLMTurhR7YFPjj95iuf4KNKKrn7-4QwKFW7_Z2Ox0VTvrVOHQeZd-t7CZ5fVF55EA5Rd8UCnsIqEmLurs-s9RS7sFg3vuRU1-5UkTb79hRafThidbkZwI2kGuXgKY6mMMIdiAZlCHRp-7tHpccZcxA3AFxjI1_diOFOOplARqJYzyx19ekCfEo"
+      },
+      "plaintext": {
+        "seq": 2,
+        "ts": 1790000000000,
+        "rpc": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "irondivi_sendTransaction",
+          "params": {
+            "to": "yGpZVzXypG13pEhNkieYBiEvpXsf5PqXnY",
+            "amount": "1.25",
+            "memo": "héllo ✓"
+          }
+        }
+      }
+    },
+    {
+      "envelope": {
+        "v": 1,
+        "d": "w",
+        "n": "QMD-Jc98J8ywRUq5",
+        "c": "FMU67kg_wCvLBfUcdf6bhfRU7L2qORs5d0u8HN4u1Sy1O87Ikbk5k-D4SdNHUxHEx200kX6RU8XV2V-YBKbiZgPsOuyvDY_o3EBR_EkypLFz2bdjVVsdpez4jc2WfIMoRAEGXM1Kfd4pkB1i5cEMAWnFhQMpBsaiTU72S3Rlf0lgjKP2cDE"
+      },
+      "plaintext": {
+        "seq": 2,
+        "ts": 1790000000000,
+        "rpc": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "error": {
+            "code": 4001,
+            "message": "Request rejected by user"
+          }
+        }
+      }
+    },
+    {
+      "envelope": {
+        "v": 1,
+        "d": "d",
+        "n": "_W5dYqpyPqFAcyJU",
+        "c": "Jt-s5n_VmSD7tcpfkYC-N3bGnIEENGqj4N9jXqcV0DUel82UWpPogNXfVXiQxRrUcJHlt68ZIDxkeDVdwZUz_5-Dkz42n7ACQtZcR2l6f8ugnhJq5vu5HllmCmNzz8A1eYjU"
+      },
+      "plaintext": {
+        "seq": 3,
+        "ts": 1790000000000,
+        "rpc": {
+          "jsonrpc": "2.0",
+          "method": "irondivi_disconnect"
+        }
+      }
+    }
+  ],
+  "toJSON": {
+    "v": 1,
+    "role": "wallet",
+    "k": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+    "relay": "https://divi.cx/connect",
+    "origin": "https://games.divi.domains",
+    "name": "Divi Games",
+    "network": "testnet",
+    "expires": 4102444800,
+    "after": 0,
+    "seqOut": 2,
+    "seqIn": 0,
+    "nextId": 1,
+    "account": null,
+    "connected": true
+  }
+}
