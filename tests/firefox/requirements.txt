@@ -1,0 +1,4 @@
+# The Firefox live-release check (live_release.py). Pinned; install into a
+# virtual environment, never the system Python:
+#   uv venv .venv && uv pip install -r tests/firefox/requirements.txt
+selenium==4.27.1

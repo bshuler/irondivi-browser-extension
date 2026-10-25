@@ -10,13 +10,14 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { AddressInfo } from 'net';
 import { launchWithExtension } from './browser';
+import { DEV_EXTENSION_PATH } from './global-setup';
 import { Address } from '../src/lib/address';
 import { Mnemonic } from '../src/lib/mnemonic';
 import { deriveAddresses } from '../src/lib/derivation';
 import { Transaction } from '../src/lib/transaction';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXTENSION_PATH = process.env.EXT_PATH || path.join(__dirname, '../dist/chrome');
+const EXTENSION_PATH = process.env.EXT_PATH || DEV_EXTENSION_PATH;
 const SHOTS = path.join(__dirname, 'screenshots');
 const MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const PASSWORD = 'E2ePassword123!';
@@ -123,6 +124,15 @@ async function setup(context: BrowserContext, extensionId: string) {
   const accounts = await popupMessage(popup, 'GET_ACCOUNTS');
   const auth = await popupMessage(popup, 'AUTHENTICATE', { accountId: accounts.data.currentAccountId, password: PASSWORD });
   expect(auth.success).toBe(true);
+  // Importing and unlocking leave the service worker busy for a while (key
+  // derivation and the first balance sync); on a loaded machine that is tens
+  // of seconds. Wait until it answers promptly so the timings below hold.
+  const [sw] = context.serviceWorkers();
+  for (const end = Date.now() + 120000; Date.now() < end;) {
+    const t = Date.now();
+    await sw.evaluate(() => 1);
+    if (Date.now() - t < 250) break;
+  }
 
   const page = await context.newPage();
   await page.goto(pageUrl);
@@ -157,16 +167,24 @@ test('a hostile page is refused; popup-only messages, sign and send need the use
 });
 
 test('the approved path still works: connect, send (approve and reject), sign', async ({ context, extensionId }) => {
+  test.setTimeout(240000);
   const { page, dest, broadcasts } = await setup(context, extensionId);
-  await page.waitForFunction(() => !!(window as any).irondivi, null, { timeout: 10000 });
+  await page.waitForFunction(() => !!(window as any).irondivi, null, { timeout: 60000 });
 
   // connect -> approval window -> approve
-  // The page event can fire before the new window has its URL, so take the
-  // next page and then wait for it to reach the approval screen
+  // Poll for a new approval window rather than waiting for the page event:
+  // the event can fire before the window has its URL, and on a loaded machine
+  // the window can take well over 30 s to appear
   const approval = async () => {
-    const p = await context.waitForEvent('page', { timeout: 15000 });
-    await p.waitForURL(/approve=/, { timeout: 15000 });
-    return p;
+    const seen = new Set(context.pages());
+    for (const end = Date.now() + 120000; Date.now() < end; await new Promise(r => setTimeout(r, 250))) {
+      const p = context.pages().find(x => !seen.has(x) && /approve=/.test(x.url()));
+      if (p) {
+        await p.waitForLoadState('domcontentloaded');
+        return p;
+      }
+    }
+    throw new Error('no approval window opened');
   };
   let win = approval();
   const connected = page.evaluate(() => (window as any).irondivi.connect());

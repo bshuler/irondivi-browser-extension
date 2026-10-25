@@ -1,12 +1,13 @@
 import { test as base, BrowserContext, Page } from '@playwright/test';
 import { launchWithExtension } from './browser';
+import { DEV_EXTENSION_PATH } from './global-setup';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EXTENSION_PATH = path.join(__dirname, '../dist/chrome');
+const EXTENSION_PATH = process.env.EXT_PATH || DEV_EXTENSION_PATH;
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 
 // Ensure screenshot directory exists
