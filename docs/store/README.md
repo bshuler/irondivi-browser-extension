@@ -88,10 +88,11 @@ Upload `packages/irondivi-wallet-firefox-v<version>.xpi`. The add-on ID is
 
 **Source code:** the scripts are bundled and minified with esbuild, so AMO
 needs the source. Upload `packages/store/irondivi-wallet-source-v<version>.zip`,
-made from the release commit with:
+made from the release tag (the commit `build-info.json` names) with:
 
 ```bash
-git archive --format=zip -o packages/store/irondivi-wallet-source-v$(node -p "require('./package.json').version").zip HEAD
+v=$(node -p "require('./package.json').version")
+git archive --format=zip -o packages/store/irondivi-wallet-source-v$v.zip v$v
 ```
 
 **Notes to reviewer:**
