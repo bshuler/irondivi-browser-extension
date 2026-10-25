@@ -315,6 +315,30 @@ Output in `packages/`: `irondivi-wallet-{chrome,edge,opera,safari}-v{version}.zi
 `irondivi-wallet-firefox-v{version}.xpi`, `SHA256SUMS-v{version}` and `releases.json`.
 The Safari zip needs `npm run build:safari:app` first. Publishing is in DEPLOY.md.
 
+### Release signing
+
+`SHA256SUMS-v{version}` is signed with the release key, an Ed25519 SSH key kept
+in 1Password that never leaves it (`scripts/sign-release.sh` signs through the
+1Password SSH agent). The site will not deploy a release the key did not sign.
+
+Release key fingerprint: `SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ`
+(public key in `site/release-signing/irondivi-release.pub`, also at
+https://browser.divi.domains/release-signing/irondivi-release.pub).
+
+To check a download, put `SHA256SUMS-v{version}`, its `.sig` and the packages in
+one folder and run:
+
+```bash
+scripts/verify-release.sh <folder> <version>
+```
+
+or by hand, with `allowed_signers` from this repository (not from the download
+site, so one compromised host cannot change both):
+
+```bash
+ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.5.sig < SHA256SUMS-v0.0.5
+```
+
 ## License
 
 TBD

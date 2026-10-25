@@ -134,3 +134,20 @@ describe('EXT-1 the page does not ask anyone to turn off add-on signatures', () 
     });
   }
 });
+
+describe('EXT-1 the published release key', () => {
+  const pub = readFileSync(join(repo, 'site/release-signing/irondivi-release.pub'), 'utf8').trim();
+  const fingerprint = execFileSync('ssh-keygen', ['-l', '-E', 'sha256', '-f', join(repo, 'site/release-signing/irondivi-release.pub')], { encoding: 'utf8' }).split(' ')[1];
+
+  it('allowed_signers holds that key, for releases and file signatures only', () => {
+    const signers = readFileSync(join(repo, 'site/release-signing/allowed_signers'), 'utf8').trim().split('\n');
+    expect(signers).toEqual([`releases@browser.divi.domains namespaces="file" ${pub.split(' ').slice(0, 2).join(' ')}`]);
+  });
+
+  it('the README and the page show its fingerprint', () => {
+    expect(fingerprint).toMatch(/^SHA256:/);
+    for (const file of ['README.md', 'site/index.html']) {
+      expect(readFileSync(join(repo, file), 'utf8')).toContain(fingerprint);
+    }
+  });
+});

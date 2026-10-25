@@ -262,6 +262,8 @@
     var name = entry ? entry.file : 'irondivi-wallet-' + FILE_KEY[state.selected] + (state.selected === 'firefox' ? '.xpi' : '.zip');
     setText($('cmd-shasum'), 'shasum -a 256 ' + name);
     setText($('cmd-ps'), 'Get-FileHash ' + name + ' -Algorithm SHA256');
+    var sums = state.release && state.release.version ? 'SHA256SUMS-v' + state.release.version : 'SHA256SUMS-v{version}';
+    setText($('cmd-sig'), 'ssh-keygen -Y verify -f allowed_signers -I releases@browser.divi.domains -n file -s ' + sums + '.sig < ' + sums);
   }
 
   function showReleaseStatus() {

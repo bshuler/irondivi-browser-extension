@@ -410,6 +410,15 @@
             </tbody>
           </table>
         </div>
+        <h3>Check the checksums are ours</h3>
+        <p><span class="mono">SHA256SUMS</span> is signed with our release key, which never leaves our password manager. Its fingerprint is <code class="mono">SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ</code>; compare it with the one in the <a href="https://github.com/bshuler/irondivi-browser-extension#release-signing">source repository</a>, so this site alone cannot vouch for itself. With the files in one folder, in Terminal:</p>
+        <div class="cmd">
+          <div class="cmd__row">
+            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.5.sig &lt; SHA256SUMS-v0.0.5</code>
+            <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-sig">Copy</button>
+          </div>
+        </div>
+        <p class="hint">Get <a href="/release-signing/allowed_signers">allowed_signers</a>, <a href="/release-signing/irondivi-release.pub">the public key</a> and the <span class="mono">.sig</span> from the <a href="/downloads/">downloads folder</a>. "Good signature" means the checksums are the ones we signed.</p>
         <p class="notice notice--warn" id="downloads-fallback" hidden>Couldn't load the release list. You can still get the files from the <a href="/downloads/">downloads folder</a>.</p>
       </div>
     </section>
