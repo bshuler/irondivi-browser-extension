@@ -1899,3 +1899,28 @@ body:not([data-network]) .network-bar {
 .contact-unverified .link-btn {
   margin-left: 6px;
 }
+
+/* IronDivi Connect pairing */
+.connect-uri-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: 11px;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.connect-actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.connect-qr-label {
+  cursor: pointer;
+}
+
+.connect-pairing-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -54,7 +54,7 @@ export function hideMnemonicModal(): void {
 /**
  * Show a confirmation modal for destructive actions
  */
-export function showConfirmModal(title: string, message: string): Promise<boolean> {
+export function showConfirmModal(title: string, message: string, okLabel = 'Delete'): Promise<boolean> {
   return new Promise(resolve => {
     const modal = document.getElementById('confirm-modal') as HTMLDivElement;
     const titleEl = document.getElementById('confirm-modal-title') as HTMLHeadingElement;
@@ -64,6 +64,7 @@ export function showConfirmModal(title: string, message: string): Promise<boolea
 
     titleEl.textContent = title;
     messageEl.textContent = message;
+    okBtn.textContent = okLabel;
     modal.classList.remove('hidden');
 
     const cleanup = () => {

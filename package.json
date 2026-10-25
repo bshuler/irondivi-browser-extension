@@ -40,6 +40,7 @@
     "@scure/bip39": "2.4.0",
     "@types/qrcode": "1.5.6",
     "buffer": "6.0.3",
+    "jsqr": "1.4.0",
     "qrcode": "1.5.4"
   }
 }

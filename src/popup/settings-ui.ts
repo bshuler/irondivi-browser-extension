@@ -13,6 +13,7 @@ import { checkSettingsUpdate } from '../shared/settings-check';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
+import { loadPairings, setupConnectUIHandlers } from './connect-ui';
 
 // ============================================================
 // Data Loading
@@ -339,7 +340,9 @@ export function setupSettingsUIHandlers(): void {
   elements.settingsBtn.addEventListener('click', () => {
     showView(elements.viewSettings);
     loadConnectedSites();
+    loadPairings();
   });
+  setupConnectUIHandlers();
 
   // Settings view back button
   document.getElementById('settings-back-btn')?.addEventListener('click', hideView);

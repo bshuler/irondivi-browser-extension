@@ -276,6 +276,16 @@
           <h3>Connected Sites</h3>
           <div id="connected-sites-list"></div>
         </div>
+        <div class="setting-section">
+          <h3>IronDivi Connect</h3>
+          <p class="setting-hint">Pair with a page on another device or browser: paste the code it shows, or pick a screenshot of its QR code. The site in a code is what the page claims; the browser cannot check it.</p>
+          <textarea id="connect-uri-input" class="connect-uri-input" rows="2" placeholder="irondivi-connect:v1?..." spellcheck="false" autocomplete="off"></textarea>
+          <div class="connect-actions">
+            <button class="secondary-btn" id="connect-pair-btn">Pair</button>
+            <label class="secondary-btn connect-qr-label">QR screenshot…<input type="file" id="connect-qr-input" accept="image/*" hidden></label>
+          </div>
+          <div id="connect-pairings-list"></div>
+        </div>
       </div>
     </div>
 
