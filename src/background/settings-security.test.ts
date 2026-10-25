@@ -70,7 +70,7 @@ describe('L2 loosening a protection needs the password', () => {
   it('lowering a limit needs no password; raising it or setting it to 0 does', async () => {
     expect((await h.popup('UPDATE_SETTINGS', { transactionLimits: { maxAmountPercent: 5 } })).success).toBe(true);
     expect(saved().transactionLimits.maxAmountPercent).toBe(5);
-    expect(saved().transactionLimits.dailyLimitPercent).toBe(0);
+    expect(saved().transactionLimits.dailyLimitPercent).toBe(25);
 
     const raise = await h.popup('UPDATE_SETTINGS', { transactionLimits: { maxAmountPercent: 50 } });
     expect(raise.success).toBe(false);

@@ -70,6 +70,8 @@ export function updateSettingsDisplay(): void {
   const authTimeoutSelect = document.getElementById('setting-auth-timeout') as HTMLSelectElement;
   const txLimitPercentInput = document.getElementById('setting-tx-limit-percent') as HTMLInputElement;
   const txLimitAbsoluteInput = document.getElementById('setting-tx-limit-absolute') as HTMLInputElement;
+  const dailyLimitPercentInput = document.getElementById('setting-daily-limit-percent') as HTMLInputElement;
+  const dailyLimitAbsoluteInput = document.getElementById('setting-daily-limit-absolute') as HTMLInputElement;
   const allowedSitesTextarea = document.getElementById('setting-allowed-sites') as HTMLTextAreaElement;
 
   networkSelect.value = state.settings.network;
@@ -77,9 +79,11 @@ export function updateSettingsDisplay(): void {
   authTimeoutSelect.value = String(state.settings.authTimeoutMinutes);
 
   // Transaction limits
-  const limits = state.settings.transactionLimits || { maxAmountPercent: 10, maxAmountAbsolute: 0 };
+  const limits = state.settings.transactionLimits || { maxAmountPercent: 10, maxAmountAbsolute: 0, dailyLimitPercent: 25, dailyLimitAbsolute: 0 };
   txLimitPercentInput.value = limits.maxAmountPercent > 0 ? String(limits.maxAmountPercent) : '';
   txLimitAbsoluteInput.value = limits.maxAmountAbsolute > 0 ? String(limits.maxAmountAbsolute) : '';
+  dailyLimitPercentInput.value = limits.dailyLimitPercent > 0 ? String(limits.dailyLimitPercent) : '';
+  dailyLimitAbsoluteInput.value = limits.dailyLimitAbsolute > 0 ? String(limits.dailyLimitAbsolute) : '';
 
   // Allowed sites
   const sites = state.settings.allowedSites || defaultAllowedSites();
@@ -323,6 +327,24 @@ export function setupSettingsUIHandlers(): void {
     const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
     updateSettings({
       transactionLimits: { ...currentLimits, maxAmountAbsolute: Math.max(0, absolute) }
+    });
+  });
+
+  // Daily limit (percent)
+  document.getElementById('setting-daily-limit-percent')?.addEventListener('change', (e) => {
+    const percent = parseInt((e.target as HTMLInputElement).value) || 0;
+    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
+    updateSettings({
+      transactionLimits: { ...currentLimits, dailyLimitPercent: Math.min(100, Math.max(0, percent)) }
+    });
+  });
+
+  // Daily limit (absolute)
+  document.getElementById('setting-daily-limit-absolute')?.addEventListener('change', (e) => {
+    const absolute = parseFloat((e.target as HTMLInputElement).value) || 0;
+    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
+    updateSettings({
+      transactionLimits: { ...currentLimits, dailyLimitAbsolute: Math.max(0, absolute) }
     });
   });
 

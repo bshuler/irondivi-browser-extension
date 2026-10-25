@@ -235,7 +235,15 @@
             <span>Max Transaction (DIVI)</span>
             <input type="number" id="setting-tx-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
           </div>
-          <p class="setting-hint">Limits apply per transaction. 0 = no limit.</p>
+          <div class="setting-item">
+            <span>Daily Limit (%)</span>
+            <input type="number" id="setting-daily-limit-percent" min="0" max="100" step="1" placeholder="25">
+          </div>
+          <div class="setting-item">
+            <span>Daily Limit (DIVI)</span>
+            <input type="number" id="setting-daily-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
+          </div>
+          <p class="setting-hint">The first two apply to each transaction, the daily ones to everything sent in 24 hours, fee included. A limit in DIVI is the strongest: it does not depend on the balance a node reports. 0 = no limit.</p>
         </div>
         <div class="setting-section">
           <h3>Allowed Sites</h3>

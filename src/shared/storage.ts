@@ -65,6 +65,9 @@ export interface Settings {
   allowedSites: string[];
   // Transaction limits for security
   transactionLimits: TransactionLimits;
+  // 2 from 0.0.5, when a daily limit became the default. Settings saved
+  // earlier have the daily limits off because that was the default then.
+  limitsVersion?: number;
 }
 
 export interface Connection {
@@ -183,20 +186,32 @@ export const DEFAULT_SETTINGS: Settings = {
   hideBalance: false,
   // The production dApp hosts, plus localhost in a development build
   allowedSites: defaultAllowedSites(),
-  // Default transaction limits - 10% of balance per transaction
+  // Default transaction limits: 10% of the balance per transaction, 25% a day
   transactionLimits: {
     maxAmountAbsolute: 0, // No absolute limit
     maxAmountPercent: 10, // 10% of balance
     dailyLimitAbsolute: 0, // No daily absolute limit
-    dailyLimitPercent: 0, // No daily percentage limit
+    dailyLimitPercent: 25, // 25% of balance in any 24 hours
   },
+  limitsVersion: 2,
 };
 
 export async function getSettings(): Promise<Settings> {
   const { settings } = await storage.local.get<{ settings: Settings }>('settings');
   // Merge with defaults to ensure new fields are present
   const merged = { ...DEFAULT_SETTINGS, ...settings };
-  return { ...merged, allowedSites: effectiveAllowedSites(settings?.allowedSites) };
+  const limits = { ...DEFAULT_SETTINGS.transactionLimits, ...settings?.transactionLimits };
+  // Turn the default daily limit on for settings saved before it existed. Once
+  // saved with limitsVersion 2, a daily limit of 0 is the owner's choice.
+  if (settings && (settings.limitsVersion ?? 1) < 2 && !limits.dailyLimitAbsolute && !limits.dailyLimitPercent) {
+    limits.dailyLimitPercent = DEFAULT_SETTINGS.transactionLimits.dailyLimitPercent;
+  }
+  return {
+    ...merged,
+    transactionLimits: limits,
+    limitsVersion: 2,
+    allowedSites: effectiveAllowedSites(settings?.allowedSites),
+  };
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

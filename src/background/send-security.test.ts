@@ -156,3 +156,88 @@ describe('H3 transaction limits', () => {
     expect(r.error).toMatch(/maximum amount/i);
   });
 });
+
+describe('EXT-16 limits that a node cannot switch off', () => {
+  it('a new wallet has a 25% daily limit', async () => {
+    const { data } = await h.popup('GET_SETTINGS');
+    expect(data.settings.transactionLimits.dailyLimitPercent).toBe(25);
+    const { DEFAULT_SETTINGS } = await import('../shared/storage');
+    expect(DEFAULT_SETTINGS.transactionLimits.dailyLimitPercent).toBe(25);
+  });
+
+  it('settings saved before 0.0.5 with no daily limit get the 25% default', async () => {
+    const { data } = await h.popup('GET_SETTINGS');
+    const old = { ...data.settings, transactionLimits: { ...data.settings.transactionLimits, dailyLimitPercent: 0, dailyLimitAbsolute: 0 } };
+    delete old.limitsVersion;
+    h.storage.settings = old;
+    const after = (await h.popup('GET_SETTINGS')).data.settings;
+    expect(after.transactionLimits.dailyLimitPercent).toBe(25);
+    expect(after.limitsVersion).toBe(2);
+  });
+
+  it('an owner who turned the daily limit off since 0.0.5 keeps it off', async () => {
+    await setLimits(h, { dailyLimitPercent: 0 });
+    expect(h.storage.settings.limitsVersion).toBe(2);
+    expect((await h.popup('GET_SETTINGS')).data.settings.transactionLimits.dailyLimitPercent).toBe(0);
+  });
+
+  it('an old daily limit in DIVI is kept and no percentage is added', async () => {
+    const { data } = await h.popup('GET_SETTINGS');
+    const old = { ...data.settings, transactionLimits: { ...data.settings.transactionLimits, dailyLimitPercent: 0, dailyLimitAbsolute: 50 } };
+    delete old.limitsVersion;
+    h.storage.settings = old;
+    const after = (await h.popup('GET_SETTINGS')).data.settings;
+    expect(after.transactionLimits).toMatchObject({ dailyLimitPercent: 0, dailyLimitAbsolute: 50 });
+  });
+
+  it('the daily default stops the fourth send of just under 10%', async () => {
+    // The fake node does not take spent coins away, so the balance stays at
+    // 1000 and the day's share is spent / (balance + spent)
+    const to = await foreignTestnetAddress();
+    for (let i = 0; i < 3; i++) {
+      expect((await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 95 })).success).toBe(true);
+    }
+    const fourth = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 95 });
+    expect(fourth.success).toBe(false);
+    expect(fourth.error).toMatch(/daily limit/i);
+    expect(h.broadcasts).toHaveLength(3);
+  });
+
+  it('a node that hides coins cannot shrink the percentages below the balance seen this week', async () => {
+    expect((await h.popup('GET_BALANCE')).data.balance).toBe(1000);
+    // The node now shows only a 20 DIVI coin: 5 DIVI is 25% of that, but
+    // well under 10% of the 1000 the wallet saw
+    const own = h.utxos[0].address;
+    h.utxos.length = 0;
+    h.fund(own, 20 * 1e8);
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 5 });
+    expect(r.success).toBe(true);
+    expect(Object.keys(h.storage).filter(k => k.startsWith('balanceRecord:'))).toHaveLength(1);
+  });
+
+  it('a balance seen more than a week ago no longer counts', async () => {
+    await h.popup('GET_BALANCE');
+    const key = Object.keys(h.storage).find(k => k.startsWith('balanceRecord:'))!;
+    h.storage[key][0].time -= 8 * 24 * 60 * 60 * 1000;
+    const own = h.utxos[0].address;
+    h.utxos.length = 0;
+    h.fund(own, 20 * 1e8);
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 5 });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/10% of balance/);
+  });
+});
+
+describe('EXT-16 the owner can see and set the daily limits', () => {
+  it('the popup has daily limit inputs wired to the settings', async () => {
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync('src/popup/popup.html', 'utf8');
+    const ui = readFileSync('src/popup/settings-ui.ts', 'utf8');
+    for (const id of ['setting-daily-limit-percent', 'setting-daily-limit-absolute']) {
+      expect(html).toContain(`id="${id}"`);
+      expect(ui).toContain(`'${id}'`);
+    }
+    expect(ui).toMatch(/dailyLimitPercent: Math\.min\(100/);
+    expect(ui).toMatch(/dailyLimitAbsolute: Math\.max\(0/);
+  });
+});

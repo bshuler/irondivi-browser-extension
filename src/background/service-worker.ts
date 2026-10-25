@@ -8,6 +8,7 @@ import { addressBook } from './address-book';
 import { walletCore, diviToSatoshis, satoshisToDivi, p2pkhScript, type BuiltTransaction, type TransactionRequest } from './wallet-core';
 import { Transaction, bytesToHex } from '../lib/transaction';
 import { recordSpend, spentToday } from './spend-ledger';
+import { highWaterBalance, recordBalance } from './balance-record';
 import { rpcClient } from './rpc-client';
 import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
@@ -78,10 +79,15 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
 
   const limits = (await getSettings()).transactionLimits;
   const spend = built.amountSats + built.feeSats;
-  // The balance is what the node reports; the previous-transaction check in
-  // sendFromAccount stops a node from inventing coins to spend, not from
-  // hiding some to make a percentage look larger
-  const balance = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+  // Percentages are of the larger of what the node reports now and the most
+  // the wallet has seen this week, so a node that hides coins cannot block
+  // sends. One that invents coins cannot spend them (sendFromAccount checks
+  // the previous transactions) but does loosen the percentages; the absolute
+  // limits are the control for that.
+  const reported = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+  await recordBalance(account.id, account.network, reported);
+  const seen = await highWaterBalance(account.id, account.network);
+  const balance = seen > reported ? seen : reported;
 
   if (limits.maxAmountAbsolute > 0 && spend > diviToSatoshis(limits.maxAmountAbsolute)) {
     throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI (amount plus fee)`);
@@ -359,6 +365,9 @@ async function handleMessage(
           ? [resolveAddress(account, payload.address).address]
           : account.addresses.map(a => a.address);
         const balance = await rpcClient.getBalance(addresses);
+        if (!payload?.address && Number.isFinite(balance) && balance > 0) {
+          await recordBalance(account.id, account.network, diviToSatoshis(balance));
+        }
         return { success: true, data: { balance } };
       }
 
