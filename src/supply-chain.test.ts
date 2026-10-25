@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Regression tests for the security review's L14: dependencies were declared
 // with ^ ranges, so a fresh install could pull a newer, unreviewed release,
@@ -25,11 +28,39 @@ describe('L14 every dependency is pinned', () => {
   });
 });
 
+// EXT-19: the old check matched the call order with a regex and broke when
+// the code changed; this runs the real writer on a temporary folder instead
 describe('L14 packaging writes checksums', () => {
-  it('scripts/package.js writes SHA256SUMS after the packages', () => {
-    const src = read('scripts/package.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    expect(src).toMatch(/createHash\('sha256'\)/);
-    expect(src).toMatch(/SHA256SUMS-v\$\{version\}/);
-    expect(src).toMatch(/packageSafari\(\);\s*writeChecksums\(\);/);
+  it('writeChecksums lists every package of the version with its sha256, and releases.json agrees', async () => {
+    // @ts-expect-error plain JS module
+    const { writeChecksums, writeReleases } = await import('../scripts/package.js');
+    const dir = mkdtempSync(join(tmpdir(), 'irondivi-pkg-'));
+    try {
+      writeFileSync(join(dir, 'irondivi-wallet-chrome-v9.9.9.zip'), 'chrome bytes');
+      writeFileSync(join(dir, 'irondivi-wallet-firefox-v9.9.9.xpi'), 'firefox bytes');
+      writeFileSync(join(dir, 'irondivi-wallet-chrome-v9.9.8.zip'), 'old version');
+      const lines = writeChecksums(dir, '9.9.9');
+      writeReleases(lines, dir, '9.9.9');
+
+      const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+      expect(readFileSync(join(dir, 'SHA256SUMS-v9.9.9'), 'utf8')).toBe(
+        `${sha('chrome bytes')}  irondivi-wallet-chrome-v9.9.9.zip\n` +
+        `${sha('firefox bytes')}  irondivi-wallet-firefox-v9.9.9.xpi\n`,
+      );
+      const rel = JSON.parse(readFileSync(join(dir, 'releases.json'), 'utf8'));
+      expect(rel.version).toBe('9.9.9');
+      expect(rel.files.chrome.sha256).toBe(sha('chrome bytes'));
+      expect(rel.files.firefox.sha256).toBe(sha('firefox bytes'));
+      expect(Object.keys(rel.files).sort()).toEqual(['chrome', 'firefox']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('main() writes the checksums after every package, Safari included', () => {
+    const src = read('scripts/package.js');
+    const body = src.slice(src.indexOf('async function main()'));
+    expect(body.indexOf('packageSafari()')).toBeGreaterThan(0);
+    expect(body.indexOf('writeChecksums(')).toBeGreaterThan(body.indexOf('packageSafari()'));
   });
 });

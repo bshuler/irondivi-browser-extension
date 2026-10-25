@@ -3,7 +3,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rm
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import archiver from 'archiver';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -74,14 +74,14 @@ async function main() {
     await createPackage(browser);
   }
   packageSafari();
-  writeReleases(writeChecksums());
+  writeReleases(writeChecksums(packagesDir, version), packagesDir, version);
 
   console.log(`\nAll packages created in ${packagesDir}`);
 }
 
 // SHA256SUMS lists every package of this version, in the format sha256sum -c
 // reads, so a download can be checked against the sums published with it
-function writeChecksums() {
+export function writeChecksums(packagesDir, version) {
   const prefix = 'irondivi-wallet-';
   const suffix = `-v${version}.`;
   const lines = readdirSync(packagesDir)
@@ -100,7 +100,7 @@ function writeChecksums() {
 
 // releases.json is what browser.divi.domains reads to offer each browser its
 // download, with the same sha256 as SHA256SUMS
-function writeReleases(lines) {
+export function writeReleases(lines, packagesDir, version) {
   const files = {};
   for (const l of lines) {
     const browser = l.name.slice('irondivi-wallet-'.length, l.name.indexOf(`-v${version}.`));
@@ -112,7 +112,10 @@ function writeReleases(lines) {
   console.log(`Wrote ${releasesPath}`);
 }
 
-main().catch(err => {
-  console.error('Packaging failed:', err);
-  process.exit(1);
-});
+// Run only as a script, so tests can import the helpers above
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(err => {
+    console.error('Packaging failed:', err);
+    process.exit(1);
+  });
+}
