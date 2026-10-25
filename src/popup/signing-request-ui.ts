@@ -2,17 +2,18 @@
  * Signing Request UI Module
  *
  * Handles the display and user interaction for dApp signing requests
- * (sign_message and send_transaction).
+ * (sign_message, sign_game_tx and send_transaction).
  */
 
 import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constants';
 import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
 import { visibleText } from './visible-text';
+import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
 
 // Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
   id: string;
-  type: 'connect' | 'sign_message' | 'send_transaction';
+  type: 'connect' | 'sign_message' | 'sign_game_tx' | 'send_transaction';
   origin: string;
   accountId: string;
   network?: NetworkType;
@@ -24,6 +25,10 @@ export interface SigningRequest {
     fee?: number;
     addressIndex?: number;
     opReturn?: string;
+    // A Divi Games transaction, as the background checked and read it
+    gameTx?: GameTxSummary;
+    // A Divi Games session grant the message makes
+    session?: SessionGrant;
   };
   // The site has not had a request of this type approved before
   firstUse?: boolean;
@@ -143,10 +148,21 @@ export function showSigningRequestView(request: SigningRequest): void {
     elements.type.textContent = 'Connect Site';
     elements.type.className = 'signing-type connect';
     elements.warningText.textContent = 'This shares your wallet address with the site. It cannot sign or send anything without asking you, with your password, each time.';
+  } else if (request.type === 'sign_message' && request.data?.session) {
+    elements.type.textContent = 'Start Game Session';
+    elements.type.className = 'signing-type sign-message';
+    elements.warningText.textContent = 'This lets another key play Divi Games as you until the time shown. It cannot send your tDIVI, but it can play, and spend, in games as you.';
   } else if (request.type === 'sign_message') {
     elements.type.textContent = 'Sign Message';
     elements.type.className = 'signing-type sign-message';
-    elements.warningText.textContent = 'This creates a signature to verify your identity. No funds will be sent.';
+    elements.warningText.textContent = 'Your signature proves you agree to this exact text. Sign only text you have read and understand: whoever holds the signature can show it to others.';
+  } else if (request.type === 'sign_game_tx') {
+    const tx = request.data?.gameTx;
+    elements.type.textContent = 'Divi Games Transaction';
+    elements.type.className = 'signing-type send-transaction';
+    elements.warningText.textContent = tx?.movesFunds
+      ? 'This transaction can move funds on Divi Games. Check every detail before you approve.'
+      : 'This transaction acts for you on Divi Games. Check the details before you approve.';
   } else {
     elements.type.textContent = 'Send Transaction';
     elements.type.className = 'signing-type send-transaction';
@@ -172,6 +188,25 @@ export function showSigningRequestView(request: SigningRequest): void {
     text.style.color = 'var(--text-secondary)';
     row.append(text);
     rows.push(row);
+  } else if (request.type === 'sign_message' && request.data?.session) {
+    const s = request.data.session;
+    rows.push(detailRow('Lets key:', el('span', 'signing-detail-value address', shown(s.key))));
+    rows.push(detailRow('Play as you until:', el('span', 'signing-detail-value', shown(localTime(s.until)))));
+    rows.push(detailRow('Chain:', el('span', 'signing-detail-value', shown(s.chain))));
+    if (request.data.address) {
+      rows.push(detailRow('Address:', el('span', 'signing-detail-value address', shown(request.data.address))));
+    }
+  } else if (request.type === 'sign_game_tx') {
+    const tx = request.data?.gameTx;
+    if (tx) {
+      const title = el('div', 'signing-detail-row', shown(tx.title));
+      title.style.fontWeight = '600';
+      rows.push(title);
+      for (const r of tx.rows) {
+        const cls = /address|^to|^from/i.test(r.label) ? 'signing-detail-value address' : 'signing-detail-value';
+        rows.push(detailRow(`${shown(r.label)}:`, el('span', cls, shown(r.value))));
+      }
+    }
   } else if (request.type === 'sign_message') {
     rows.push(detailRow('Message:', el('div', 'signing-message-content', shown(request.data?.message || ''))));
     if (request.data?.address) {
@@ -200,7 +235,9 @@ export function showSigningRequestView(request: SigningRequest): void {
   }
 
   if (request.type !== 'connect' && request.firstUse) {
-    rows.push(warningRow('first-use', `This is the first time this site has asked to ${request.type === 'sign_message' ? 'sign a message' : 'send a payment'}.`));
+    const what = request.type === 'sign_message' ? 'sign a message'
+      : request.type === 'sign_game_tx' ? 'sign a game transaction' : 'send a payment';
+    rows.push(warningRow('first-use', `This is the first time this site has asked to ${what}.`));
   }
 
   elements.details.replaceChildren(...rows);
@@ -265,7 +302,7 @@ async function handleApprove(): Promise<void> {
     return;
   }
 
-  showLoading(currentRequest.type === 'sign_message' ? 'Signing message...' : 'Sending transaction...');
+  showLoading(currentRequest.type === 'send_transaction' ? 'Sending transaction...' : 'Signing...');
 
   try {
     const response = await sendMessage({
@@ -283,6 +320,8 @@ async function handleApprove(): Promise<void> {
 
     if (currentRequest.type === 'sign_message') {
       showToast('Message signed successfully', 'success');
+    } else if (currentRequest.type === 'sign_game_tx') {
+      showToast('Transaction signed', 'success');
     } else {
       showToast('Transaction sent successfully', 'success');
     }
@@ -368,6 +407,13 @@ export function setupSigningRequestUIHandlers(): void {
       }
     });
   }
+}
+
+// An ISO time as the owner's local time, with the UTC time after it
+function localTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.toLocaleString()} (${iso})`;
 }
 
 function el(tag: string, className: string, text?: string): HTMLElement {

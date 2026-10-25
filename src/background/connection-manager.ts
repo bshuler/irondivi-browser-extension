@@ -1,5 +1,6 @@
 import { getConnections, saveConnections, type Connection } from '../shared/storage';
 import type { NetworkType } from '../shared/constants';
+import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
 
 export interface SigningRequestData {
   message?: string;
@@ -12,11 +13,18 @@ export interface SigningRequestData {
   opReturn?: string;
   // The network the request was made on; approval is refused on another
   network?: NetworkType;
+  // A Divi Games transaction, as the background parsed it, for the window
+  gameTx?: GameTxSummary;
+  // A Divi Games session grant, when the message is one
+  session?: SessionGrant;
 }
+
+export type SigningRequestType = 'sign_message' | 'sign_game_tx' | 'send_transaction';
+const SIGNING_TYPES: readonly string[] = ['sign_message', 'sign_game_tx', 'send_transaction'];
 
 export interface PendingRequest {
   id: string;
-  type: 'connect' | 'sign_message' | 'send_transaction';
+  type: 'connect' | SigningRequestType;
   origin: string;
   accountId: string;
   data?: SigningRequestData;
@@ -94,7 +102,7 @@ export class ConnectionManager {
    */
   private updateBadge(): void {
     const signingRequests = Array.from(this.pendingRequests.values())
-      .filter(r => r.type === 'sign_message' || r.type === 'send_transaction');
+      .filter(r => SIGNING_TYPES.includes(r.type));
     const count = signingRequests.length;
 
     if (count > 0) {
@@ -344,7 +352,7 @@ export class ConnectionManager {
    * Deduplicates requests - if there's already a pending request with the same message, reuse it
    */
   async createSigningRequest(
-    type: 'sign_message' | 'send_transaction',
+    type: SigningRequestType,
     origin: string,
     accountId: string,
     data: SigningRequestData
@@ -427,17 +435,17 @@ export class ConnectionManager {
    */
   getPendingSigningRequests(): Array<{
     id: string;
-    type: 'sign_message' | 'send_transaction';
+    type: SigningRequestType;
     origin: string;
     accountId: string;
     data: SigningRequestData | undefined;
     createdAt: number;
   }> {
     return Array.from(this.pendingRequests.values())
-      .filter(r => r.type === 'sign_message' || r.type === 'send_transaction')
+      .filter(r => SIGNING_TYPES.includes(r.type))
       .map(r => ({
         id: r.id,
-        type: r.type as 'sign_message' | 'send_transaction',
+        type: r.type as SigningRequestType,
         origin: r.origin,
         accountId: r.accountId,
         data: r.data,

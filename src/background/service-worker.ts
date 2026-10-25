@@ -13,6 +13,7 @@ import { addPendingTx, getPendingTxids, prunePendingTxs } from './pending-txs';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
+import { checkGameTx, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
@@ -425,6 +426,9 @@ async function handleMessage(
           const signer = resolveAddress(account, payload?.address, payload?.addressIndex);
 
           try {
+            // A game transaction is refused here; a session grant comes only
+            // from the games site and is shown as one
+            const { session } = checkMessageToSign(payload?.message, origin, account.network);
             // Create signing request and wait for user approval
             const result = await connectionManager.createSigningRequest(
               'sign_message',
@@ -435,6 +439,7 @@ async function handleMessage(
                 address: signer.address,
                 addressIndex: signer.index,
                 network: account.network,
+                session,
               }
             );
             return { success: true, data: result };
@@ -460,6 +465,39 @@ async function handleMessage(
         const signer = resolveAddress(account, payload.address, payload.addressIndex);
         const signature = await signingSession.signMessage(payload.message, signer.index, account.network);
         return { success: true, data: { signature, address: signer.address } };
+      }
+
+      case MSG.SIGN_GAME_TX: {
+        // Only a site, and only the Divi Games site: the popup has no use for it
+        if (!origin) return { success: false, error: 'Game transactions come from the Divi Games site' };
+        const account = await accountManager.getSelectedAccount();
+        if (!account) return { success: false, error: 'No account selected' };
+        if (!(await connectionManager.isConnected(origin, account.id))) return NOT_CONNECTED;
+        if (account.addresses.length === 0) return noAddressesOn(account);
+
+        try {
+          const { tx, summary } = checkGameTx(
+            payload?.body, origin, account.network, account.addresses.map(a => a.address));
+          const signer = resolveAddress(account, tx.from);
+          const result = await connectionManager.createSigningRequest(
+            'sign_game_tx',
+            origin,
+            account.id,
+            {
+              message: payload.body,
+              address: signer.address,
+              addressIndex: signer.index,
+              network: account.network,
+              gameTx: summary,
+            }
+          );
+          return { success: true, data: result };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Signing rejected'
+          };
+        }
       }
 
       case MSG.SEND_TRANSACTION: {
@@ -732,7 +770,7 @@ async function handleMessage(
         }
 
         try {
-          let result: { signature?: string; txid?: string; fee?: number } | undefined;
+          let result: { signature?: string; address?: string; txid?: string; fee?: number } | undefined;
 
           if (!request.data) {
             return { success: false, error: 'Request data missing' };
@@ -765,6 +803,13 @@ async function handleMessage(
               account.network
             );
             result = { signature };
+          } else if (request.type === 'sign_game_tx') {
+            // Checked again against the account as it is now
+            const body = request.data.message;
+            const { tx } = checkGameTx(body, request.origin, account.network, account.addresses.map(a => a.address));
+            const signer = resolveAddress(account, tx.from);
+            const signature = await signingSession.signMessage(body!, signer.index, account.network);
+            result = { signature, address: signer.address, txid: gameTxid(body!) };
           } else if (request.type === 'send_transaction') {
             if (!request.data.to || request.data.amount === undefined) {
               return { success: false, error: 'to and amount are required for send_transaction' };

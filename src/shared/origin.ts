@@ -21,6 +21,22 @@ export const DEV_SITES = ['localhost:*', '127.0.0.1:*'];
 // by the user, so it is replaced by the current default.
 export const LEGACY_DEFAULT_SITES = ['*.divi.domains', 'localhost', '127.0.0.1'];
 
+// The only origin that may ask the wallet to sign Divi Games chain
+// transactions or session grants, whatever else the user allows. A
+// development build also takes local dApps.
+export const GAME_ORIGIN = 'https://games.divi.domains';
+
+export function isGameOrigin(origin: string, dev: boolean = DEV_BUILD): boolean {
+  if (origin === GAME_ORIGIN) return true;
+  if (!dev) return false;
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
+
 export function defaultAllowedSites(dev: boolean = DEV_BUILD): string[] {
   return dev ? [...PRODUCTION_SITES, ...DEV_SITES] : [...PRODUCTION_SITES];
 }

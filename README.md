@@ -163,11 +163,21 @@ pages.
 | `getAccounts()` | `irondivi_accounts` | yes | no; `getAccounts()` returns the address strings, `irondivi_accounts` the address objects |
 | `getBalance(address?)` | `irondivi_getBalance` | yes | no; the balance of `address`, or of the whole account if none is given |
 | `signMessage(message, address?)` | `irondivi_signMessage` | yes | yes, always |
+| `signGameTx(body)` | `irondivi_signGameTx` | yes, and only `https://games.divi.domains` | yes, always; returns `{ signature, address, txid }` |
 | `sendTransaction({ to, amount, fee?, fromAddresses? })` | `irondivi_sendTransaction` | yes | yes, always |
 
 `signMessage` signs with the key of `address` (the account's first address if
 none is given). `getBalance` and `signMessage` refuse an address the wallet does
 not own.
+
+`signGameTx` signs a Divi Games chain transaction: the exact `JSON.stringify`
+text of `{v, chain, from, nonce, action[, memo]}` as the games' `txBody()` makes
+it. Only the Divi Games site may ask, the chain must be on the wallet's network
+and `from` must be one of the account's addresses. The popup shows what the
+transaction does (recipient, amount and token, with GOLD and TDIVI decimals
+fixed in the wallet), not the raw text. `signMessage` refuses a transaction
+body, so a site cannot get one signed as an opaque message, and takes a
+`Divi Games session: …` grant only from the Divi Games site.
 
 For `signMessage` and `sendTransaction` the approval popup shows the site, and
 the message and signing address, or the full destination, amount and fee. The

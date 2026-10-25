@@ -53,6 +53,8 @@ export const MSG = {
   // Signing (requires auth)
   AUTHENTICATE: 'AUTHENTICATE',
   SIGN_MESSAGE: 'SIGN_MESSAGE',
+  // A Divi Games chain transaction body, shown as a transaction
+  SIGN_GAME_TX: 'SIGN_GAME_TX',
   SIGN_TRANSACTION: 'SIGN_TRANSACTION',
   SEND_TRANSACTION: 'SEND_TRANSACTION',
 
@@ -103,6 +105,7 @@ export const DAPP_METHODS: readonly string[] = [
   MSG.GET_BALANCE,
   MSG.GET_NETWORK,
   MSG.SIGN_MESSAGE,
+  MSG.SIGN_GAME_TX,
   MSG.SEND_TRANSACTION,
 ];
 

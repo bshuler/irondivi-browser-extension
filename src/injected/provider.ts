@@ -159,6 +159,18 @@ class IronDiviProvider {
   }
 
   /**
+   * Sign a Divi Games chain transaction: the exact JSON text of its body.
+   * The owner is shown it as a transaction. Only the Divi Games site may ask.
+   */
+  async signGameTx(body: string): Promise<{ signature: string; address: string; txid: string }> {
+    const connected = await this.isConnected();
+    if (!connected) {
+      throw new Error('Not connected. Call connect() first.');
+    }
+    return this.sendRequest('SIGN_GAME_TX', { body });
+  }
+
+  /**
    * Send a transaction
    */
   async sendTransaction(tx: TransactionRequest): Promise<string> {
@@ -219,6 +231,7 @@ class IronDiviProvider {
       'irondivi_accounts': 'GET_ADDRESSES',
       'irondivi_getBalance': 'GET_BALANCE',
       'irondivi_signMessage': 'SIGN_MESSAGE',
+      'irondivi_signGameTx': 'SIGN_GAME_TX',
       'irondivi_sendTransaction': 'SEND_TRANSACTION',
     };
 
