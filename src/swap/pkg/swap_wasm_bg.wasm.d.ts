@@ -1,0 +1,33 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_wasmtaker_free: (a: number, b: number) => void;
+export const wasmtaker_addresses: (a: number) => [number, number, number, number];
+export const wasmtaker_begin: (a: number, b: number, c: number, d: number) => any;
+export const wasmtaker_lock: (a: number, b: number, c: number) => any;
+export const wasmtaker_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+export const wasmtaker_offers: (a: number) => any;
+export const wasmtaker_refund: (a: number, b: number, c: number) => any;
+export const wasmtaker_storePrefix: (a: number, b: number) => [number, number];
+export const wasmtaker_swaps: (a: number) => [number, number, number, number];
+export const wasmtaker_syncDiviCoins: (a: number, b: number, c: number) => any;
+export const wasmtaker_tick: (a: number) => any;
+export const rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
+export const rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
+export const rustsecp256k1_v0_10_0_context_create: (a: number) => number;
+export const rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
+export const wasm_bindgen_c592120464837e1d___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut_____Output_______: (a: number, b: number) => void;
+export const wasm_bindgen_c592120464837e1d___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut__wasm_bindgen_c592120464837e1d___JsValue____Output_______: (a: number, b: number) => void;
+export const wasm_bindgen_c592120464837e1d___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut_____Output________1_: (a: number, b: number) => void;
+export const wasm_bindgen_c592120464837e1d___convert__closures_____invoke___wasm_bindgen_c592120464837e1d___JsValue__wasm_bindgen_c592120464837e1d___JsValue_____: (a: number, b: number, c: any, d: any) => void;
+export const wasm_bindgen_c592120464837e1d___convert__closures_____invoke___wasm_bindgen_c592120464837e1d___JsValue_____: (a: number, b: number, c: any) => void;
+export const wasm_bindgen_c592120464837e1d___convert__closures_____invoke______: (a: number, b: number) => void;
+export const wasm_bindgen_c592120464837e1d___convert__closures_____invoke_______1_: (a: number, b: number) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;

@@ -190,6 +190,13 @@ export class RPCClient {
   }
 
   /**
+   * Raw getaddressutxos for one address (exact satoshis, as the swap engine needs them)
+   */
+  async getAddressUtxosRaw(address: string): Promise<RPCUTXOResponse[]> {
+    return this.rpc<RPCUTXOResponse[]>('getaddressutxos', [address]);
+  }
+
+  /**
    * Get transaction history for addresses
    */
   async getTransactionHistory(addresses: string[], limit: number = 50): Promise<TransactionHistoryItem[]> {

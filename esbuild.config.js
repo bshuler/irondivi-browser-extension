@@ -54,6 +54,7 @@ async function build() {
   cpSync(join(__dirname, 'src/popup/popup.html'), join(outdir, 'popup.html'));
   cpSync(join(__dirname, 'src/popup/styles.css'), join(outdir, 'styles.css'));
   cpSync(join(__dirname, 'assets/icons'), join(outdir, 'icons'), { recursive: true });
+  cpSync(join(__dirname, 'src/swap/pkg/swap_wasm_bg.wasm'), join(outdir, 'swap_wasm_bg.wasm'));
 
   // Merge manifest for browser
   const baseManifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'));

@@ -183,7 +183,7 @@ function build(inputs: SignPrevout[], outputs: { script: Uint8Array; valueSats: 
 let PHRASE = '';
 let PRIV: Uint8Array = new Uint8Array(0);
 let ADDRESS = '';
-let SCRIPT = new Uint8Array(0); // the wallet's own P2PKH scriptPubKey (for self-send outputs)
+let SCRIPT: Uint8Array = new Uint8Array(0); // the wallet's own P2PKH scriptPubKey (for self-send outputs)
 const REPORT: Record<string, unknown> = { legA: {}, legB: {} };
 
 /** Decode + chain-verify + sign through the NEW signer, exactly as the service worker would. */

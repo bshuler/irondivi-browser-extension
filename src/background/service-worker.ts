@@ -9,6 +9,8 @@ import { walletCore } from './wallet-core';
 import { rpcClient } from './rpc-client';
 import { connectionManager } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
+import { isExtensionSender } from './sender';
+import { swapService, disposeSwapEngine, SWAP_TICK_ALARM } from './swap-service';
 import { decodeSignRequest, verifyPrevoutsOnChain, toReview } from '../lib/sign-request';
 
 // Origin validation helper
@@ -24,12 +26,6 @@ function isValidOrigin(origin: string): boolean {
   } catch {
     return false;
   }
-}
-
-// Verify sender is from our extension (popup or background)
-function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
-  // Messages from popup/extension pages have sender.id === our extension ID
-  return sender.id === chrome.runtime.id;
 }
 
 // Message handler type
@@ -79,6 +75,8 @@ async function handleMessage(
     MSG.EXPORT_MNEMONIC, MSG.GENERATE_MNEMONIC, MSG.AUTHENTICATE,
     MSG.APPROVE_SIGNING_REQUEST, MSG.REJECT_SIGNING_REQUEST,
     MSG.UPDATE_SETTINGS, MSG.GENERATE_NEW_ADDRESS,
+    MSG.SWAP_ADDRESSES, MSG.SWAP_OFFERS, MSG.SWAP_LIST,
+    MSG.SWAP_BEGIN, MSG.SWAP_LOCK, MSG.SWAP_REFUND,
   ];
   if (popupOnlyOperations.includes(type as any)) {
     if (!isExtensionSender(sender)) {
@@ -700,6 +698,24 @@ async function handleMessage(
         }
       }
 
+      case MSG.SWAP_ADDRESSES:
+        return { success: true, data: await swapService.addresses() };
+
+      case MSG.SWAP_OFFERS:
+        return { success: true, data: await swapService.offers() };
+
+      case MSG.SWAP_LIST:
+        return { success: true, data: await swapService.list() };
+
+      case MSG.SWAP_BEGIN:
+        return { success: true, data: await swapService.begin(payload?.offerId, payload?.btcSats) };
+
+      case MSG.SWAP_LOCK:
+        return { success: true, data: await swapService.lock(String(payload?.id)) };
+
+      case MSG.SWAP_REFUND:
+        return { success: true, data: await swapService.refund(String(payload?.id)) };
+
       default:
         return { success: false, error: `Unknown message type: ${type}` };
     }
@@ -723,6 +739,8 @@ runtime.onMessage.addListener((message: Message, sender: chrome.runtime.MessageS
 alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'signing-session-timeout') {
     await signingSession.handleAlarmTimeout();
+  } else if (alarm.name === SWAP_TICK_ALARM) {
+    await swapService.tick().catch(err => console.warn('swap tick failed:', err instanceof Error ? err.message : err));
   }
 });
 

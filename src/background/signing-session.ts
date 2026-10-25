@@ -39,6 +39,7 @@ const RATE_LIMIT_STATE_KEY = 'rate_limit_state';
 export class SigningSession {
   private sessionKey: CryptoKey | null = null;
   private decryptedMnemonic: SecureString | null = null;
+  private clearListeners: Array<() => void> = [];
   private currentAccountId: string | null = null;
   private failedAttempts: Map<string, RateLimitEntry> = new Map();
   private readonly MAX_ATTEMPTS = 5;
@@ -299,9 +300,17 @@ export class SigningSession {
   }
 
   /**
+   * Run `cb` whenever the session is cleared (lock, timeout, account change)
+   */
+  onClear(cb: () => void): void {
+    this.clearListeners.push(cb);
+  }
+
+  /**
    * Clear the signing session (manual lock)
    */
   async clearSession(): Promise<void> {
+    for (const cb of this.clearListeners) cb();
     await storage.session.remove('signingSession');
     await alarms.clear(SESSION_ALARM_NAME);
 
