@@ -14,6 +14,7 @@ import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePending
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { isAllowedDappOrigin } from '../shared/origin';
+import { CAPABILITIES, ERR } from '../shared/provider-errors';
 import { checkGameTx, checkMessageShape, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
@@ -33,6 +34,8 @@ const MAINNET_SITE_METHODS: readonly string[] = [MSG.GET_NETWORK, MSG.IS_CONNECT
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
+// What a site may put in a send; the memo is the "memo" capability
+const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo'];
 
 /**
  * Unlock with the password given for one send or signature from the popup.
@@ -95,6 +98,7 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
       amount: request.amount,
       fee: request.fee,
       fromAddresses: request.fromAddresses,
+      memo: request.memo,
     }, account.network);
   } catch (error) {
     if (utxos.length < listed.length && error instanceof Error && /^Insufficient funds/.test(error.message)) {
@@ -243,6 +247,7 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
         to: request.data.to,
         amount: request.data.amount,
         fromAddresses: request.data.fromAddresses,
+        memo: request.data.memo,
       }, diviToSatoshis(request.data.fee));
     }
 
@@ -338,6 +343,7 @@ async function sendFromAccount(
       amountSats: parseDiviAmount(request.amount),
       ownAddresses: account.addresses.map(a => a.address),
       network: account.network,
+      memo: request.memo,
     });
     const txid = await rpcClient.broadcastTransaction(signedHex);
     await recordSpend(account.id, account.network, built.amountSats + built.feeSats);
@@ -377,6 +383,8 @@ interface MessageResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+  // For a site: the IronDivi Connect error code (provider-errors.ts)
+  code?: number;
 }
 
 /**
@@ -681,12 +689,21 @@ async function handleMessage(
         if (!account) return { success: false, error: 'No account selected' };
         if (account.addresses.length === 0) return noAddressesOn(account);
 
+        // An option this wallet does not know is refused, never dropped: a
+        // site asking for one must not get a payment without it (4200)
+        if (origin) {
+          const unknown = Object.keys(payload ?? {}).filter(k => !SEND_OPTIONS.includes(k));
+          if (unknown.length > 0) {
+            return { success: false, error: `Unsupported option: ${unknown.join(', ')}`, code: ERR.UNSUPPORTED };
+          }
+        }
         const request: TransactionRequest = {
           to: payload.to,
           amount: payload.amount,
           // Only the owner, in the popup, may choose the fee; a site's is ignored
           fee: origin ? undefined : payload.fee,
           fromAddresses: payload.fromAddresses,
+          memo: payload.memo,
         };
 
         // From a dApp (has origin): needs a connection, then the user's approval
@@ -856,29 +873,28 @@ async function handleMessage(
         if (selected && selected.addresses.length === 0) return noAddressesOn(selected);
 
         if (!selected) return { success: false, error: 'No account selected' };
-        const isConnected = await connectionManager.isConnected(origin, accountId, selected.network);
-        if (isConnected) {
-          return {
-            success: true,
-            data: {
-              address: selected?.addresses[0]?.address,
-              connected: true
-            }
-          };
+        // A site that says which network it wants is refused on the other one
+        if (payload?.network !== undefined && payload.network !== selected.network) {
+          return { success: false, error: `Network mismatch: the wallet is on ${selected.network}`, code: ERR.NETWORK_MISMATCH };
         }
+        const connected = () => ({
+          success: true,
+          data: {
+            address: selected.addresses[0]?.address,
+            connected: true,
+            network: selected.network,
+            capabilities: [...CAPABILITIES],
+          }
+        });
+        const isConnected = await connectionManager.isConnected(origin, accountId, selected.network);
+        if (isConnected) return connected();
 
         // Create connection request and wait for approval
         try {
           await connectionManager.requestConnection(origin, accountId, selected.network);
           // Connection approved - return the address of the account the site
           // was connected to, even if the owner chose another meanwhile
-          return {
-            success: true,
-            data: {
-              address: selected?.addresses[0]?.address,
-              connected: true
-            }
-          };
+          return connected();
         } catch (error) {
           // Connection rejected or timed out
           return {

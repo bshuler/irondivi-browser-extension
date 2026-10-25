@@ -16,6 +16,38 @@ interface TxOutput {
     script: Uint8Array | string;
 }
 
+// The most data an OP_RETURN output carries: an IronDivi Connect memo
+export const MAX_OP_RETURN_BYTES = 512;
+
+// The data's bytes, if it is text that UTF-8 carries unchanged: a lone
+// surrogate would be sent as U+FFFD, which is not what was asked for
+export function utf8Exact(text: string): Uint8Array | null {
+    const data = new TextEncoder().encode(text);
+    return new TextDecoder().decode(data) === text ? data : null;
+}
+
+// scriptPubKey OP_RETURN <push> <data>, for 1 to MAX_OP_RETURN_BYTES bytes of UTF-8
+export function opReturnScript(dataString: string): string {
+    const data = typeof dataString === 'string' ? utf8Exact(dataString) : null;
+    if (!data) throw new Error('OP_RETURN data must be text');
+    const len = data.length;
+    if (len === 0) throw new Error('OP_RETURN data is empty');
+    if (len > MAX_OP_RETURN_BYTES) throw new Error(`OP_RETURN data too large (max ${MAX_OP_RETURN_BYTES} bytes)`);
+
+    let scriptHex = '6a'; // OP_RETURN
+    if (len <= 75) {
+        // Direct push: length byte is the opcode
+        scriptHex += len.toString(16).padStart(2, '0');
+    } else if (len <= 255) {
+        // OP_PUSHDATA1 + 1-byte length
+        scriptHex += '4c' + len.toString(16).padStart(2, '0');
+    } else {
+        // OP_PUSHDATA2 + 2-byte little-endian length
+        scriptHex += '4d' + (len & 0xff).toString(16).padStart(2, '0') + (len >> 8).toString(16).padStart(2, '0');
+    }
+    return scriptHex + bytesToHex(data);
+}
+
 class Transaction {
     version: number = 1;
     inputs: TxInput[] = [];
@@ -186,26 +218,9 @@ class Transaction {
      * Used for DNS registration: DNSDIVI:REG:<name>:<owner_address>
      */
     addOpReturn(dataString: string): void {
-        const data = new TextEncoder().encode(dataString);
-        const dataHex = bytesToHex(data);
-        const len = data.length;
-
-        // Build scriptPubKey: OP_RETURN <push> <data>
-        let scriptHex = '6a'; // OP_RETURN
-        if (len <= 75) {
-            // Direct push: length byte is the opcode
-            scriptHex += len.toString(16).padStart(2, '0');
-        } else if (len <= 255) {
-            // OP_PUSHDATA1 + 1-byte length
-            scriptHex += '4c' + len.toString(16).padStart(2, '0');
-        } else {
-            throw new Error('OP_RETURN data too large (max 255 bytes)');
-        }
-        scriptHex += dataHex;
-
         this.outputs.push({
             value: 0n,
-            script: scriptHex
+            script: opReturnScript(dataString)
         });
     }
 

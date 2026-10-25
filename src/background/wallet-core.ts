@@ -1,5 +1,5 @@
 import { Address } from '../lib/address';
-import { Transaction } from '../lib/transaction';
+import { MAX_OP_RETURN_BYTES, opReturnScript, Transaction } from '../lib/transaction';
 import { bytesToHex } from '../lib/hex';
 import { Signer } from '../lib/signer';
 import { derivePublicKey } from '../lib/secp256k1';
@@ -23,6 +23,8 @@ export interface TransactionRequest {
   // Only honoured from the wallet's own popup; a site never sets the fee
   fee?: number;
   fromAddresses?: string[];
+  // Text put unchanged into one OP_RETURN output (IronDivi Connect "memo")
+  memo?: string;
 }
 
 export interface BuiltInput {
@@ -51,6 +53,8 @@ export interface SendIntent {
   amountSats: bigint;
   ownAddresses: string[];
   network: NetworkType;
+  // The memo the owner was shown; the transaction carries exactly it, or none
+  memo?: string;
 }
 
 // DIVI min relay fee: 10,000 sat/KB, so 10 sat per byte, and never below 5000 sat
@@ -129,15 +133,22 @@ export function p2pkhScript(address: string): string {
   return '76a914' + bytesToHex(Address.decode(address).hash) + '88ac';
 }
 
-// Smallest fee the network relays for a P2PKH transaction of this shape
-function minimumFeeSats(inputCount: number, outputCount: number): bigint {
-  const estimatedSize = BigInt(inputCount * 148 + outputCount * 34 + 10);
+// Smallest fee the network relays for a P2PKH transaction of this shape,
+// plus extraBytes (an OP_RETURN output)
+function minimumFeeSats(inputCount: number, outputCount: number, extraBytes = 0): bigint {
+  const estimatedSize = BigInt(inputCount * 148 + outputCount * 34 + 10 + extraBytes);
   const fee = estimatedSize * FEE_SATS_PER_BYTE;
   return fee > MIN_FEE_SATS ? fee : MIN_FEE_SATS;
 }
 
 function scriptToHex(script: Uint8Array | string): string {
   return (script instanceof Uint8Array ? bytesToHex(script) : script).toLowerCase();
+}
+
+// Size of an output with this script: value, script length, script
+function outputBytes(scriptHex: string): number {
+  const len = scriptHex.length / 2;
+  return 8 + (len < 0xfd ? 1 : 3) + len;
 }
 
 export class WalletCore {
@@ -157,7 +168,7 @@ export class WalletCore {
     request: TransactionRequest,
     network: NetworkType
   ): { amountSats: bigint; requestedFeeSats: bigint | undefined } {
-    const { to, amount, fee: requestedFee } = request;
+    const { to, amount, fee: requestedFee, memo } = request;
 
     const amountSats = parseDiviAmount(amount);
     if (requestedFee !== undefined &&
@@ -183,6 +194,14 @@ export class WalletCore {
       throw new Error('Invalid address: checksum verification failed');
     }
 
+    if (memo !== undefined) {
+      try {
+        opReturnScript(memo);
+      } catch {
+        throw new Error(`Invalid memo: it must be text of 1 to ${MAX_OP_RETURN_BYTES} bytes (UTF-8)`);
+      }
+    }
+
     return { amountSats, requestedFeeSats };
   }
 
@@ -197,8 +216,10 @@ export class WalletCore {
     request: TransactionRequest,
     network: NetworkType
   ): BuiltTransaction {
-    const { to, amount, fromAddresses } = request;
+    const { to, fromAddresses, memo } = request;
     const { amountSats, requestedFeeSats } = this.checkRequest(request, network);
+    const memoHex = memo === undefined ? undefined : opReturnScript(memo);
+    const extraBytes = memoHex ? outputBytes(memoHex) : 0;
 
     // Only coins at this account's own addresses can be spent
     const addressIndexMap = new Map(addresses.map(a => [a.address, a.index]));
@@ -221,10 +242,10 @@ export class WalletCore {
       }
       selectedUtxos.push(utxo);
       selectedAmountSats += utxo.satoshis;
-      feeSats = this.feeFor(selectedUtxos.length, requestedFeeSats);
+      feeSats = this.feeFor(selectedUtxos.length, requestedFeeSats, extraBytes);
       if (selectedAmountSats >= amountSats + feeSats) break;
     }
-    if (selectedUtxos.length === 0) feeSats = this.feeFor(1, requestedFeeSats);
+    if (selectedUtxos.length === 0) feeSats = this.feeFor(1, requestedFeeSats, extraBytes);
 
     if (selectedAmountSats < amountSats + feeSats) {
       throw new Error(`Insufficient funds. Need ${satoshisToDivi(amountSats + feeSats)}, have ${satoshisToDivi(selectedAmountSats)}`);
@@ -266,6 +287,8 @@ export class WalletCore {
     if (changeSats > 0n) {
       tx.outputs.push({ value: changeSats, script: p2pkhScript(changeAddress) });
     }
+    // The memo goes last, worth nothing
+    if (memoHex) tx.outputs.push({ value: 0n, script: memoHex });
 
     return {
       tx,
@@ -279,9 +302,9 @@ export class WalletCore {
     };
   }
 
-  private feeFor(inputCount: number, requestedFeeSats: bigint | undefined): bigint {
-    // One output to the recipient and one for change
-    const minimum = minimumFeeSats(inputCount, 2);
+  private feeFor(inputCount: number, requestedFeeSats: bigint | undefined, extraBytes: number): bigint {
+    // One output to the recipient and one for change, and any memo
+    const minimum = minimumFeeSats(inputCount, 2, extraBytes);
     if (requestedFeeSats === undefined) return minimum;
     if (requestedFeeSats < minimum) {
       throw new Error(`Fee is below the network minimum of ${satoshisToDivi(minimum)} DIVI for this send`);
@@ -313,7 +336,15 @@ export class WalletCore {
     if (!Address.validate(intent.to, intent.network)) {
       throw new Error('Invalid address');
     }
-    const outputs = tx.outputs;
+    let outputs = tx.outputs;
+    // A memo is the last output, worth nothing, holding exactly the memo
+    if (intent.memo !== undefined) {
+      const last = outputs[outputs.length - 1];
+      if (!last || last.value !== 0n || scriptToHex(last.script) !== opReturnScript(intent.memo)) {
+        throw new Error('Transaction does not carry the memo that was shown');
+      }
+      outputs = outputs.slice(0, -1);
+    }
     if (outputs.length < 1 || outputs.length > 2 ||
         outputs[0].value !== intent.amountSats ||
         scriptToHex(outputs[0].script) !== p2pkhScript(intent.to)) {

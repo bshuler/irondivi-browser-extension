@@ -12,7 +12,8 @@ export interface SigningRequestData {
   total?: string;
   fee?: number;
   fromAddresses?: string[];
-  opReturn?: string;
+  // Text sent unchanged in one OP_RETURN output
+  memo?: string;
   // The network the request was made on; approval is refused on another
   network?: NetworkType;
   // A Divi Games transaction, as the background parsed it, for the window

@@ -29,7 +29,7 @@ export interface SigningRequest {
     // What the account holds after this payment, as text (EXT-8)
     balanceAfter?: string;
     addressIndex?: number;
-    opReturn?: string;
+    memo?: string;
     // A Divi Games transaction, as the background checked and read it
     gameTx?: GameTxSummary;
     // A Divi Games session grant the message makes
@@ -275,11 +275,13 @@ export function showSigningRequestView(request: SigningRequest): void {
       blocked = true;
       rows.push(warningRow('fee-unknown', 'The wallet could not work out the fee, so this payment cannot be approved. Reject it and try again.'));
     }
-    if (request.data?.opReturn) {
-      const value = el('span', 'signing-detail-value', shown(request.data.opReturn));
+    if (request.data?.memo !== undefined) {
+      // Stored on the chain with the payment, where anyone can read it
+      const value = el('span', 'signing-detail-value', shown(request.data.memo));
       value.style.fontSize = '11px';
       value.style.wordBreak = 'break-all';
-      rows.push(detailRow('OP_RETURN', value));
+      value.style.whiteSpace = 'pre-wrap';
+      rows.push(detailRow('Memo (public):', value));
     }
   }
 

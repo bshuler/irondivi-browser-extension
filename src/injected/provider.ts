@@ -12,6 +12,8 @@
 //     already listening takes it and cancels the event;
 //   - if nobody took it, the provider waits for the content script's
 //     'irondivi:ready' event and offers again, once.
+import { CAPABILITIES, ERR, errorCode } from '../shared/provider-errors';
+
 const PORT_EVENT = 'irondivi:port';
 const READY_EVENT = 'irondivi:ready';
 
@@ -24,18 +26,28 @@ interface TransactionRequest {
   amount: number | string;
   fee?: number;
   fromAddresses?: string[];
+  // UTF-8, 1 to 512 bytes, sent unchanged in one OP_RETURN output ("memo")
+  memo?: string;
 }
 
-interface ProviderResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
+// A failed request: message, and the IronDivi Connect code (4001 rejected,
+// 4100 not connected, 4200 unsupported, 4900 locked, 4901 network mismatch)
+export class ProviderRpcError extends Error {
+  constructor(message: string, readonly code: number) {
+    super(message);
+    this.name = 'ProviderRpcError';
+  }
 }
+
+const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo'];
 
 class IronDiviProvider {
   // Properties
   readonly isIronDivi = true;
   readonly version = '1.0.0';
+  // What this wallet does beyond the base API; "memo": sendTransaction
+  // attaches memo. A site must check before relying on one.
+  readonly capabilities: readonly string[] = CAPABILITIES;
 
   private pendingRequests = new Map<string, {
     resolve: (value: any) => void;
@@ -57,7 +69,9 @@ class IronDiviProvider {
         if (response.success) {
           pending.resolve(response.data);
         } else {
-          pending.reject(new Error(response.error || 'Request failed'));
+          const message = response.error || 'Request failed';
+          const code = typeof response.code === 'number' ? response.code : errorCode(message);
+          pending.reject(new ProviderRpcError(message, code));
         }
       }
     };
@@ -83,7 +97,7 @@ class IronDiviProvider {
       // Set timeout
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new Error('Request timeout'));
+        reject(new ProviderRpcError('Request timeout', ERR.INTERNAL));
       }, 5 * 60 * 1000); // 5 minutes
 
       this.pendingRequests.set(id, {
@@ -114,8 +128,8 @@ class IronDiviProvider {
   /**
    * Request connection to the wallet
    */
-  async connect(): Promise<{ address: string; publicKey?: string }> {
-    const result = await this.sendRequest('CONNECT');
+  async connect(params?: { network?: 'mainnet' | 'testnet' }): Promise<{ address: string; network: string; capabilities: string[] }> {
+    const result = await this.sendRequest('CONNECT', params?.network === undefined ? undefined : { network: params.network });
     this.emit('connect', { address: result.address });
     return result;
   }
@@ -165,7 +179,7 @@ class IronDiviProvider {
   async signMessage(message: string, address?: string): Promise<string> {
     const connected = await this.isConnected();
     if (!connected) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new ProviderRpcError('Not connected. Call connect() first.', ERR.NOT_CONNECTED);
     }
     // Without an address the wallet signs with the account's first address
     const result = await this.sendRequest('SIGN_MESSAGE', { message, address });
@@ -179,7 +193,7 @@ class IronDiviProvider {
   async signGameTx(body: string): Promise<{ signature: string; address: string; txid: string }> {
     const connected = await this.isConnected();
     if (!connected) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new ProviderRpcError('Not connected. Call connect() first.', ERR.NOT_CONNECTED);
     }
     return this.sendRequest('SIGN_GAME_TX', { body });
   }
@@ -190,14 +204,16 @@ class IronDiviProvider {
   async sendTransaction(tx: TransactionRequest): Promise<string> {
     const connected = await this.isConnected();
     if (!connected) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new ProviderRpcError('Not connected. Call connect() first.', ERR.NOT_CONNECTED);
     }
-    const result = await this.sendRequest('SEND_TRANSACTION', {
-      to: tx.to,
-      amount: tx.amount,
-      fee: tx.fee,
-      fromAddresses: tx.fromAddresses,
-    });
+    // An option this wallet does not know is refused, never dropped
+    const unknown = Object.keys(tx ?? {}).filter(k => !SEND_OPTIONS.includes(k));
+    if (unknown.length > 0) {
+      throw new ProviderRpcError(`Unsupported option: ${unknown.join(', ')}`, ERR.UNSUPPORTED);
+    }
+    const params: TransactionRequest = { to: tx.to, amount: tx.amount, fee: tx.fee, fromAddresses: tx.fromAddresses };
+    if (tx.memo !== undefined) params.memo = tx.memo;
+    const result = await this.sendRequest('SEND_TRANSACTION', params);
     return result?.txid;
   }
 
@@ -255,7 +271,7 @@ class IronDiviProvider {
 
     const internalMethod = methodMap[args.method];
     if (!internalMethod) {
-      throw new Error(`Unknown method: ${args.method}`);
+      throw new ProviderRpcError(`Unsupported method: ${args.method}`, ERR.UNSUPPORTED);
     }
 
     return this.sendRequest(internalMethod, args.params);

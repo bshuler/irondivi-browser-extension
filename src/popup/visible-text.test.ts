@@ -100,8 +100,8 @@ describe('L7 the approval window shows the whole request', () => {
     expect(details.text()).toContain('<img src=x onerror=alert(1)>');
   });
 
-  it('the destination and OP_RETURN of a payment are checked too', async () => {
-    const details = await render({ type: 'send_transaction', data: { to: 'D\u200babc', amount: 1, fee: 0.00005, opReturn: 'x\u202ey' } });
+  it('the destination and memo of a payment are checked too', async () => {
+    const details = await render({ type: 'send_transaction', data: { to: 'D\u200babc', amount: 1, fee: 0.00005, memo: 'x\u202ey' } });
     const text = details.text();
     expect(text).toContain('D⟨U+200B⟩abc');
     expect(text).toContain('x⟨U+202E⟩y');

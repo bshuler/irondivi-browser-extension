@@ -168,7 +168,8 @@ export interface SendTransactionPayload {
   amount: number;
   fee?: number;
   fromAddresses?: string[];
-  opReturn?: string;
+  // Text sent unchanged in one OP_RETURN output
+  memo?: string;
   // From the popup: the password, which every send needs
   password?: string;
 }
@@ -308,4 +309,5 @@ export const FAUCET_URLS = {
   testnet: 'https://services.divi.domains/testnet/faucet/api/request',
   mainnet: 'https://vps1.divi.domains/faucet/api/request',
 };
+
 
