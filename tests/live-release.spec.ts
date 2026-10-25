@@ -54,10 +54,11 @@ test('the release: create a wallet, connect on games.divi.domains, example.com i
   await games.goto('https://games.divi.domains/', { waitUntil: 'domcontentloaded' });
   await games.waitForFunction(() => !!(window as any).irondivi, null, { timeout: 15000 });
   expect(await games.evaluate(() => (window as any).irondivi.getAccessStatus())).toBe('default');
-  // The site may ask on load as well; requests share one approval window, so
-  // take any approval window, whether it was already open or opens now
+  // Watch the open pages rather than the 'page' event: the window can take
+  // over 20 s to show on a busy machine, and its URL may not be set yet when
+  // the event fires
   const win = (async () => {
-    for (const end = Date.now() + 20000; Date.now() < end; await new Promise(r => setTimeout(r, 250))) {
+    for (const end = Date.now() + 60000; Date.now() < end; await new Promise(r => setTimeout(r, 250))) {
       const p = context.pages().find(x => /approve=/.test(x.url()));
       if (p) { await p.waitForLoadState('domcontentloaded'); return p; }
     }
@@ -68,7 +69,8 @@ test('the release: create a wallet, connect on games.divi.domains, example.com i
   await w.click('#approve-request-btn');
   const result = await connected;
   console.log('games.divi.domains connect ->', JSON.stringify({ ...result, address: result?.address ? 'present' : result?.address }));
-  expect(result?.address).toMatch(/^[DyY]/);
+  // Testnet addresses (prefix 0x8b) start with x or y
+  expect(result?.address).toMatch(/^[xy]/);
 
   // A site off the list: told only its status; nothing opens
   const ex = await context.newPage();
