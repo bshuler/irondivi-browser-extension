@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { feeText, pickRequest } from './signing-request-ui';
+import { feeText, pickRequest, relayNotice } from './signing-request-ui';
 
 // Regression tests for the security review's M4: an approval window opened
 // for one request showed the first pending request instead when its own was
@@ -123,5 +123,31 @@ describe('the network colour bar', () => {
   it('the approval window colours itself by the request\'s network', () => {
     const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/document\.body\.dataset\.network = network;/);
+  });
+});
+
+// IronDivi Connect: a request relayed from a paired page shows the site and
+// name its pairing claims, the relay, and that the browser did not check them
+describe('a relayed request says who it claims to be', () => {
+  it('shows the claimed site, the name, the relay and that it is not verified', () => {
+    const n = relayNotice({ origin: 'https://games.divi.domains', name: 'Divi Games', relayHost: 'divi.cx' });
+    expect(n.site).toBe('https://games.divi.domains');
+    const text = n.lines.join(' ');
+    expect(text).toContain('divi.cx');
+    expect(text).toContain('“Divi Games”');
+    expect(text).toContain('claimed by the page, not verified by the browser');
+  });
+
+  it('makes hidden characters in the name visible', () => {
+    const n = relayNotice({ origin: 'https://games.divi.domains', name: 'Divi\u202eGames', relayHost: 'divi.cx' });
+    expect(n.lines.join(' ')).not.toContain('\u202e');
+  });
+
+  it('the window shows the notice, set as text, for relayed requests only', () => {
+    const src = readFileSync(new URL('./signing-request-ui.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/elements\.origin\.textContent = request\.relay \? relayNotice\(request\.relay\)\.site : request\.origin/);
+    expect(src).toMatch(/elements\.relay\.classList\.toggle\('hidden', !request\.relay\)/);
+    const html = readFileSync(new URL('./popup.html', import.meta.url), 'utf8');
+    expect(html).toContain('id="signing-relay"');
   });
 });

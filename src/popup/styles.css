@@ -1555,6 +1555,18 @@ body {
   border-radius: 6px;
 }
 
+/* A request relayed by IronDivi Connect: who it claims to be */
+.signing-relay {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--warning, #d97706);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 6px;
+}
+
 .signing-type {
   text-align: center;
   padding: 5px 12px;

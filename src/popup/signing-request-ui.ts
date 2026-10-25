@@ -44,7 +44,29 @@ export interface SigningRequest {
   from?: { name: string; address: string; addressCount: number };
   // What the wallet knows about the recipient of a payment (EXT-8)
   recipient?: { text: string; level: 'ok' | 'warn' | 'danger' };
+  // A page paired over IronDivi Connect: what its pairing code claims
+  relay?: RelayClaim | null;
   createdAt: number;
+}
+
+export interface RelayClaim { origin: string; name: string; relayHost: string }
+
+/**
+ * What the window says about a request that came over the relay. The origin
+ * and name are what the pasted code and the page claim: no browser checked
+ * them, so the window shows them as a claim and says so.
+ */
+export function relayNotice(relay: RelayClaim): { site: string; lines: string[] } {
+  const site = visibleText(relay.origin).text;
+  const name = visibleText(relay.name).text.trim();
+  return {
+    site,
+    lines: [
+      `Through IronDivi Connect, relayed by ${visibleText(relay.relayHost).text}.`,
+      `${name ? `“${name}”` : 'The page'} claims to be ${site}. This is claimed by the page, not verified by the browser.`,
+      'Approve only if you paired this wallet with that page yourself, just now.',
+    ],
+  };
 }
 
 /**
@@ -74,6 +96,7 @@ function getElements() {
     view: document.getElementById('view-signing-request') as HTMLDivElement,
     backBtn: document.getElementById('signing-request-back-btn') as HTMLButtonElement,
     origin: document.getElementById('signing-origin') as HTMLDivElement,
+    relay: document.getElementById('signing-relay') as HTMLDivElement | null,
     network: document.getElementById('signing-network') as HTMLSpanElement,
     type: document.getElementById('signing-type') as HTMLDivElement,
     details: document.getElementById('signing-details') as HTMLDivElement,
@@ -163,8 +186,13 @@ export function showSigningRequestView(request: SigningRequest): void {
 
   signingRequestViewElement = elements.view;
 
-  // Set origin
-  elements.origin.textContent = request.origin;
+  // Set origin: a relayed request shows the site its pairing claims, and says
+  // it is a claim
+  elements.origin.textContent = request.relay ? relayNotice(request.relay).site : request.origin;
+  if (elements.relay) {
+    elements.relay.replaceChildren(...(request.relay ? relayNotice(request.relay).lines.map(t => el('div', '', t)) : []));
+    elements.relay.classList.toggle('hidden', !request.relay);
+  }
 
   // Which network this request is for, in that network's colour
   const network = (request.network ?? document.body.dataset.network) as NetworkType | undefined;
