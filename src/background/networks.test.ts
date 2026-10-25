@@ -52,9 +52,9 @@ describe('each network has its own addresses', () => {
     h.storage.settings = { ...h.storage.settings, network: 'mainnet' };
     expect((await selected()).addresses).toEqual([]);
 
-    // A site asking to connect is refused: sites are testnet only for now
+    // A site asking to connect is refused until the account has a Mainnet address
     const refused = await h.fromTab('CONNECT');
-    expect(refused).toEqual({ success: false, error: 'Sites can use IronDivi on testnet only' });
+    expect(refused).toEqual({ success: false, error: expect.stringContaining('no Mainnet address yet') });
 
     const wrong = await h.popup('ADD_NETWORK_ADDRESSES', { accountId: account.id, password: 'wrong password' });
     expect(wrong?.success).toBe(false);

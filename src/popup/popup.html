@@ -260,10 +260,17 @@
           <p class="setting-hint">Every approval window shows this phrase. A website can draw a window that looks like the wallet's, but it cannot know your phrase: never type your password into a window that does not show it.</p>
         </div>
         <div class="setting-section">
-          <h3>Allowed Sites</h3>
-          <p class="setting-hint">Sites that can connect to your wallet, one per line. *.example.com allows one level of subdomain, **.example.com any depth. Add :8080 for a port, or :* for any port. Adding a site asks for your password.</p>
-          <textarea id="setting-allowed-sites" rows="4" placeholder="games.divi.domains&#10;**.divi.domains&#10;localhost:*"></textarea>
-          <button class="secondary-btn" id="save-allowed-sites-btn" style="margin-top:8px;">Save Sites</button>
+          <h3>Site Access</h3>
+          <p class="setting-hint">The sites on IronDivi's default list can ask to connect. Any other site must first ask for access, and you choose. These are the sites you answered and the sites you blocked. A blocked site can never ask.</p>
+          <div id="site-access-list"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="text" id="block-site-input" placeholder="https://example.com" style="flex:1;" autocomplete="off" spellcheck="false">
+            <button class="secondary-btn" id="block-site-btn">Block</button>
+          </div>
+          <details style="margin-top:8px;">
+            <summary class="setting-hint">The default list</summary>
+            <ul id="default-sites-list" class="setting-hint"></ul>
+          </details>
         </div>
         <div class="setting-section">
           <h3>Connected Sites</h3>
@@ -430,6 +437,7 @@
             <button id="reject-request-btn" class="secondary-btn">Reject</button>
             <button id="approve-request-btn" class="primary-btn">Approve</button>
           </div>
+          <button id="never-request-btn" class="secondary-btn hidden" style="width:100%;margin-top:8px;">Never for this site</button>
         </div>
       </div>
     </div>

@@ -31,7 +31,7 @@ const unlock = () => h.popup('AUTHENTICATE', { accountId: account.id, password: 
 function plantLooseSettings() {
   h.storage.settings = {
     ...h.storage.settings,
-    allowedSites: ['games.divi.domains', EVIL],
+    siteAccess: { grants: { [`https://${EVIL}`]: { testnet: { state: 'allowed', at: 1 }, mainnet: { state: 'allowed', at: 1 } } }, blocked: {} },
     transactionLimits: { maxAmountAbsolute: 0, maxAmountPercent: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 },
     authTimeoutMinutes: 30,
     limitsVersion: 2,
@@ -41,7 +41,7 @@ function plantLooseSettings() {
 
 function expectProtectionsBack() {
   const s = h.storage.settings;
-  expect(s.allowedSites).not.toContain(EVIL);
+  expect(JSON.stringify(s.siteAccess ?? {})).not.toContain(EVIL);
   expect(s.transactionLimits.maxAmountPercent).toBeGreaterThan(0);
   expect(s.transactionLimits.dailyLimitPercent).toBeGreaterThan(0);
   expect(s.authTimeoutMinutes).toBeLessThan(30);
@@ -89,10 +89,13 @@ describe('EXT-3 a wallet from before the seal is sealed as it is', () => {
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about', TEST_PASSWORD);
     delete h.storage.recordsSeal;
     h.storage.settings = { ...h.storage.settings, allowedSites: ['games.divi.domains', 'my.site'], limitsVersion: 2 };
+    delete h.storage.settings.siteAccess;
     await browserRestart();
 
     expect((await unlock()).success).toBe(true);
-    expect(h.storage.settings.allowedSites).toContain('my.site');
+    // The old list is read as exact sites until the settings are next saved
+    const { normalizeSettings } = await import('../shared/storage');
+    expect(normalizeSettings(h.storage.settings).siteAccess.grants['https://my.site']?.mainnet?.state).toBe('allowed');
     expect(h.storage.secrets[account.id].version).toBe(3);
     expect(h.storage.recordsSeal).toBeTruthy();
     expect((await h.popup('GET_RECORDS_WARNING')).data.warning).toBeNull();

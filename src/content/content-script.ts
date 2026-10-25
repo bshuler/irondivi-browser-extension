@@ -10,8 +10,10 @@ const READY_EVENT = 'irondivi:ready';
 const pageOrigin = window.location.origin;
 
 // The background registers this script, and window.irondivi in the page's own
-// world, only on the allowed sites (site-scripts.ts); nothing of the wallet
-// runs on any other page.
+// world, on every https page (site-scripts.ts), so a site that is not on the
+// default list can ask the user with requestAccess. The background answers
+// such a site only with its access status (site-access.ts) until the user
+// allows it; a blocked site gets nothing else and can never open a window.
 //
 // Run once per page. This window is the content script's own isolated world,
 // so the page cannot see or set the flag; a second copy (an extension reload)
@@ -19,8 +21,9 @@ const pageOrigin = window.location.origin;
 const firstCopy = !(window as any).__irondiviBridge;
 (window as any).__irondiviBridge = true;
 
-// Whether this page may use the wallet at all. The background decides from
-// this tab's origin; a content script never reads extension storage.
+// Whether this page's origin is one the wallet can talk to at all (https, or
+// a local page in a development build). The background decides from this
+// tab's origin; a content script never reads extension storage.
 const siteAllowed: Promise<boolean> = (runtime.sendMessage({ type: MSG.SITE_ALLOWED }) as Promise<any>)
   .then(r => r?.success === true && r.data?.allowed === true)
   .catch(() => false);

@@ -54,7 +54,8 @@ export interface Settings {
   authTimeoutMinutes: number;
   currency: string;
   hideBalance: boolean;
-  allowedSites: string[];
+  // Sites that asked and what the owner chose, and the sites the owner blocked
+  siteAccess: SiteAccess;
   transactionLimits: TransactionLimits;
   // Shown in every approval window (EXT-18)
   securityPhrase?: string;
@@ -70,6 +71,7 @@ export interface PendingSendTx {
 }
 
 import { NetworkType } from '../shared/constants';
+import type { SiteAccess } from '../shared/site-access';
 
 /**
  * Helper to get primary address from an account

@@ -7,18 +7,26 @@ const provider = fs.readFileSync(path.join(__dirname, 'injected', 'provider.ts')
 const section = readme.slice(readme.indexOf('## dApp connections'), readme.indexOf('## Development'));
 
 describe('#7 README dApp section matches the code', () => {
-  it('does not claim the provider is on every page or that every request opens the popup', () => {
-    expect(readme).not.toMatch(/adds to every http\(s\) page/);
+  it('does not claim that every request opens the popup, or that a page it runs on may use the wallet', () => {
     expect(readme).not.toMatch(/every\s+request is approved in the extension popup/);
+    expect(section).toMatch(/learns nothing|opens no window/);
   });
 
-  it('names the default allowed sites', async () => {
-    // storage.ts reaches for the browser API when loaded
-    (globalThis as any).chrome ??= { runtime: {} };
-    const { DEFAULT_SETTINGS } = await import('./shared/storage');
-    for (const site of DEFAULT_SETTINGS.allowedSites) {
+  it('names every site on the default list, and the denylist', async () => {
+    const { DEFAULT_SITES } = await import('./shared/site-access');
+    for (const site of DEFAULT_SITES) {
       expect(section).toContain(`\`${site}\``);
     }
+    expect(section).toContain('site-access/blocked-sites.json');
+  });
+
+  it('documents each access status and its error code', () => {
+    for (const status of ['default', 'allowed', 'not_allowed', 'denied', 'blocked']) {
+      expect(section).toContain(`\`"${status}"\``);
+    }
+    expect(section).toMatch(/`4300` the site must ask/);
+    expect(section).toMatch(/`4301` the site is blocked/);
+    expect(section).toMatch(/requestAccess\(\{ reason:/);
   });
 
   it('lists every request() method name the provider accepts', () => {

@@ -59,7 +59,7 @@ describe('EXT-4 signGameTx', () => {
   });
 
   it('another connected site cannot ask for one', async () => {
-    h = await createHarness('https://example.org/', { allowedSites: ['example.org'], grantedOrigins: ['https://example.org/*'] });
+    h = await createHarness('https://example.org/', { siteAccess: { grants: { 'https://example.org': { testnet: { state: 'allowed', at: 1 } } }, blocked: {} }, grantedOrigins: ['https://example.org/*'] });
     const account = await h.setupWallet();
     await h.connectPage();
     const body = txBody(account.addresses[0].address, { type: 'transfer', to: 'yX', token: 'GOLD', amount: '1' });

@@ -137,25 +137,72 @@ can serve as the RPC backend: the wallet calls `getaddressbalance`,
 ## dApp connections
 
 dApps connect through the injected provider, `window.irondivi` (`isIronDivi: true`).
-The wallet registers its content script and the provider only on a page that is
+The wallet's scripts run on every `https:` page (and, in a development build
+from `npm run build:dev` or `npm run watch`, on `http://localhost` and
+`http://127.0.0.1`), so any site can find `window.irondivi` and ask. What a site
+may do depends on its **access status**, which the content script, the
+background and the popup all work out the same way (`src/shared/site-access.ts`):
 
-- `https:`, or `http:` on `localhost` or `127.0.0.1`, **and**
-- on a host in **Settings → Allowed Sites**. The default list names each
-  production dApp exactly: `games.divi.domains` alone. `services.divi.domains`
-  serves the RPC the wallet trusts for balances, so it is not also a dApp.
-  A development build (`npm run build:dev`, or `npm run watch`) also allows
-  `localhost` and `127.0.0.1`; a release build does not. A list saved by
-  0.0.3 or earlier that is still that version's default (`*.divi.domains`,
-  localhost and 127.0.0.1) is replaced by the new default. In a pattern you
-  add, `*` matches within one name label and `**` matches across labels.
+| Status | Meaning | What the site can do |
+|---|---|---|
+| `"blocked"` | On the denylist ([`site-access/blocked-sites.json`](site-access/blocked-sites.json)) or blocked by the user in **Settings → Site Access**. Overrides everything else. | Every call fails with `4301`. It can never open a window. |
+| `"default"` | On the default list ([`site-access/default-sites.json`](site-access/default-sites.json)) | Everything in the method table below |
+| `"allowed"` | The user chose **Allow** when the site asked, on this network | Everything in the method table below |
+| `"not_allowed"` | Not on the default list and not allowed (or the user chose **Not now**) | Only `getAccessStatus()` and `requestAccess()`; every other call fails with `4300` and opens no window |
+| `"denied"` | The user chose **Never** | As `"not_allowed"`, but `requestAccess()` resolves `"denied"` and opens no window |
 
-The background applies the same rule to every message from a page. A page can
-use only the provider methods below; every other wallet message (settings,
-accounts, approvals and the rest) is accepted only from the extension's own
-pages.
+The default list is exact `https` origins, the same on Mainnet and Testnet, with
+no wildcards: `https://divi.cx`, `https://stakewatch.divi.cx`,
+`https://games.divi.domains`, `https://browser.divi.domains`,
+`https://services.divi.domains`, `https://intel.divi.domains`,
+`https://irondivi.com`, `https://www.irondivi.com`, `https://app.irondivi.com`,
+`https://dividinos.com` and `https://www.dividinos.com`. A subdomain is not
+covered by its parent. Sites are added only by a pull request to this
+repository; see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-site-to-the-default-list).
+A harmful site can be reported with the **Report a site** issue template.
+
+A site that is not on the list asks the user once:
+
+```js
+const wallet = window.irondivi;
+if (!wallet) { /* IronDivi is not installed */ }
+
+let status = await wallet.getAccessStatus();   // never opens a window
+if (status === 'not_allowed') {
+  status = await wallet.requestAccess({ reason: 'To pay for orders in DIVI' });
+}
+if (status === 'default' || status === 'allowed') {
+  const { address } = await wallet.connect();  // the usual connect window
+}
+// 'denied' or 'blocked': do not ask again; offer another way to pay
+```
+
+`requestAccess` opens one window that shows the site's exact origin, says it is
+not on the default list, and quotes the `reason` as the site's own, unverified
+words, cut to 200 characters. The user chooses **Allow**, **Not now** or
+**Never**; closing the window, letting it time out (5 minutes) or locking the
+wallet counts as **Not now**. A site has at most one request open at a time.
+After **Not now** a call to `requestAccess` resolves `"not_allowed"` with no
+window for 24 hours; after **Never** it resolves `"denied"` with no window until
+the user changes it. Choices are kept per origin and per network, and the user
+can forget, block or unblock a site in **Settings → Site Access**. Allowing a
+site only lets it ask: connecting, signing and paying each still open their own
+approval window.
+
+Errors carry a numeric `code`: `4001` the user rejected, `4100` the site is not
+connected, `4200` an unsupported method or option, `4300` the site must ask
+with `requestAccess()` first, `4301` the site is blocked, `4900` the wallet is
+locked, `4901` the site asked for the other network, `-32602` invalid
+parameters.
+
+A page can use only the provider methods below; every other wallet message
+(settings, accounts, approvals and the rest) is accepted only from the
+extension's own pages.
 
 | Method | `request()` name | Connected site needed | Opens the popup |
 |---|---|---|---|
+| `getAccessStatus()` | `irondivi_getAccessStatus` | no, and any status | no; see above |
+| `requestAccess({ reason? })` | `irondivi_requestAccess` | no, and any status | only for a `"not_allowed"` site, as above |
 | `connect()` | `irondivi_connect` | no | yes, until the site is connected; a connected site gets its address back with no popup |
 | `isConnected()` | | no | no |
 | `disconnect()` | `irondivi_disconnect` | no | no |
@@ -164,7 +211,7 @@ pages.
 | `getBalance(address?)` | `irondivi_getBalance` | yes | no; the balance of `address`, or of the whole account if none is given |
 | `signMessage(message, address?)` | `irondivi_signMessage` | yes | yes, always |
 | `signGameTx(body)` | `irondivi_signGameTx` | yes, and only `https://games.divi.domains` | yes, always; returns `{ signature, address, txid }` |
-| `sendTransaction({ to, amount, fee?, fromAddresses? })` | `irondivi_sendTransaction` | yes | yes, always |
+| `sendTransaction({ to, amount, fee?, fromAddresses?, memo? })` | `irondivi_sendTransaction` | yes | yes, always |
 
 `sendTransaction`'s `amount` is in DIVI. Pass it as a decimal string
 (`'1234.5'`, at most 8 decimals) and it is used to the satoshi; a number is

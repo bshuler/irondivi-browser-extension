@@ -14,12 +14,12 @@
     "scripting"
   ],
   "host_permissions": [
+    "https://*/*",
     "https://games.divi.domains/*",
     "https://services.divi.domains/*",
     "https://vps1.divi.domains/*"
   ],
   "optional_host_permissions": [
-    "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],

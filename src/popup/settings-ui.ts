@@ -8,10 +8,8 @@ import { showLoading, hideLoading, showToast, showView, hideView } from './ui-st
 import { sendMessage } from './message-api';
 import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
-import { defaultAllowedSites, isValidSitePattern } from '../shared/origin';
+import { canonicalOrigin, DEFAULT_SITES, type SiteAccess } from '../shared/site-access';
 import { checkSettingsUpdate } from '../shared/settings-check';
-import { patternsFor } from '../shared/site-patterns';
-import { browserAPI } from '../shared/browser-polyfill';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
@@ -74,7 +72,6 @@ export function updateSettingsDisplay(): void {
   const txLimitAbsoluteInput = document.getElementById('setting-tx-limit-absolute') as HTMLInputElement;
   const dailyLimitPercentInput = document.getElementById('setting-daily-limit-percent') as HTMLInputElement;
   const dailyLimitAbsoluteInput = document.getElementById('setting-daily-limit-absolute') as HTMLInputElement;
-  const allowedSitesTextarea = document.getElementById('setting-allowed-sites') as HTMLTextAreaElement;
 
   networkSelect.value = state.settings.network;
   hideBalanceCheck.checked = state.settings.hideBalance;
@@ -89,9 +86,86 @@ export function updateSettingsDisplay(): void {
   dailyLimitPercentInput.value = limits.dailyLimitPercent > 0 ? String(limits.dailyLimitPercent) : '';
   dailyLimitAbsoluteInput.value = limits.dailyLimitAbsolute > 0 ? String(limits.dailyLimitAbsolute) : '';
 
-  // Allowed sites
-  const sites = state.settings.allowedSites || defaultAllowedSites();
-  allowedSitesTextarea.value = sites.join('\n');
+  updateSiteAccessList();
+}
+
+const CHOICE_TEXT: Record<string, string> = { allowed: 'allowed', denied: 'never', not_now: 'not now' };
+
+/**
+ * The sites that asked for access and what the owner chose, per network, and
+ * the sites the owner blocked
+ */
+export function updateSiteAccessList(): void {
+  const list = document.getElementById('site-access-list');
+  if (!list) return;
+  const access: SiteAccess = state.settings.siteAccess ?? { grants: {}, blocked: {} };
+  list.replaceChildren();
+  const row = (origin: string, detail: string, buttons: Array<[string, () => void]>) => {
+    const item = document.createElement('div');
+    item.className = 'connected-site-item';
+    const originSpan = document.createElement('span');
+    originSpan.className = 'connected-site-origin';
+    originSpan.textContent = origin;
+    const detailSpan = document.createElement('span');
+    detailSpan.className = 'connected-site-networks';
+    detailSpan.textContent = detail;
+    originSpan.append(' ', detailSpan);
+    item.appendChild(originSpan);
+    for (const [label, action] of buttons) {
+      const btn = document.createElement('button');
+      btn.className = 'disconnect-btn';
+      btn.textContent = label;
+      btn.addEventListener('click', action);
+      item.appendChild(btn);
+    }
+    list.appendChild(item);
+  };
+  const origins = Object.keys(access.grants).filter(o => !(o in access.blocked)).sort();
+  for (const origin of origins) {
+    const detail = Object.entries(access.grants[origin] ?? {})
+      .map(([net, g]) => `${NETWORKS[net as NetworkType]?.name ?? net}: ${CHOICE_TEXT[g!.state] ?? g!.state}`)
+      .join(', ');
+    row(origin, detail, [
+      ['Forget', () => setSiteAccess('revoke', origin)],
+      ['Block', () => setSiteAccess('block', origin)],
+    ]);
+  }
+  for (const origin of Object.keys(access.blocked).sort()) {
+    row(origin, 'blocked', [['Unblock', () => setSiteAccess('unblock', origin)]]);
+  }
+  if (!list.firstChild) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.style.padding = '8px 0';
+    empty.style.fontSize = '13px';
+    empty.textContent = 'No site has asked yet';
+    list.appendChild(empty);
+  }
+  const defaults = document.getElementById('default-sites-list');
+  if (defaults && !defaults.firstChild) {
+    for (const origin of DEFAULT_SITES) {
+      const li = document.createElement('li');
+      li.textContent = origin;
+      defaults.appendChild(li);
+    }
+  }
+}
+
+/**
+ * Forget what the owner chose for a site, block it, or unblock it. Unblocking
+ * loosens the records, so after a browser restart it asks for the password
+ * (sendMessage retries after the unlock).
+ */
+async function setSiteAccess(action: 'revoke' | 'block' | 'unblock', origin: string): Promise<void> {
+  try {
+    const data = await sendMessage<{ siteAccess: SiteAccess }>(MSG.SET_SITE_ACCESS, { action, origin });
+    state.settings = { ...state.settings, siteAccess: data.siteAccess };
+    updateSiteAccessList();
+    if (action !== 'unblock') await loadConnectedSites();
+    showToast(action === 'block' ? `${origin} is blocked` : action === 'unblock' ? `${origin} is unblocked` : `${origin} must ask again`, 'success');
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'Failed to update site access', 'error');
+  }
 }
 
 /**
@@ -359,29 +433,16 @@ export function setupSettingsUIHandlers(): void {
     });
   });
 
-  // Allowed sites save button
-  document.getElementById('save-allowed-sites-btn')?.addEventListener('click', () => {
-    const textarea = document.getElementById('setting-allowed-sites') as HTMLTextAreaElement;
-    const sites = textarea.value
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    const bad = sites.find(s => !isValidSitePattern(s));
-    if (bad) {
-      showToast(`Not a valid site: ${bad.slice(0, 60)}`, 'error');
+  // Block a site by its address
+  document.getElementById('block-site-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('block-site-input') as HTMLInputElement;
+    const origin = canonicalOrigin(input.value);
+    if (!origin) {
+      showToast('Enter a site as https://name', 'error');
       return;
     }
-    // The wallet's scripts run only where the browser lets it: ask for the
-    // added sites now, while the click still counts as the owner's (Chrome
-    // asks nothing for the sites it already has)
-    const request = browserAPI.permissions?.request;
-    const asked: Promise<boolean> = typeof request === 'function'
-      ? Promise.resolve(browserAPI.permissions.request({ origins: patternsFor(sites) })).catch(() => false)
-      : Promise.resolve(true);
-    asked.then(ok => {
-      if (!ok) showToast('Saved; the sites you did not allow in the browser cannot use the wallet', 'error');
-      updateSettings({ allowedSites: sites });
-    });
+    input.value = '';
+    setSiteAccess('block', origin);
   });
 
   // The phrase approval windows show (EXT-18); changing it asks for the password

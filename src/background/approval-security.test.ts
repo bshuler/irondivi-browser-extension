@@ -136,19 +136,19 @@ describe('EXT-11 a connection holds only on the network it was made on', () => {
     await h.connectPage();
     await toMainnet();
     const windows = h.createdWindows.length;
-    expect((await h.fromTab('SIGN_MESSAGE', { message: 'hello' })).error).toMatch(/NOT_CONNECTED|not connected|testnet only/i);
+    expect((await h.fromTab('SIGN_MESSAGE', { message: 'hello' })).error).toMatch(/NOT_CONNECTED|not connected/i);
     expect((await h.fromTab('IS_CONNECTED')).data.connected).toBe(false);
     expect(h.createdWindows).toHaveLength(windows);
   });
 
-  it('connecting again on mainnet is refused while sites are testnet only, and opens no window', async () => {
+  it('connecting again on mainnet asks the owner, and then both networks are listed', async () => {
     await h.connectPage();
     await toMainnet();
     const windows = h.createdWindows.length;
-    expect((await h.fromTab('CONNECT')).error).toMatch(/testnet only/);
-    expect(h.createdWindows).toHaveLength(windows);
+    await h.connectPage();
+    expect(h.createdWindows.length).toBeGreaterThan(windows);
     const sites = await h.popup('GET_CONNECTED_SITES', { accountId: account.id });
-    expect(sites.data[0].networks).toEqual(['testnet']);
+    expect(sites.data[0].networks.sort()).toEqual(['mainnet', 'testnet']);
   });
 
   it('a connection from before networks were recorded must be made again', async () => {

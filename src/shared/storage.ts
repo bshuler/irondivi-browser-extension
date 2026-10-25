@@ -1,7 +1,8 @@
 import { storage } from './browser-polyfill';
 import { encryptWithPassword, decryptWithPassword, encryptVault, decryptVault } from './crypto-utils';
 import type { NetworkType } from './constants';
-import { defaultAllowedSites, effectiveAllowedSites } from './origin';
+import { OLD_DEFAULT_PATTERNS } from './origin';
+import { emptyAccess, migrateAllowedSites, normalizeAccess, type SiteAccess } from './site-access';
 
 // Storage schema types
 export interface Account {
@@ -64,8 +65,13 @@ export interface Settings {
   authTimeoutMinutes: number;
   currency: string;
   hideBalance: boolean;
-  // Site allowlist patterns (glob-style, e.g. "*.divi.domains", "localhost:*")
-  allowedSites: string[];
+  // What the user chose for sites that asked, and the sites the user
+  // blocked (site-access.ts). The default list and the denylist are compiled
+  // into the wallet and are not settings.
+  siteAccess: SiteAccess;
+  // Before 0.0.5: the allowed-site patterns, read once to carry the user's
+  // own sites over to siteAccess, never written again
+  allowedSites?: string[];
   // Transaction limits for security
   transactionLimits: TransactionLimits;
   // 2 from 0.0.5, when a daily limit became the default. Settings saved
@@ -287,8 +293,7 @@ export const DEFAULT_SETTINGS: Settings = {
   authTimeoutMinutes: 5,
   currency: 'USD',
   hideBalance: false,
-  // The production dApp hosts, plus localhost in a development build
-  allowedSites: defaultAllowedSites(),
+  siteAccess: emptyAccess(),
   // Default transaction limits: 10% of the balance per transaction, 25% a day
   transactionLimits: {
     maxAmountAbsolute: 0, // No absolute limit
@@ -314,12 +319,25 @@ export function normalizeSettings(settings: Partial<Settings> | undefined): Sett
   if (settings && (settings.limitsVersion ?? 1) < 2 && !limits.dailyLimitAbsolute && !limits.dailyLimitPercent) {
     limits.dailyLimitPercent = DEFAULT_SETTINGS.transactionLimits.dailyLimitPercent;
   }
-  return {
+  const out: Settings = {
     ...merged,
     transactionLimits: limits,
     limitsVersion: 2,
-    allowedSites: effectiveAllowedSites(settings?.allowedSites),
+    siteAccess: settings?.siteAccess
+      ? normalizeAccess(settings.siteAccess)
+      : migrateAllowedSites(settings?.allowedSites, OLD_DEFAULT_PATTERNS).access,
   };
+  delete out.allowedSites;
+  return out;
+}
+
+/**
+ * The allowed-site patterns of settings from before 0.0.5 that could not be
+ * carried over to exact sites (wildcards, any port), or none
+ */
+export function droppedSitePatterns(settings: Partial<Settings> | undefined): string[] {
+  if (!settings || settings.siteAccess) return [];
+  return migrateAllowedSites(settings.allowedSites, OLD_DEFAULT_PATTERNS).dropped;
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

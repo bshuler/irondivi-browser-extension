@@ -1759,7 +1759,7 @@ body {
 }
 
 .network-bar::after {
-  content: "Mainnet · real DIVI · closed to sites";
+  content: "Mainnet · real DIVI";
 }
 
 body[data-network="testnet"] .network-bar::after {

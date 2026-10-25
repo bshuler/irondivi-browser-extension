@@ -31,7 +31,8 @@ afterEach(() => {
 
 describe('#2 popup-only messages need an extension page sender', () => {
   const privileged: Array<[string, unknown]> = [
-    ['UPDATE_SETTINGS', { network: 'mainnet', allowedSites: ['*'] }],
+    ['UPDATE_SETTINGS', { network: 'mainnet' }],
+    ['SET_SITE_ACCESS', { origin: 'https://evil.example', action: 'unblock' }],
     ['GENERATE_NEW_ADDRESS', { accountId: 'x', password: 'y' }],
     ['GET_ACCOUNTS', undefined],
     ['SELECT_ACCOUNT', { accountId: 'x' }],
@@ -63,11 +64,10 @@ describe('#2 popup-only messages need an extension page sender', () => {
   it('a page cannot change settings through the content script', async () => {
     h = await createHarness();
     await h.setupWallet();
-    const r = await h.pagePost('UPDATE_SETTINGS', { network: 'mainnet', allowedSites: ['*'] });
+    const r = await h.pagePost('UPDATE_SETTINGS', { network: 'mainnet' });
     expect(r.success).not.toBe(true);
     const s = await h.popup('GET_SETTINGS');
     expect(s.data.settings.network).toBe('testnet');
-    expect(s.data.settings.allowedSites).not.toContain('*');
   });
 
   it('the content script forwards only provider methods', async () => {
@@ -155,21 +155,30 @@ describe('#3 sendTransaction from a site needs approval in the popup', () => {
   });
 });
 
-// A development build's list, which allows a local dApp
-// A pattern without a port allows only the default one, so the dev server's needs :*
-const LOCAL_DEV = { allowedSites: ['games.divi.domains', '127.0.0.1:*'], grantedOrigins: ['http://127.0.0.1/*'] };
+// A site off the default list that the user allowed when it asked
+const SHOP = 'https://shop.example/';
+const SHOP_ALLOWED = { siteAccess: { grants: { 'https://shop.example': { testnet: { state: 'allowed' as const, at: 1 } } }, blocked: {} } };
 
 describe('#4 one origin rule; sign and send need a connected origin', () => {
-  it('http://127.0.0.1 gets the provider and can connect', async () => {
-    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
+  it('a release build serves no local page, even when the browser granted it', async () => {
+    h = await createHarness('http://127.0.0.1:8080/', { grantedOrigins: ['http://127.0.0.1/*'] });
+    await h.setupWallet();
+    expect(h.provider()).toBeUndefined();
+    expect(await h.fromTab('GET_ACCESS_STATUS')).toEqual({ success: true, data: { status: 'not_allowed' } });
+    expect((await h.fromTab('CONNECT')).code).toBe(4300);
+    expect(h.createdWindows).toHaveLength(0);
+  });
+
+  it('a site the user allowed gets the provider and can connect', async () => {
+    h = await createHarness(SHOP, SHOP_ALLOWED);
     await h.setupWallet();
     expect(h.provider()).toBeDefined();
     await h.connectPage();
     expect(await h.provider().isConnected()).toBe(true);
   });
 
-  it('an unconnected http://127.0.0.1 page cannot sign a message', async () => {
-    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
+  it('an unconnected page of an allowed site cannot sign a message', async () => {
+    h = await createHarness(SHOP, SHOP_ALLOWED);
     await h.setupWallet();
     const r = await h.pagePost('SIGN_MESSAGE', { message: 'hello' });
     expect(r.success).toBe(false);
@@ -177,8 +186,8 @@ describe('#4 one origin rule; sign and send need a connected origin', () => {
     expect(h.createdWindows).toHaveLength(0);
   });
 
-  it('an unconnected http://127.0.0.1 page cannot send', async () => {
-    h = await createHarness('http://127.0.0.1:8080/', LOCAL_DEV);
+  it('an unconnected page of an allowed site cannot send', async () => {
+    h = await createHarness(SHOP, SHOP_ALLOWED);
     await h.setupWallet();
     const r = await h.pagePost('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 1 });
     expect(r.success).toBe(false);
@@ -196,17 +205,26 @@ describe('#4 one origin rule; sign and send need a connected origin', () => {
     }
   });
 
-  it('a page on a site outside allowedSites reaches nothing', async () => {
+  it('a page of a site that is not allowed is told so, and reaches nothing', async () => {
     h = await createHarness('https://example.org/');
     await h.setupWallet();
-    expect(h.provider()).toBeUndefined();
-    const r = await h.pagePost('CONNECT');
-    expect(r.success).not.toBe(true);
+    for (const m of ['CONNECT', 'GET_ADDRESSES', 'GET_BALANCE', 'SIGN_MESSAGE', 'SEND_TRANSACTION']) {
+      const r = await h.pagePost(m, m === 'SIGN_MESSAGE' ? { message: 'hello' } : undefined);
+      expect({ m, success: r.success }).toEqual({ m, success: false });
+    }
     await settle();
     expect(h.createdWindows).toHaveLength(0);
     // and the background refuses it too, if a message gets there some other way
-    const direct = await Promise.race([h.fromTab('CONNECT'), settle(200).then(() => 'pending')]);
-    expect(direct).toEqual({ success: false, error: 'Invalid origin' });
+    const direct = await h.fromTab('CONNECT');
+    expect(direct).toMatchObject({ success: false, code: 4300 });
+    expect(JSON.stringify(direct)).not.toMatch(/address/i);
+  });
+
+  it('a page that is not https is refused outright', async () => {
+    h = await createHarness('http://example.org/', { grantedOrigins: ['http://example.org/*'] });
+    await h.setupWallet();
+    expect(h.provider()).toBeUndefined();
+    expect(await h.fromTab('CONNECT')).toEqual({ success: false, error: 'Invalid origin' });
   });
 });
 

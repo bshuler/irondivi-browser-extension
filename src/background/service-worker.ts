@@ -1,7 +1,7 @@
 
-import { runtime, alarms, idle, browserAPI } from '../shared/browser-polyfill';
+import { runtime, alarms, idle, browserAPI, storage } from '../shared/browser-polyfill';
 import { MSG, NETWORKS, DAPP_METHODS, UI_PORT, type NetworkType } from '../shared/constants';
-import { getSettings, saveSettings, getAccounts, getSelectedAccountId, type Account, type AccountAddress } from '../shared/storage';
+import { getSettings, saveSettings, droppedSitePatterns, getAccounts, getSelectedAccountId, type Account, type AccountAddress, type Settings } from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
 import { addressBook } from './address-book';
@@ -13,24 +13,22 @@ import { rpcClient } from './rpc-client';
 import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePendingTxs } from './pending-txs';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
-import { isAllowedDappOrigin } from '../shared/origin';
+import { accessStatus, askedTooRecently, canonicalOrigin, cleanReason, mayUse, withBlock, withChoice, withoutBlock, withoutGrant, MAX_SITE_ENTRIES, type AccessChoice, type AccessStatus } from '../shared/site-access';
 import { CAPABILITIES, ERR } from '../shared/provider-errors';
 import { checkGameTx, checkMessageShape, checkMessageToSign, gameTxid } from './sign-policy';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { syncSiteScripts } from './site-scripts';
 import { checkRecipient, recipientNote } from '../popup/recipient-check';
-import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning } from './records-seal';
+import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
 installRecordsSeal();
 
 const NOT_CONNECTED = { success: false, error: 'Site not connected. Please connect first.' };
-// Until the wallet has been through a store review and notarization, sites
-// may use it on testnet only; the owner keeps full use of mainnet in the popup
-const SITES_TESTNET_ONLY = true;
-const TESTNET_ONLY = { success: false, error: 'Sites can use IronDivi on testnet only' };
-// What a site may still ask on mainnet: nothing that reveals or moves funds
-const MAINNET_SITE_METHODS: readonly string[] = [MSG.GET_NETWORK, MSG.IS_CONNECTED, MSG.DISCONNECT];
+// What a site that may not use the wallet is told (site-access.ts). Neither
+// opens a window.
+const ACCESS_REQUIRED = { success: false, error: 'ACCESS_REQUIRED: this site must ask with irondivi.requestAccess() first', code: ERR.ACCESS_REQUIRED };
+const BLOCKED = { success: false, error: 'BLOCKED: this site is blocked in IronDivi', code: ERR.BLOCKED };
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
@@ -163,6 +161,34 @@ async function requestContext(request: PendingRequest, network: NetworkType, acc
   const contacts = await addressBook.listContacts(network);
   const check = checkRecipient(request.data.to, contacts, accounts.flatMap(a => own(a).map(x => x.address)));
   return { from, recipient: recipientNote(check) };
+}
+
+/**
+ * A site asks the user whether it may use the wallet. Only a site that is not
+ * allowed and has not been answered opens a window; any other status is
+ * returned as it is. After Not now the site cannot ask for a day.
+ */
+async function requestSiteAccess(origin: string, network: NetworkType, status: AccessStatus, payload: any): Promise<MessageResponse> {
+  if (status !== 'not_allowed') return { success: true, data: { status } };
+  if (askedTooRecently(origin, network, (await getSettings()).siteAccess, Date.now())) {
+    return { success: true, data: { status } };
+  }
+  let choice: AccessChoice | null;
+  try {
+    choice = await connectionManager.requestAccess(origin, network, cleanReason(payload?.reason));
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Could not ask' };
+  }
+  if (choice === null) {
+    // The window was closed or timed out: that counts as Not now, so a site
+    // cannot open window after window
+    const current = await getSettings();
+    if (current.network === network && accessStatus(origin, network, current.siteAccess) === 'not_allowed') {
+      await saveSettings({ ...current, siteAccess: withChoice(current.siteAccess, origin, network, 'not_now', Date.now()) }).catch(() => {});
+    }
+  }
+  const now = await getSettings();
+  return { success: true, data: { status: accessStatus(origin, now.network, now.siteAccess) } };
 }
 
 /**
@@ -404,9 +430,10 @@ async function handleMessage(
   // injects window.irondivi. The answer is about the sender's origin only.
   if (!fromExtensionPage && sender.tab && type === MSG.SITE_ALLOWED) {
     try {
+      // Every page the wallet serves gets window.irondivi, so a site that is
+      // not allowed can still learn its status and ask; it learns nothing else
       const pageOrigin = sender.origin || new URL(sender.url || '').origin;
-      const { allowedSites } = await getSettings();
-      return { success: true, data: { allowed: isAllowedDappOrigin(pageOrigin, allowedSites) } };
+      return { success: true, data: { allowed: canonicalOrigin(pageOrigin) === pageOrigin } };
     } catch {
       return { success: true, data: { allowed: false } };
     }
@@ -425,15 +452,16 @@ async function handleMessage(
     } catch {
       return { success: false, error: 'Invalid sender URL' };
     }
-    const { allowedSites } = await getSettings();
-    if (!isAllowedDappOrigin(origin, allowedSites)) {
+    if (canonicalOrigin(origin) !== origin) {
       return { success: false, error: 'Invalid origin' };
     }
-  }
-
-  if (origin && SITES_TESTNET_ONLY && !MAINNET_SITE_METHODS.includes(type)
-      && (await getSettings()).network === 'mainnet') {
-    return TESTNET_ONLY;
+    // What the site may do decides everything it is answered (site-access.ts)
+    const settings = await getSettings();
+    const status = accessStatus(origin, settings.network, settings.siteAccess);
+    if (type === MSG.GET_ACCESS_STATUS) return { success: true, data: { status } };
+    if (type === MSG.REQUEST_ACCESS) return requestSiteAccess(origin, settings.network, status, payload);
+    if (status === 'blocked') return BLOCKED;
+    if (!mayUse(status)) return ACCESS_REQUIRED;
   }
 
   // Connection messages only make sense for a web page
@@ -853,7 +881,6 @@ async function handleMessage(
           rpcClient.setNetwork(updates.network);
         }
         // The wallet's scripts follow the allowed sites
-        if (updates.allowedSites) await syncSiteScripts();
 
         if (switching) {
           // Nothing unlocked on one network carries over to the other
@@ -982,6 +1009,8 @@ async function handleMessage(
         if (!request) {
           return { success: false, error: 'Request not found' };
         }
+        // A site asking for access is answered with ANSWER_ACCESS_REQUEST
+        if (request.type === 'access') return { success: false, error: 'Request not found' };
         // Taken before the first await, so a second click or a second window
         // cannot approve it again while the first approval is running
         if (!connectionManager.claimRequest(payload.requestId)) {
@@ -992,6 +1021,61 @@ async function handleMessage(
         } finally {
           connectionManager.releaseRequest(payload.requestId);
         }
+      }
+
+      case MSG.ANSWER_ACCESS_REQUEST: {
+        const choice = payload?.choice as AccessChoice;
+        if (!['allowed', 'not_now', 'denied'].includes(choice)) return { success: false, error: 'Invalid choice' };
+        const request = connectionManager.getPendingRequest(payload?.requestId);
+        if (!request || request.type !== 'access') return { success: false, error: 'Request not found' };
+        if (!connectionManager.claimRequest(request.id)) {
+          return { success: false, error: 'This request is already being answered' };
+        }
+        try {
+          const current = await getSettings();
+          if (current.network !== request.data?.network) {
+            return { success: false, error: 'The wallet moved to another network; the site must ask again' };
+          }
+          // Allowing loosens the records, so after a restart it needs the
+          // password (UNLOCK_NEEDED); the window asks and sends again
+          await saveSettings({ ...current, siteAccess: withChoice(current.siteAccess, request.origin, request.data.network, choice, Date.now()) });
+          await syncSiteScripts();
+          connectionManager.approveRequest(request.id, choice);
+          return { success: true };
+        } finally {
+          connectionManager.releaseRequest(request.id);
+        }
+      }
+
+      case MSG.SET_SITE_ACCESS: {
+        const site = canonicalOrigin(payload?.origin);
+        if (!site) return { success: false, error: 'Enter a site as https://name' };
+        const current = await getSettings();
+        let siteAccess = current.siteAccess;
+        switch (payload?.action) {
+          case 'revoke':
+            siteAccess = withoutGrant(siteAccess, site);
+            break;
+          case 'block':
+            if (!(site in siteAccess.blocked) && Object.keys(siteAccess.blocked).length >= MAX_SITE_ENTRIES) {
+              return { success: false, error: `At most ${MAX_SITE_ENTRIES} sites can be blocked` };
+            }
+            siteAccess = withBlock(siteAccess, site, Date.now());
+            break;
+          case 'unblock':
+            siteAccess = withoutBlock(siteAccess, site);
+            break;
+          default:
+            return { success: false, error: 'Invalid action' };
+        }
+        await saveSettings({ ...current, siteAccess });
+        if (payload.action !== 'unblock') {
+          // The site loses its connections and anything it has waiting
+          await connectionManager.revokeOriginEverywhere(site);
+          connectionManager.rejectRequestsFrom(site);
+        }
+        await syncSiteScripts();
+        return { success: true, data: { siteAccess } };
       }
 
       case MSG.REJECT_SIGNING_REQUEST: {
@@ -1054,6 +1138,9 @@ idle.onStateChanged?.addListener((state: string) => {
 async function initialize() {
   const settings = await getSettings();
   rpcClient.setNetwork(settings.network);
+  // Settings from before 0.0.5 are still stored as they were
+  const { settings: stored } = await storage.local.get<{ settings: Partial<Settings> }>('settings');
+  await noteDroppedSitePatterns(droppedSitePatterns(stored)).catch(() => {});
   // Registered scripts persist, but a browser that dropped them (or an
   // update that changed the scripts) gets them back here
   await syncSiteScripts();

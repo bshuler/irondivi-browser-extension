@@ -23,7 +23,13 @@ class FakeNode {
   children: FakeNode[] = [];
   value = '';
   disabled = false;
-  classList = { add: (c: string) => { this.className = `${this.className} ${c}`.trim(); } };
+  classList = {
+    add: (c: string) => { this.className = `${this.className} ${c}`.trim(); },
+    toggle: (c: string, on: boolean) => {
+      const rest = this.className.split(' ').filter(x => x && x !== c);
+      this.className = (on ? [...rest, c] : rest).join(' ');
+    },
+  };
   constructor(public tag: string) {}
   append(...nodes: FakeNode[]) { this.children.push(...nodes); }
   replaceChildren(...nodes: FakeNode[]) { this.children = nodes; }
@@ -107,6 +113,27 @@ describe('L7 the approval window shows the whole request', () => {
     expect(text).toContain('x⟨U+202E⟩y');
     expect(text).toMatch(/2 hidden or direction-changing characters/);
     expect(text).toContain('1.00005 DIVI');
+  });
+
+  it('a site asking for access is named exactly, said to be off the default list, and its reason quoted as text', async () => {
+    const details = await render({
+      type: 'access', origin: 'https://shop.example',
+      data: { reason: '<b>Trust us</b> \u202eevil' },
+    });
+    const text = details.text();
+    expect(text).toContain('https://shop.example');
+    expect(text).toMatch(/Not on the default list/);
+    expect(text).toMatch(/unverified/);
+    expect(text).toContain('“<b>Trust us</b> ⟨U+202E⟩evil”');
+    expect(byId['approve-request-btn'].textContent).toBe('Allow');
+    expect(byId['reject-request-btn'].textContent).toBe('Not now');
+    expect(byId['never-request-btn'].className).not.toContain('hidden');
+  });
+
+  it('a request that is not for access hides Never', async () => {
+    await render({ type: 'sign_message', data: { message: 'hello' } });
+    expect(byId['approve-request-btn'].textContent).toBe('Approve');
+    expect(byId['never-request-btn'].className).toContain('hidden');
   });
 
   it('the view no longer builds markup or truncates', () => {

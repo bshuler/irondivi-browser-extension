@@ -1,15 +1,15 @@
 /**
- * The wallet's scripts run only on the sites in the allowedSites setting.
- * Nothing is declared for every page in the manifest: the content script and
- * window.irondivi are registered here, for the allowed sites alone, so a page
- * on any other site never sees the wallet or its script. The background still
- * answers a page only if its origin is allowed (SITE_ALLOWED and every dApp
- * message check it), so a match pattern that is wider than a site pattern
- * (ports, *. versus **.) can admit nothing.
+ * Where the wallet's scripts run (site-access.ts siteMatchPatterns). Nothing
+ * is declared in the manifest: the content script and window.irondivi are
+ * registered here. While sites can ask for access they run on every https
+ * page, so a site that is not on the default list can find window.irondivi
+ * and ask; the background answers such a page only with its status until the
+ * user allows it, so running there shows the page nothing else. A blocked
+ * site and any other origin the background refuses learn nothing either.
  */
 import { browserAPI } from '../shared/browser-polyfill';
 import { getSettings } from '../shared/storage';
-import { patternsFor } from '../shared/site-patterns';
+import { siteMatchPatterns } from '../shared/site-access';
 
 export const CONTENT_SCRIPT_ID = 'irondivi-content';
 export const PROVIDER_SCRIPT_ID = 'irondivi-provider';
@@ -53,8 +53,8 @@ async function sync(): Promise<string[]> {
     return [];
   }
   try {
-    const { allowedSites } = await getSettings();
-    const matches = await granted(patternsFor(allowedSites));
+    const { siteAccess } = await getSettings();
+    const matches = await granted(siteMatchPatterns(siteAccess));
     const ids = [CONTENT_SCRIPT_ID, PROVIDER_SCRIPT_ID];
     const existing: Array<{ id: string }> = await scripting.getRegisteredContentScripts?.({ ids }) ?? [];
     if (existing.length > 0) {

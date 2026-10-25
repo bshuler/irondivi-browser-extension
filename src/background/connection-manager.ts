@@ -1,6 +1,7 @@
 import { getConnections, saveConnections, type Connection } from '../shared/storage';
 import type { NetworkType } from '../shared/constants';
 import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
+import type { AccessChoice } from '../shared/site-access';
 
 export interface SigningRequestData {
   message?: string;
@@ -22,6 +23,8 @@ export interface SigningRequestData {
   session?: SessionGrant;
   // What the account holds after a payment, in DIVI, for the window
   balanceAfter?: string;
+  // Why a site asks for access, in its own words, cut to length (untrusted)
+  reason?: string;
 }
 
 export type SigningRequestType = 'sign_message' | 'sign_game_tx' | 'send_transaction';
@@ -29,7 +32,7 @@ const SIGNING_TYPES: readonly string[] = ['sign_message', 'sign_game_tx', 'send_
 
 export interface PendingRequest {
   id: string;
-  type: 'connect' | SigningRequestType;
+  type: 'connect' | 'access' | SigningRequestType;
   origin: string;
   accountId: string;
   data?: SigningRequestData;
@@ -123,7 +126,7 @@ export class ConnectionManager {
   /**
    * Open a popup window for approval
    */
-  private async openApprovalWindow(requestId: string, type: 'connect' | 'sign'): Promise<void> {
+  private async openApprovalWindow(requestId: string, type: 'connect' | 'access' | 'sign'): Promise<void> {
     const width = 400;
     const height = 600;
 
@@ -258,6 +261,56 @@ export class ConnectionManager {
   }
 
   /**
+   * Ask the user whether a site that is not on the default list may use the
+   * wallet. Opens one approval window; resolves with the user's choice, or
+   * null when the window is closed, the request times out or the wallet
+   * locks, in which case nothing is recorded. Throws when the site already
+   * has a request open or has asked too often.
+   */
+  async requestAccess(origin: string, network: NetworkType, reason: string): Promise<AccessChoice | null> {
+    this.admit(origin);
+    const requestId = crypto.randomUUID();
+
+    return new Promise((resolve) => {
+      const done = (value: AccessChoice | null) => {
+        this.pendingRequests.delete(requestId);
+        this.requestWindows.delete(requestId);
+        this.updateBadge();
+        resolve(value);
+      };
+      const request: PendingRequest = {
+        id: requestId,
+        type: 'access',
+        origin,
+        accountId: '',
+        data: { network, reason },
+        createdAt: Date.now(),
+        resolve: (value) => done(value as AccessChoice),
+        reject: () => done(null),
+      };
+
+      this.pendingRequests.set(requestId, request);
+      this.updateBadge();
+
+      setTimeout(() => {
+        if (this.pendingRequests.has(requestId)) done(null);
+      }, REQUEST_TIMEOUT);
+
+      this.openApprovalWindow(requestId, 'access');
+    });
+  }
+
+  /**
+   * Reject every pending request from a site, e.g. when the user blocks it
+   */
+  rejectRequestsFrom(origin: string, reason = 'Request rejected: the site was blocked'): void {
+    for (const r of [...this.pendingRequests.values()]) {
+      if (r.origin === origin) r.reject(new Error(reason));
+    }
+    this.updateBadge();
+  }
+
+  /**
    * Approve a connection request
    */
   async approveConnection(
@@ -334,6 +387,23 @@ export class ConnectionManager {
         delete connections[accountId][origin];
         await saveConnections(connections);
       }
+    });
+  }
+
+  /**
+   * Remove a site's connections on every account
+   */
+  async revokeOriginEverywhere(origin: string): Promise<void> {
+    return this.withLock(async () => {
+      const connections = await getConnections();
+      let changed = false;
+      for (const conns of Object.values(connections)) {
+        if (conns && origin in conns) {
+          delete conns[origin];
+          changed = true;
+        }
+      }
+      if (changed) await saveConnections(connections);
     });
   }
 

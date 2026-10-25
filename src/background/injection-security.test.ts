@@ -24,11 +24,18 @@ describe('M1 the content script never reads extension storage', () => {
     expect(h.provider()).toBeDefined();
   });
 
-  it('a page outside allowedSites is told no and gets no provider', async () => {
-    const h = await createHarness('https://evil.example/');
+  it('a page that is not https is told no and gets no provider', async () => {
+    const h = await createHarness('http://evil.example/', { grantedOrigins: ['http://evil.example/*'] });
     const r = await h.fromTab('SITE_ALLOWED');
     expect(r).toEqual({ success: true, data: { allowed: false } });
     expect(h.provider()).toBeUndefined();
+  });
+
+  it('an https page off the default list gets the provider, but only its status', async () => {
+    const h = await createHarness('https://evil.example/');
+    expect(await h.fromTab('SITE_ALLOWED')).toEqual({ success: true, data: { allowed: true } });
+    expect(await h.provider().getAccessStatus()).toBe('not_allowed');
+    expect(await h.fromTab('GET_ADDRESSES')).toMatchObject({ success: false, code: 4300 });
   });
 
   it('a page cannot ask SITE_ALLOWED through the provider bridge', async () => {
@@ -56,14 +63,14 @@ describe('M1 the content script never reads extension storage', () => {
     expect(src).not.toMatch(/storage\.(local|session|get|set)|getSettings|import \{[^}]*storage/);
   });
 
-  it('the manifest asks only for what the wallet needs, and only its own hosts up front', () => {
+  it('the manifest asks only for what the wallet needs: https pages, so sites can ask, and its own hosts', () => {
     const m = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
     expect(m.permissions).toEqual(['storage', 'alarms', 'idle', 'scripting']);
     expect(m.host_permissions).toEqual([
-      'https://games.divi.domains/*', 'https://services.divi.domains/*', 'https://vps1.divi.domains/*',
+      'https://*/*', 'https://games.divi.domains/*', 'https://services.divi.domains/*', 'https://vps1.divi.domains/*',
     ]);
-    // Any other site is asked for when the owner adds it in Settings
-    expect(m.optional_host_permissions).toEqual(['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*']);
+    // Local pages only for a development build, and only if the developer grants them
+    expect(m.optional_host_permissions).toEqual(['http://localhost/*', 'http://127.0.0.1/*']);
   });
 });
 

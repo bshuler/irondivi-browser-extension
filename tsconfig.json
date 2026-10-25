@@ -8,12 +8,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": "src",
+    "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "site-access/*.json"],
   "exclude": ["node_modules", "dist"]
 }

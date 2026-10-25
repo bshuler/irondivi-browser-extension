@@ -30,6 +30,8 @@ import {
 } from '../shared/storage';
 import { addressesOn, setAddressesOn, withSeed } from '../shared/account-addresses';
 import { looser } from '../shared/settings-check';
+import { OLD_DEFAULT_PATTERNS } from '../shared/origin';
+import { accessSummary, migrateAllowedSites, normalizeAccess, type SiteAccess } from '../shared/site-access';
 import { HDKey } from '../lib/hdkey';
 import { Address } from '../lib/address';
 import { syncSiteScripts } from './site-scripts';
@@ -37,6 +39,9 @@ import { syncSiteScripts } from './site-scripts';
 export { UNLOCK_NEEDED };
 const SEAL_KEY = 'recordsSeal';
 const WARNING_KEY = 'recordsWarning';
+// The one-time notice about allowed-site patterns 0.0.5 could not carry over
+const SITE_NOTICE_KEY = 'siteAccessNotice';
+const SITE_NOTICE_DONE_KEY = 'siteAccessNoticeDone';
 const SESSION_KEY = 'recordsKey';
 // The most addresses per network the wallet keeps for an account. Discovery
 // adds 20 at a time; anything beyond this is not the wallet's own doing.
@@ -59,7 +64,9 @@ export interface Snapshot {
   verified: string[];
   // phrase: the security phrase approval windows show (EXT-18); a seal made
   // before it existed has none, which is the same as no phrase
-  settings: { allowedSites: string[]; limits: TransactionLimits; timeout: number; phrase?: string };
+  // access: the sites the user allowed ("origin|network") and blocked, sorted.
+  // A seal made before 0.0.5 has allowedSites, the patterns, instead.
+  settings: { access?: AccessSnapshot; allowedSites?: string[]; limits: TransactionLimits; timeout: number; phrase?: string };
   // account id -> origin -> permissions, sorted; connected entries only
   connections: Record<string, Record<string, string[]>>;
   // contact id -> "network:address"
@@ -67,6 +74,14 @@ export interface Snapshot {
 }
 
 interface Seal { v: 1; snapshot: Snapshot; mac: string }
+
+type AccessSnapshot = { allowed: string[]; blocked: string[] };
+
+// What a seal vouches for, from either form it may have
+function sealedAccess(settings: Snapshot['settings']): AccessSnapshot {
+  if (settings.access) return settings.access;
+  return accessSummary(migrateAllowedSites(settings.allowedSites ?? [], OLD_DEFAULT_PATTERNS).access);
+}
 
 // The records key, base64, once a password has opened it this session
 let recordsKey: string | null = null;
@@ -182,7 +197,7 @@ export function snapshotOf(records: Records, verified: Iterable<string>): Snapsh
     accounts,
     verified: [...new Set(verified)].filter(id => ids.has(id)).sort(),
     settings: {
-      allowedSites: settings.allowedSites.map(s => s.trim().toLowerCase()).sort(),
+      access: accessSummary(settings.siteAccess),
       limits: { ...settings.transactionLimits },
       timeout: settings.authTimeoutMinutes,
       phrase: settings.securityPhrase ?? '',
@@ -194,12 +209,17 @@ export function snapshotOf(records: Records, verified: Iterable<string>): Snapsh
 
 const EMPTY: Snapshot = {
   accounts: {}, verified: [], connections: {}, contacts: {},
-  settings: { allowedSites: [], limits: { ...DEFAULT_SETTINGS.transactionLimits }, timeout: 0 },
+  settings: { access: { allowed: [], blocked: [] }, limits: { ...DEFAULT_SETTINGS.transactionLimits }, timeout: 0 },
 };
 
 function settingsLooser(cur: Snapshot['settings'], sealed: Snapshot['settings']): boolean {
-  const known = new Set(sealed.allowedSites);
-  if (cur.allowedSites.some(s => !known.has(s))) return true;
+  // A site allowed that the seal did not allow, or a block lifted
+  const was = sealedAccess(sealed);
+  const now = sealedAccess(cur);
+  const known = new Set(was.allowed);
+  if (now.allowed.some(s => !known.has(s))) return true;
+  const blocked = new Set(now.blocked);
+  if (was.blocked.some(o => !blocked.has(o))) return true;
   for (const k of Object.keys(cur.limits) as (keyof TransactionLimits)[]) {
     if (looser(cur.limits[k], sealed.limits[k] ?? 0)) return true;
   }
@@ -267,7 +287,8 @@ function revert(records: Records, sealed: Snapshot): Records {
   const cur = snapshotOf(records, []);
   const settings = { ...records.settings } as Partial<Settings>;
   if (settingsLooser(cur.settings, sealed.settings)) {
-    settings.allowedSites = [...sealed.settings.allowedSites];
+    settings.siteAccess = revertAccess(normalizeSettings(records.settings).siteAccess, sealedAccess(sealed.settings));
+    delete settings.allowedSites;
     settings.transactionLimits = { ...sealed.settings.limits };
     settings.authTimeoutMinutes = sealed.settings.timeout;
     settings.limitsVersion = 2;
@@ -305,7 +326,10 @@ function reset(records: Records): Records {
     accounts: records.accounts ?? [],
     settings: {
       ...records.settings,
-      allowedSites: [...DEFAULT_SETTINGS.allowedSites],
+      // No site the user allowed stays allowed; the sites the user blocked
+      // stay blocked
+      siteAccess: { grants: {}, blocked: { ...normalizeSettings(records.settings).siteAccess.blocked } },
+      allowedSites: undefined,
       transactionLimits: { ...DEFAULT_SETTINGS.transactionLimits },
       authTimeoutMinutes: DEFAULT_SETTINGS.authTimeoutMinutes,
       limitsVersion: 2,
@@ -315,6 +339,22 @@ function reset(records: Records): Records {
     connections: {},
     addressBook: (records.addressBook ?? []).map(c => ({ ...c, unverified: true })),
   };
+}
+
+// Site access with only the allowed sites the seal vouches for, and every
+// block it records
+function revertAccess(access: SiteAccess, sealed: AccessSnapshot): SiteAccess {
+  const ok = new Set(sealed.allowed);
+  const grants: SiteAccess['grants'] = {};
+  for (const [origin, byNet] of Object.entries(access.grants)) {
+    for (const [net, g] of Object.entries(byNet ?? {})) {
+      if (!g || (g.state === 'allowed' && !ok.has(`${origin}|${net}`))) continue;
+      (grants[origin] ??= {})[net as NetworkType] = g;
+    }
+  }
+  const blocked = { ...access.blocked };
+  for (const o of sealed.blocked) if (!(o in blocked)) blocked[o] = 0;
+  return normalizeAccess({ grants, blocked });
 }
 
 function nextIndex(addresses: { index: number }[], was: number): number {
@@ -545,13 +585,34 @@ export function writeRecords(patch: RecordsPatch): Promise<void> {
   });
 }
 
+/** The banner text for the popup: the tamper warning first, else the site notice */
 export async function getRecordsWarning(): Promise<string | null> {
-  const w = (await storage.local.get<Record<string, unknown>>(WARNING_KEY))[WARNING_KEY] as { message?: unknown } | undefined;
-  return typeof w?.message === 'string' ? w.message : null;
+  const got = await storage.local.get<Record<string, unknown>>([WARNING_KEY, SITE_NOTICE_KEY]);
+  for (const key of [WARNING_KEY, SITE_NOTICE_KEY]) {
+    const w = got[key] as { message?: unknown } | undefined;
+    if (typeof w?.message === 'string') return w.message;
+  }
+  return null;
 }
 
+/** Dismiss the banner the popup shows (the tamper warning first) */
 export async function dismissRecordsWarning(): Promise<void> {
-  await storage.local.remove(WARNING_KEY);
+  const got = await storage.local.get<Record<string, unknown>>(WARNING_KEY);
+  await storage.local.remove(got[WARNING_KEY] ? WARNING_KEY : SITE_NOTICE_KEY);
+}
+
+/**
+ * Once, after the update to exact site names: tell the owner which of their
+ * old allowed-site patterns (wildcards, any port) could not be carried over.
+ * The notice holds only the wallet's own text and patterns the owner typed.
+ */
+export async function noteDroppedSitePatterns(dropped: string[]): Promise<void> {
+  if (dropped.length === 0) return;
+  const got = await storage.local.get<Record<string, unknown>>(SITE_NOTICE_DONE_KEY);
+  if (got[SITE_NOTICE_DONE_KEY]) return;
+  const shown = dropped.slice(0, 10).join(', ') + (dropped.length > 10 ? `, and ${dropped.length - 10} more` : '');
+  const message = `IronDivi now allows sites by their exact name. These entries from your allowed sites could not be carried over: ${shown}. A site you still use can ask you for access when you visit it.`;
+  await storage.local.set({ [SITE_NOTICE_KEY]: { at: Date.now(), message }, [SITE_NOTICE_DONE_KEY]: true });
 }
 
 /** Route the storage module's record writes through the seal */

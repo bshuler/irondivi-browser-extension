@@ -2,7 +2,8 @@
  * Signing Request UI Module
  *
  * Handles the display and user interaction for dApp signing requests
- * (sign_message, sign_game_tx and send_transaction).
+ * (sign_message, sign_game_tx and send_transaction), connections, and a site
+ * asking for access (access).
  */
 
 import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constants';
@@ -14,7 +15,7 @@ import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
 // Type for a pending request (connection, signing, or transaction)
 export interface SigningRequest {
   id: string;
-  type: 'connect' | 'sign_message' | 'sign_game_tx' | 'send_transaction';
+  type: 'connect' | 'sign_message' | 'sign_game_tx' | 'send_transaction' | 'access';
   origin: string;
   accountId: string;
   network?: NetworkType;
@@ -34,6 +35,8 @@ export interface SigningRequest {
     gameTx?: GameTxSummary;
     // A Divi Games session grant the message makes
     session?: SessionGrant;
+    // Why a site asking for access says it wants it: the site's own words
+    reason?: string;
   };
   // The site has not had a request of this type approved before
   firstUse?: boolean;
@@ -79,6 +82,7 @@ function getElements() {
     password: document.getElementById('signing-password') as HTMLInputElement,
     rejectBtn: document.getElementById('reject-request-btn') as HTMLButtonElement,
     approveBtn: document.getElementById('approve-request-btn') as HTMLButtonElement,
+    neverBtn: document.getElementById('never-request-btn') as HTMLButtonElement | null,
   };
 }
 
@@ -172,8 +176,18 @@ export function showSigningRequestView(request: SigningRequest): void {
   }
   blocked = false;
 
+  // A site asking for access answers Allow, Not now or Never
+  const asking = request.type === 'access';
+  elements.approveBtn.textContent = asking ? 'Allow' : 'Approve';
+  elements.rejectBtn.textContent = asking ? 'Not now' : 'Reject';
+  elements.neverBtn?.classList.toggle('hidden', !asking);
+
   // Set type label and warning message based on request type
-  if (request.type === 'connect') {
+  if (request.type === 'access') {
+    elements.type.textContent = 'Site Asks for Access';
+    elements.type.className = 'signing-type connect';
+    elements.warningText.textContent = 'This site is not on IronDivi\'s default list. Allowing it lets it ask you to connect, sign and pay, each with its own window; it learns nothing until you approve. Allow only a site you trust.';
+  } else if (request.type === 'connect') {
     elements.type.textContent = 'Connect Site';
     elements.type.className = 'signing-type connect';
     elements.warningText.textContent = 'This shares your wallet address with the site. It cannot sign or send anything without asking you, with your password, each time.';
@@ -218,7 +232,15 @@ export function showSigningRequestView(request: SigningRequest): void {
     }
   }
 
-  if (request.type === 'connect') {
+  if (request.type === 'access') {
+    rows.push(detailRow('Site:', el('span', 'signing-detail-value address', shown(request.origin))));
+    rows.push(el('div', 'signing-detail-row access-not-default', 'Not on the default list of sites IronDivi knows.'));
+    // The site's own words: shown as quoted text, cut short, never as markup
+    const reason = request.data?.reason ?? '';
+    const quote = el('div', 'signing-message-content', reason ? `“${shown(reason)}”` : 'The site gave no reason.');
+    rows.push(detailRow('The site says (unverified):', quote));
+    rows.push(el('div', 'signing-detail-row', 'Closing this window counts as Not now: the site cannot ask again for a day.'));
+  } else if (request.type === 'connect') {
     // Keep it simple - the warning text explains what happens
     const row = el('div', 'signing-detail-row');
     row.style.textAlign = 'center';
@@ -289,7 +311,7 @@ export function showSigningRequestView(request: SigningRequest): void {
     rows.push(warningRow('hidden-chars', `This request contains ${hidden} hidden or direction-changing character${hidden === 1 ? '' : 's'}, shown above as ⟨U+…⟩. The text may not be what it seems.`));
   }
 
-  if (request.type !== 'connect' && request.firstUse) {
+  if (request.type !== 'connect' && request.type !== 'access' && request.firstUse) {
     const what = request.type === 'sign_message' ? 'sign a message'
       : request.type === 'sign_game_tx' ? 'sign a game transaction' : 'send a payment';
     rows.push(warningRow('first-use', `This is the first time this site has asked to ${what}.`));
@@ -303,7 +325,7 @@ export function showSigningRequestView(request: SigningRequest): void {
   // Hide password field for connection requests (they don't need password)
   const passwordFormGroup = elements.password.closest('.form-group') as HTMLElement | null;
   if (passwordFormGroup) {
-    passwordFormGroup.style.display = request.type === 'connect' ? 'none' : 'block';
+    passwordFormGroup.style.display = request.type === 'connect' || asking ? 'none' : 'block';
   }
 
   // Show the view
@@ -331,6 +353,12 @@ async function handleApprove(): Promise<void> {
 
 async function approveCurrent(elements: ReturnType<typeof getElements>): Promise<void> {
   if (!currentRequest) return;
+
+  if (currentRequest.type === 'access') {
+    await answerAccess('allowed');
+    if (currentRequest) elements.approveBtn.disabled = false;
+    return;
+  }
 
   // Connection requests don't need password
   if (currentRequest.type === 'connect') {
@@ -425,10 +453,36 @@ function showSecurityPhrase(phrase: string): void {
 }
 
 /**
+ * Answer a site that asked for access. Allowing loosens the records, so after
+ * a browser restart it asks for the password first (retryAfterUnlock).
+ * Returns once the window is closing, or with the request still shown.
+ */
+async function answerAccess(choice: 'allowed' | 'not_now' | 'denied'): Promise<void> {
+  const request = currentRequest;
+  if (!request || request.type !== 'access') return;
+  try {
+    const response = await retryAfterUnlock(() => sendMessage({
+      type: MSG.ANSWER_ACCESS_REQUEST,
+      payload: { requestId: request.id, choice },
+    }));
+    if (!response?.success) throw new Error(response?.error || 'Failed to answer the site');
+    currentRequest = null;
+    showToast(choice === 'allowed' ? 'Site allowed' : choice === 'denied' ? 'This site can no longer ask' : 'Not now', 'success');
+    setTimeout(() => window.close(), 500);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to answer the site', 'error');
+  }
+}
+
+/**
  * Handle reject button click
  */
 async function handleReject(): Promise<void> {
   if (!currentRequest) return;
+  if (currentRequest.type === 'access') {
+    await answerAccess('not_now');
+    return;
+  }
 
   try {
     const response = await sendMessage({
@@ -480,6 +534,8 @@ export function setupSigningRequestUIHandlers(): void {
   if (elements.rejectBtn) {
     elements.rejectBtn.addEventListener('click', handleReject);
   }
+
+  elements.neverBtn?.addEventListener('click', () => answerAccess('denied'));
 
   if (elements.backBtn) {
     elements.backBtn.addEventListener('click', handleReject);

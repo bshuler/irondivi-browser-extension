@@ -19,6 +19,10 @@ const READY_EVENT = 'irondivi:ready';
 
 type EventCallback = (...args: any[]) => void;
 
+// What a site may do: on the default list, allowed or refused by the user,
+// not (yet) allowed, or blocked
+export type AccessStatus = 'default' | 'allowed' | 'not_allowed' | 'denied' | 'blocked';
+
 interface TransactionRequest {
   to: string;
   // DIVI: a decimal string ("1234.5") is exact; a number must have at
@@ -31,7 +35,9 @@ interface TransactionRequest {
 }
 
 // A failed request: message, and the IronDivi Connect code (4001 rejected,
-// 4100 not connected, 4200 unsupported, 4900 locked, 4901 network mismatch)
+// 4100 not connected, 4200 unsupported, 4900 locked, 4901 network mismatch),
+// or IronDivi's own site-access codes (4300 the site must ask with
+// requestAccess first, 4301 the site is blocked)
 export class ProviderRpcError extends Error {
   constructor(message: string, readonly code: number) {
     super(message);
@@ -113,6 +119,28 @@ class IronDiviProvider {
 
       this.port.postMessage({ id, method, params });
     });
+  }
+
+  // ============ Site Access ============
+
+  /**
+   * What this site may do, without asking the user. Every other method
+   * fails with 4300 unless this is "default" or "allowed".
+   */
+  async getAccessStatus(): Promise<AccessStatus> {
+    const result = await this.sendRequest('GET_ACCESS_STATUS');
+    return result.status;
+  }
+
+  /**
+   * Ask the user whether this site may use the wallet. Opens one window only
+   * for a site that is "not_allowed" and has not been told "Not now" in the
+   * last 24 hours; resolves with the status afterwards.
+   */
+  async requestAccess(params?: { reason?: string }): Promise<AccessStatus> {
+    const reason = typeof params?.reason === 'string' ? params.reason : undefined;
+    const result = await this.sendRequest('REQUEST_ACCESS', reason === undefined ? undefined : { reason });
+    return result.status;
   }
 
   // ============ Connection Methods ============
@@ -268,6 +296,8 @@ class IronDiviProvider {
     if (args.method === 'irondivi_getNetwork') {
       return this.getNetwork();
     }
+    if (args.method === 'irondivi_getAccessStatus') return this.getAccessStatus();
+    if (args.method === 'irondivi_requestAccess') return this.requestAccess(args.params);
 
     const internalMethod = methodMap[args.method];
     if (!internalMethod) {

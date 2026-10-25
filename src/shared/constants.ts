@@ -90,6 +90,13 @@ export const MSG = {
   REVOKE_SITE: 'REVOKE_SITE',
   // Content script only: may this page use the wallet at all?
   SITE_ALLOWED: 'SITE_ALLOWED',
+  // Site access (site-access.ts): what a site may do, and asking the user
+  GET_ACCESS_STATUS: 'GET_ACCESS_STATUS',
+  REQUEST_ACCESS: 'REQUEST_ACCESS',
+  // The approval window's answer to a REQUEST_ACCESS: allowed, not_now, denied
+  ANSWER_ACCESS_REQUEST: 'ANSWER_ACCESS_REQUEST',
+  // Settings: revoke a site's grant, block or unblock a site
+  SET_SITE_ACCESS: 'SET_SITE_ACCESS',
 
   // Signing request approval
   GET_PENDING_SIGNING_REQUESTS: 'GET_PENDING_SIGNING_REQUESTS',
@@ -105,6 +112,8 @@ export type MessageType = typeof MSG[keyof typeof MSG];
  * the extension's own pages (popup, approval window) only.
  */
 export const DAPP_METHODS: readonly string[] = [
+  MSG.GET_ACCESS_STATUS,
+  MSG.REQUEST_ACCESS,
   MSG.CONNECT,
   MSG.DISCONNECT,
   MSG.IS_CONNECTED,
@@ -260,7 +269,9 @@ export type WalletMessage =
   | { type: typeof MSG.REVOKE_SITE; payload: RevokeSitePayload }
   | { type: typeof MSG.GET_PENDING_SIGNING_REQUESTS; payload?: GetPendingSigningRequestsPayload }
   | { type: typeof MSG.APPROVE_SIGNING_REQUEST; payload: ApproveSigningRequestPayload }
-  | { type: typeof MSG.REJECT_SIGNING_REQUEST; payload: RejectSigningRequestPayload };
+  | { type: typeof MSG.REJECT_SIGNING_REQUEST; payload: RejectSigningRequestPayload }
+  | { type: typeof MSG.ANSWER_ACCESS_REQUEST; payload: { requestId: string; choice: 'allowed' | 'not_now' | 'denied' } }
+  | { type: typeof MSG.SET_SITE_ACCESS; payload: { action: 'revoke' | 'block' | 'unblock'; origin: string } };
 
 // ============================================================
 // Generic response wrapper

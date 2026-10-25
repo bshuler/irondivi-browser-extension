@@ -11,12 +11,12 @@ export async function showRecordsWarning(): Promise<void> {
   const dismiss = document.getElementById('records-warning-dismiss');
   if (!banner || !text || !dismiss) return;
   try {
-    const { warning } = await sendMessage<{ warning: { at: number; message: string } | null }>(MSG.GET_RECORDS_WARNING);
+    const { warning } = await sendMessage<{ warning: string | null }>(MSG.GET_RECORDS_WARNING);
     if (!warning) {
       banner.classList.add('hidden');
       return;
     }
-    text.textContent = `${warning.message} (${new Date(warning.at).toLocaleString()})`;
+    text.textContent = warning;
     banner.classList.remove('hidden');
     dismiss.onclick = async () => {
       banner.classList.add('hidden');

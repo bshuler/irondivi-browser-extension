@@ -12,14 +12,17 @@ import { readFileSync } from 'fs';
 import { vi } from 'vitest';
 import { Address } from '../lib/address';
 import { Transaction } from '../lib/transaction';
+import type { SiteAccess } from '../shared/site-access';
 
 export const EXT_ID = 'testextensionid';
 
 /** Whether a match pattern (scheme://host/*, host may start with *.) covers a URL */
 export function matchPattern(pattern: string, url: string): boolean {
+  const u = new URL(url);
+  const any = /^(https?):\/\/\*\/\*$/.exec(pattern);
+  if (any) return u.protocol === `${any[1]}:`;
   const m = /^(https?):\/\/(\*\.)?([^/*]+)\/\*$/.exec(pattern);
   if (!m) return false;
-  const u = new URL(url);
   if (u.protocol !== `${m[1]}:`) return false;
   const host = u.hostname;
   return m[2] ? host === m[3] || host.endsWith(`.${m[3]}`) : host === m[3];
@@ -144,11 +147,12 @@ function p2pkhScript(address: string): string {
  */
 export async function createHarness(
   pageUrl = 'https://games.divi.domains/',
-  opts: { allowedSites?: string[]; grantedOrigins?: string[] } = {},
+  opts: { allowedSites?: string[]; siteAccess?: SiteAccess; grantedOrigins?: string[]; withheldOrigins?: string[] } = {},
 ): Promise<Harness> {
   const pageOrigin = new URL(pageUrl).origin;
   const local: Record<string, any> = {};
   if (opts.allowedSites) local.settings = { allowedSites: opts.allowedSites };
+  if (opts.siteAccess) local.settings = { siteAccess: opts.siteAccess };
   const session: Record<string, any> = {};
   const onMessage = event();
   const onConnect = event();
@@ -177,7 +181,9 @@ export async function createHarness(
   const registeredScripts: any[] = [];
   // The manifest's host permissions, granted at install, and any the test adds
   const manifest = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf-8'));
-  const grantedOrigins: string[] = [...manifest.host_permissions, ...(opts.grantedOrigins ?? [])];
+  // (less any the test says the user withheld)
+  const grantedOrigins: string[] = [...manifest.host_permissions, ...(opts.grantedOrigins ?? [])]
+    .filter(o => !(opts.withheldOrigins ?? []).includes(o));
 
   const dispatch = (msg: any, sender: any): Promise<any> => new Promise((resolve) => {
     let answered = false;

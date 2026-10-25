@@ -1,12 +1,12 @@
 /**
  * What UPDATE_SETTINGS accepts, and which changes loosen a protection and so
- * need the wallet's password: allowing a new site, raising or removing a
- * transaction limit, or keeping the wallet unlocked longer. The background
+ * need the wallet's password: raising or removing a transaction limit, or
+ * keeping the wallet unlocked longer. Sites are not a setting: they have
+ * SET_SITE_ACCESS (site-access.ts). The background
  * enforces it; the popup uses the same rule to know when to ask.
  */
 
 import { NETWORKS } from './constants';
-import { checkSitePatterns } from './origin';
 import type { Settings, TransactionLimits } from './storage';
 
 const LIMIT_KEYS: (keyof TransactionLimits)[] = [
@@ -59,15 +59,6 @@ export function checkSettingsUpdate(raw: unknown, current: Settings): SettingsCh
         if (typeof value !== 'boolean') return { ok: false, error: 'Invalid hide balance setting' };
         updates.hideBalance = value;
         break;
-      case 'allowedSites': {
-        const problem = checkSitePatterns(value);
-        if (problem) return { ok: false, error: problem };
-        const sites = (value as string[]).map(s => s.trim().toLowerCase());
-        const known = new Set(current.allowedSites.map(s => s.trim().toLowerCase()));
-        if (sites.some(s => !known.has(s))) loosens = true;
-        updates.allowedSites = sites;
-        break;
-      }
       case 'transactionLimits': {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: 'Invalid limits' };
         const v = value as Record<string, unknown>;

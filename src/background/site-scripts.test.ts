@@ -1,38 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHarness, TEST_PASSWORD } from '../test-support/harness';
-import { patternsFor } from '../shared/site-patterns';
+import { DEFAULT_SITES, emptyAccess, siteMatchPatterns, withChoice } from '../shared/site-access';
+import { ERR } from '../shared/provider-errors';
 
 const CONTENT_SCRIPT_ID = 'irondivi-content';
 const PROVIDER_SCRIPT_ID = 'irondivi-provider';
 
-// EXT-20/21: the wallet's scripts run only on the allowed sites. Nothing is
-// declared for every page; the background registers them for the allowed
-// sites the browser has granted, and re-registers them when the list changes.
-
-async function settle(ms = 50) {
-  await new Promise(r => setTimeout(r, ms));
-}
+// The wallet's scripts run on every https page the browser has granted, so a
+// site off the default list can find window.irondivi to ask with
+// requestAccess. Such a page is told its status and nothing else.
 
 beforeEach(() => { vi.resetModules(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe('patternsFor', () => {
-  it('drops ports, folds **. into *., and serves local hosts over http', () => {
-    expect(patternsFor(['games.divi.domains', '**.example.org', '*.foo.test:8443', '127.0.0.1:*', 'localhost:3000']))
-      .toEqual(['https://games.divi.domains/*', 'https://*.example.org/*', 'https://*.foo.test/*', 'http://127.0.0.1/*', 'http://localhost/*']);
+describe('siteMatchPatterns', () => {
+  it('is every https page and the default sites, and adds the local hosts in a development build', () => {
+    const release = siteMatchPatterns(emptyAccess(), false);
+    expect(release[0]).toBe('https://*/*');
+    expect(release).toEqual(['https://*/*', ...DEFAULT_SITES.map(o => `${o}/*`)]);
+    expect(siteMatchPatterns(emptyAccess(), true)).toEqual([...release, 'http://localhost/*', 'http://127.0.0.1/*']);
   });
 
-  it('leaves out anything that is not a host pattern', () => {
-    expect(patternsFor(['*', 'a b.com', '.x.com', 'x.com.', 'https://x.com', 'x.com/path', 42 as any])).toEqual([]);
-  });
-
-  it('lists a host once', () => {
-    expect(patternsFor(['x.com', 'x.com:443', 'X.COM'])).toEqual(['https://x.com/*']);
+  it('keeps a site the user allowed, so it still works if every-site access is withheld', () => {
+    const access = withChoice(emptyAccess(), 'https://shop.example', 'testnet', 'allowed', 1);
+    expect(siteMatchPatterns(access, false)).toContain('https://shop.example/*');
+    const denied = withChoice(emptyAccess(), 'https://shop.example', 'testnet', 'denied', 1);
+    expect(siteMatchPatterns(denied, false)).not.toContain('https://shop.example/*');
   });
 });
 
-describe('the background registers the scripts for allowed sites only', () => {
-  it('registers the content script and the provider, in the page world, for the granted sites', async () => {
+describe('the background registers the scripts', () => {
+  it('registers the content script and the provider, in the page world, for every https page', async () => {
     const h = await createHarness();
     const ids = h.registeredScripts.map(s => s.id).sort();
     expect(ids).toEqual([CONTENT_SCRIPT_ID, PROVIDER_SCRIPT_ID].sort());
@@ -40,38 +38,36 @@ describe('the background registers the scripts for allowed sites only', () => {
     expect(provider.world).toBe('MAIN');
     expect(provider.js).toEqual(['provider.js']);
     expect(provider.runAt).toBe('document_start');
-    for (const s of h.registeredScripts) {
-      expect(s.matches).toContain('https://games.divi.domains/*');
-      expect(s.matches.every((m: string) => m.startsWith('https://'))).toBe(true);
-    }
+    for (const s of h.registeredScripts) expect(s.matches[0]).toBe('https://*/*');
   });
 
-  it('example.com gets neither script nor window.irondivi', async () => {
+  it('example.com finds window.irondivi, but is told only that it is not allowed', async () => {
     const h = await createHarness('https://example.com/');
-    expect(h.provider()).toBeUndefined();
-    expect((globalThis as any).window.irondivi).toBeUndefined();
-  });
-
-  it('a site the browser has not granted is not registered, even when allowed', async () => {
-    const h = await createHarness('https://example.org/', { allowedSites: ['games.divi.domains', 'example.org'] });
-    for (const s of h.registeredScripts) expect(s.matches).not.toContain('https://example.org/*');
-    expect(h.provider()).toBeUndefined();
-  });
-
-  it('changing the allowed sites in Settings re-registers the scripts', async () => {
-    const h = await createHarness('https://games.divi.domains/', { grantedOrigins: ['https://example.org/*'] });
     await h.setupWallet();
-    const r = await h.popup('UPDATE_SETTINGS', { allowedSites: ['games.divi.domains', 'example.org', 'not-granted.example'], password: TEST_PASSWORD });
-    expect(r.success).toBe(true);
-    await settle();
-    for (const s of h.registeredScripts) {
-      expect(s.matches).toEqual(['https://games.divi.domains/*', 'https://example.org/*']);
-    }
-    expect(h.registeredScripts).toHaveLength(2);
+    const windows = h.createdWindows.length;
+    expect(await h.provider().getAccessStatus()).toBe('not_allowed');
+    await expect(h.provider().connect()).rejects.toMatchObject({ code: ERR.ACCESS_REQUIRED });
+    await expect(h.provider().getAccounts()).rejects.toMatchObject({ code: ERR.ACCESS_REQUIRED });
+    await expect(h.provider().getBalance()).rejects.toMatchObject({ code: ERR.ACCESS_REQUIRED });
+    expect(h.createdWindows).toHaveLength(windows);
+  });
 
-    expect((await h.popup('UPDATE_SETTINGS', { allowedSites: [], password: TEST_PASSWORD })).success).toBe(true);
-    await settle();
-    expect(h.registeredScripts).toHaveLength(0);
+  it('when the user withholds every-site access, only the granted default sites are registered', async () => {
+    const h = await createHarness('https://example.org/', { withheldOrigins: ['https://*/*'] });
+    for (const s of h.registeredScripts) expect(s.matches).toEqual(['https://games.divi.domains/*', 'https://services.divi.domains/*']);
+    expect(h.provider()).toBeUndefined();
+    vi.resetModules();
+    const game = await createHarness('https://games.divi.domains/', { withheldOrigins: ['https://*/*'] });
+    expect(game.provider()).toBeDefined();
+  });
+
+  it('a change of site access in Settings registers the scripts again', async () => {
+    const h = await createHarness();
+    await h.setupWallet();
+    const register = vi.spyOn((globalThis as any).chrome.scripting, 'registerContentScripts');
+    expect((await h.popup('SET_SITE_ACCESS', { origin: 'https://shop.example', action: 'block', password: TEST_PASSWORD })).success).toBe(true);
+    await vi.waitFor(() => expect(register).toHaveBeenCalled());
+    expect(h.registeredScripts).toHaveLength(2);
   });
 });
 
