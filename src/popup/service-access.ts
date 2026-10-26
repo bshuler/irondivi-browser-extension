@@ -4,7 +4,8 @@
  * Safari grants an extension's host permissions one website at a time, and
  * nobody browses to services.divi.domains, so until the user allows it every
  * balance, history and send call from the background fails as a cross-origin
- * request. Chrome and Firefox grant them at install, so they never see it.
+ * request. Chrome grants them at install; Firefox does too but lets the user
+ * take them back, and then the banner shows there as well.
  */
 import { NETWORKS, FAUCET_URLS } from '../shared/constants';
 

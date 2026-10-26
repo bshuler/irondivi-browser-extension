@@ -21,7 +21,8 @@
 # only account is the image's published default (admin/admin); `up` swaps it
 # for an ssh key kept in $STATE on first boot.
 #
-# Safari forgets "Allow unsigned extensions" every time it quits, so after an
+# Safari forgets "Allow unsigned extensions" every time it quits (and the
+# relaunch can lose the extension's wallet: create a fresh one), so after an
 # install or a Safari relaunch, in the guest (all by `click`; the password
 # prompt takes the image's `admin`): Safari › Settings › Developer › Allow
 # unsigned extensions; `sh 'pkill -x "IronDivi Wallet"; open -g

@@ -83,7 +83,9 @@ Safari build is a two-step: `dist/safari/` holds the extension, and
    macOS registers the extension
 3. In Safari: Develop > Allow Unsigned Extensions (ad-hoc builds only), then
    Settings > Extensions > enable IronDivi Wallet
-4. Open the wallet and click **Allow** on the banner, then **Always Allow**.
+4. Click the toolbar icon and choose **Always Allow** for the site you're on;
+   then in the wallet click **Allow** on the "reach the Divi network" banner,
+   and **Always Allow** again.
    Safari grants an extension's websites one at a time, so until then the
    wallet can't reach the Divi network (services.divi.domains,
    vps1.divi.domains) for balance, history or sends.
