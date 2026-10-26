@@ -55,6 +55,8 @@ export interface Harness {
   registeredScripts: any[];
   createdWindows: Array<{ id: number; url: string }>;
   closeWindow: (id: number) => void;
+  /** The user granting a site outside the extension, as Safari's website access does. */
+  grantInBrowser: (origin: string) => void;
   broadcasts: string[];
   /** What the node's address index reports; a test may edit it in place (not reassign it) to make the node lie. */
   utxos: Utxo[];
@@ -158,6 +160,7 @@ export async function createHarness(
   const onConnect = event();
   const onIdle = event();
   const onRemoved = event();
+  const onPermissionsAdded = event();
   const createdWindows: Array<{ id: number; url: string }> = [];
   const broadcasts: string[] = [];
   const utxos: Utxo[] = [];
@@ -257,6 +260,7 @@ export async function createHarness(
         grantedOrigins.push(...origins.filter(o => !grantedOrigins.includes(o)));
         return true;
       },
+      onAdded: onPermissionsAdded,
     },
   };
   (globalThis as any).chrome = chromeFake;
@@ -394,6 +398,10 @@ export async function createHarness(
     registeredScripts,
     createdWindows,
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
+    grantInBrowser: (origin) => {
+      grantedOrigins.push(origin);
+      onPermissionsAdded.listeners.forEach(l => l({ origins: [origin] }));
+    },
     broadcasts,
     utxos,
     fund,

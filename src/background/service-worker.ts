@@ -1215,6 +1215,10 @@ async function initialize() {
 
 browserAPI.runtime.onInstalled?.addListener(() => { void syncSiteScripts(); });
 browserAPI.runtime.onStartup?.addListener(() => { void syncSiteScripts(); });
+// Safari grants website access in its own settings and toolbar, not through
+// the extension; register for a newly allowed site now, not at the next launch
+browserAPI.permissions?.onAdded?.addListener(() => { void syncSiteScripts(); });
+browserAPI.permissions?.onRemoved?.addListener(() => { void syncSiteScripts(); });
 
 // Keep web pages' content scripts out of local storage, where the encrypted
 // vault lives. They ask SITE_ALLOWED instead. Chrome and Edge support this for

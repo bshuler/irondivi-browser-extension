@@ -69,6 +69,14 @@ describe('the background registers the scripts', () => {
     await vi.waitFor(() => expect(register).toHaveBeenCalled());
     expect(h.registeredScripts).toHaveLength(2);
   });
+
+  it('a site the browser allows later gets the wallet without a restart', async () => {
+    const h = await createHarness('https://divi.cx/', { withheldOrigins: ['https://*/*', 'https://divi.cx/*'] });
+    for (const s of h.registeredScripts) expect(s.matches).not.toContain('https://divi.cx/*');
+    h.grantInBrowser('https://divi.cx/*');
+    await vi.waitFor(() => expect(h.registeredScripts.every(s => s.matches.includes('https://divi.cx/*'))).toBe(true));
+    expect(h.registeredScripts).toHaveLength(2);
+  });
 });
 
 describe('EXT-3 a failure to restrict local storage is not hidden', () => {
