@@ -19,7 +19,7 @@
     "package:release": "npm run package",
     "lint": "eslint src/",
     "test": "playwright test",
-    "test:headed": "playwright test --headed",
+    "test:headed": "PW_HEADED=1 playwright test --headed",
     "test:unit": "vitest",
     "check:remote": "scripts/remote-check.sh",
     "reproduce": "scripts/reproduce.sh"

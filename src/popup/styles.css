@@ -49,6 +49,11 @@ body {
   font-size: 14px;
 }
 
+/* The window's height, not 600px, so nothing sits under the bottom edge */
+body.approval-window {
+  height: 100vh;
+}
+
 #app {
   /* Views and dialogs fill the wallet, not the whole window */
   position: relative;
@@ -1534,7 +1539,9 @@ body {
   flex-direction: column;
   padding: 12px 16px;
   gap: 10px;
-  overflow: hidden;
+  /* A short window scrolls to the Approve and Reject buttons */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .signing-origin-wrapper {

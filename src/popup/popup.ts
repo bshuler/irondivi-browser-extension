@@ -148,6 +148,8 @@ async function init(): Promise<void> {
     console.warn('Could not tell the background this window is open');
   }
   setupEventListeners();
+  // An approval window's title bar takes some of its height: fill what is left
+  if (checkApprovalParams()) document.body.classList.add('approval-window');
 
   showLoading('Loading wallet...');
 

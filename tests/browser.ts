@@ -42,7 +42,10 @@ export async function launchWithExtension(extensionPath: string): Promise<Browse
   const launch = resolveLaunch();
   return chromium.launchPersistentContext('', {
     ...launch,
-    headless: false,
+    // Headless unless asked (npm run test:headed): a visible window lands on
+    // whoever's screen the tests run on. Chrome's own headless mode loads
+    // extensions; only the separate headless shell can't.
+    headless: process.env.PW_HEADED !== '1',
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,

@@ -47,7 +47,7 @@ irondivi-browser-extension/
 {
   "scripts": {
     "test": "playwright test",           // Run all tests
-    "test:headed": "playwright test --headed",  // Visible browser
+    "test:headed": "PW_HEADED=1 playwright test --headed",  // Visible browser
     "test:unit": "vitest"                // Unit tests (existing)
   }
 }
@@ -144,7 +144,7 @@ The fixture automatically:
   timeout: 60000,        // 60s per test
   retries: 1,            // Retry once on failure
   use: {
-    headless: false,     // Required for extensions
+    headless: process.env.PW_HEADED !== '1',  // Chrome's own headless mode loads extensions
     viewport: { width: 400, height: 600 },  // Popup size
     screenshot: 'only-on-failure',
   }
@@ -154,9 +154,8 @@ The fixture automatically:
 ## Best Practices
 
 ### Before Running Tests
-1. **Always rebuild**: `npm run build:dev` (a release build refuses the test dApp on 127.0.0.1)
-2. **Check dist exists**: `ls dist/chrome/manifest.json`
-3. **Verify background script**: `ls dist/chrome/background.js`
+1. **Nothing to build first**: `npm test` builds dist/chrome (the release build most specs load) and dist/e2e/chrome (a development build for the dApp specs, since a release build refuses the test dApp on 127.0.0.1)
+2. **Headless by default**: no Chrome window opens on your screen; `npm run test:headed` shows one
 
 ### Test Isolation
 - Each test creates a new wallet

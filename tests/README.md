@@ -111,10 +111,9 @@ npm run build && npm test
 - Adjust in `playwright.config.ts` if needed
 
 ### Headless Mode
-Tests run in non-headless mode by default (headless: false) because:
-- Extension popup requires visible window
-- Better debugging experience
-- More realistic user simulation
+Tests run headless by default, so no Chrome window opens on your screen.
+Chrome's own headless mode loads extensions (only Playwright's separate
+headless shell can't). To watch them: `npm run test:headed` (sets PW_HEADED=1).
 
 ### Debugging Failed Tests
 
