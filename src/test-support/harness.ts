@@ -54,6 +54,10 @@ export interface Harness {
   /** The content scripts the background has registered. */
   registeredScripts: any[];
   createdWindows: Array<{ id: number; url: string }>;
+  /** The size a new window really opens at; unset, the size asked for (Safari can ignore it). */
+  openWindowsAt?: { width: number; height: number };
+  /** windows.update calls, in order. */
+  windowUpdates: Array<Record<string, number>>;
   closeWindow: (id: number) => void;
   /** The user granting a site outside the extension, as Safari's website access does. */
   grantInBrowser: (origin: string) => void;
@@ -162,6 +166,7 @@ export async function createHarness(
   const onRemoved = event();
   const onPermissionsAdded = event();
   const createdWindows: Array<{ id: number; url: string }> = [];
+  const windowUpdates: Array<Record<string, number>> = [];
   const broadcasts: string[] = [];
   const utxos: Utxo[] = [];
   const addressTxids: string[] = [];
@@ -228,11 +233,13 @@ export async function createHarness(
     action: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {} },
     windows: {
       getAll: async () => [],
-      create: async (opts: { url: string }) => {
+      create: async (opts: { url: string; width?: number; height?: number }) => {
         const w = { id: nextWindowId++, url: opts.url };
         createdWindows.push(w);
-        return { id: w.id, tabs: [{ id: w.id * 10 }] };
+        const size = h.openWindowsAt ?? { width: opts.width, height: opts.height };
+        return { id: w.id, tabs: [{ id: w.id * 10 }], ...size };
       },
+      update: async (id: number, opts: Record<string, number>) => { windowUpdates.push({ id, ...opts }); return { id }; },
       remove: async (id: number) => { onRemoved.listeners.forEach(l => l(id)); },
       onRemoved,
     },
@@ -397,6 +404,7 @@ export async function createHarness(
     provider: () => fakeWindow.irondivi,
     registeredScripts,
     createdWindows,
+    windowUpdates,
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
     grantInBrowser: (origin) => {
       grantedOrigins.push(origin);

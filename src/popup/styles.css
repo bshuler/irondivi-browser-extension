@@ -40,6 +40,8 @@ body[data-network="testnet"] {
 body {
   width: 360px;
   height: 600px;
+  /* A window bigger than the wallet (Safari can open one) keeps it centred */
+  margin: 0 auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a3e 100%);
   color: var(--text-primary);
@@ -48,6 +50,8 @@ body {
 }
 
 #app {
+  /* Views and dialogs fill the wallet, not the whole window */
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
