@@ -6,6 +6,7 @@ import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showToast, showView, hideView } from './ui-state';
 import { sendMessage } from './message-api';
+import { explainedByMissingAccess } from './service-access';
 import { MSG, NETWORKS } from '../shared/constants';
 import { Account, Transaction, Contact, ConnectedSite, getPrimaryAddress } from './types';
 import QRCode from 'qrcode';
@@ -52,6 +53,7 @@ export async function loadBalance(): Promise<void> {
     updateBalanceDisplay();
   } catch (error) {
     console.error('Failed to load balance');
+    if (await explainedByMissingAccess()) return;
     showToast('Failed to load balance. Please try again.', 'error');
   }
 }
@@ -68,6 +70,7 @@ export async function loadTransactions(): Promise<void> {
     updateTransactionList();
   } catch (error) {
     console.error('Failed to load transactions');
+    if (await explainedByMissingAccess()) return;
     showToast('Failed to load transactions. Please try again.', 'error');
   }
 }

@@ -28,6 +28,9 @@
 # ~/Applications/"IronDivi Wallet.app"'` so Safari rescans (answer Gatekeeper
 # with Open Anyway); tick IronDivi under Settings › Extensions; and on the
 # first click of the toolbar icon, Always Allow on the site under test.
+# The wallet's own banner then asks for the Divi services (Allow, then
+# Always Allow). Settings › Websites › IronDivi Wallet takes that grant back
+# for a re-test, but a running background keeps it until Safari quits.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
