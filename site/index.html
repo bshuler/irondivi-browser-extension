@@ -6,16 +6,26 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IronDivi Wallet: a browser wallet for Divi</title>
-  <meta name="description" content="IronDivi Wallet is a browser extension for the Divi blockchain: an HD wallet with mainnet and testnet, multiple accounts, and an approval window for every site request. Beta, open source, desktop browsers.">
+  <meta name="description" content="IronDivi Wallet is a browser extension for the Divi blockchain, for Chrome, Brave, Edge, Opera, Firefox and Safari: an HD wallet with mainnet and testnet, multiple accounts, and an approval window for every site request. Beta, open source.">
   <meta name="theme-color" content="#0f0f1a">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="IronDivi Wallet">
-  <meta property="og:title" content="IronDivi Wallet: a browser wallet for Divi">
-  <meta property="og:description" content="A Divi wallet in your browser. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Beta: testnet first.">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="IronDivi Wallet: the Divi wallet for every desktop browser">
+  <meta property="og:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Open source beta.">
   <meta property="og:url" content="https://browser.irondivi.com/">
-  <meta property="og:image" content="https://browser.irondivi.com/assets/icon-512.png">
-  <meta property="og:image:alt" content="IronDivi shield logo">
-  <meta name="twitter:card" content="summary">
+  <!-- The link preview: site/deploy/og/ makes it -->
+  <meta property="og:image" content="https://browser.irondivi.com/assets/og-image.png">
+  <meta property="og:image:secure_url" content="https://browser.irondivi.com/assets/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="IronDivi Wallet, the Divi wallet for every desktop browser: Chrome, Brave, Edge, Opera, Firefox and Safari.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IronDivi Wallet: the Divi wallet for every desktop browser">
+  <meta name="twitter:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, nothing signed without your approval.">
+  <meta name="twitter:image" content="https://browser.irondivi.com/assets/og-image.png">
+  <meta name="twitter:image:alt" content="IronDivi Wallet, the Divi wallet for every desktop browser: Chrome, Brave, Edge, Opera, Firefox and Safari.">
   <link rel="canonical" href="https://browser.irondivi.com/">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
@@ -70,6 +80,14 @@
             </a>
             <a class="btn btn--ghost btn--lg" id="hero-steps" href="#install">Install steps</a>
           </div>
+          <ul class="browser-strip" aria-label="Supported browsers">
+            <li><a href="#install" data-pick="chrome"><img src="/assets/browsers/chrome.svg" alt="" width="28" height="28"><span>Chrome</span></a></li>
+            <li><a href="#install" data-pick="brave"><img src="/assets/browsers/brave.svg" alt="" width="28" height="28"><span>Brave</span></a></li>
+            <li><a href="#install" data-pick="edge"><img src="/assets/browsers/edge.svg" alt="" width="28" height="28"><span>Edge</span></a></li>
+            <li><a href="#install" data-pick="opera"><img src="/assets/browsers/opera.svg" alt="" width="28" height="28"><span>Opera</span></a></li>
+            <li><a href="#install" data-pick="firefox"><img src="/assets/browsers/firefox.svg" alt="" width="28" height="28"><span>Firefox</span></a></li>
+            <li><a href="#install" data-pick="safari"><img src="/assets/browsers/safari.svg" alt="" width="28" height="28"><span>Safari</span></a></li>
+          </ul>
           <p class="hero__meta" id="hero-meta">Chrome, Brave, Edge, Opera, Firefox and Safari on desktop. Not in the browser stores yet: store listings are coming.</p>
           <p class="notice notice--info" id="mobile-notice" hidden></p>
 

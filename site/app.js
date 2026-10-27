@@ -390,6 +390,10 @@
   }
 
   function initHero() {
+    // The browser row in the hero opens that browser's install steps
+    document.querySelectorAll('[data-pick]').forEach(function (a) {
+      a.addEventListener('click', function () { selectTab(a.getAttribute('data-pick'), false); });
+    });
     var btn = $('hero-download');
     if (!btn) return;
     btn.addEventListener('click', function () {
