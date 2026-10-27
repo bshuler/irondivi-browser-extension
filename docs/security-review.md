@@ -65,7 +65,8 @@ Fixes land in `bshuler/irondivi-browser-extension` on `main`. Each one has regre
 | L15 | Fixed: popup message signing takes an account id and refuses it unless the session unlocked that account; it signs from an address the account owns on its own network and returns that address. Completed by EXT-7 below: dApp signing checks the session's account too | ffa421f, 9245ef7, e0a33b3 | sign-message-account.test.ts, approval-security.test.ts |
 | I2, I3 | Fixed: `isValidPrivateKey` checks that a key is 32 bytes from 1 to n - 1. Transaction and message signing refuse any other key and refuse s = 0; BIP32 refuses a master key outside that range, IL of n or more, and a child key of 0 | 7f40d75 | key-range.test.ts |
 | T1 | Fixed: the approval window checks the wallet's reply to approve and reject, and shows an error and keeps the window open when it is refused | 25f0b53 | signing-request.test.ts, dapp-security.spec.ts |
-| I1, I4, I5, I6, I7 | Accepted as they stand; see each finding for why | | |
+| I1, I4, I6, I7 | Accepted as they stand; see each finding for why | | |
+| I5 | Reversed in 0.0.9: the wallet pays script (P2SH) addresses on its own network with a P2SH output, because they are destinations people are asked to pay (DNSDivi's registration address is one), not addresses the wallet spends from. The approval check rebuilds the expected output from the address either way. Change and inputs stay P2PKH, the wallet's own addresses. The same change accepts testnet key addresses that start with 'x' as well as 'y' | 0.0.9 | script-address.test.ts, payment-uri.test.ts |
 
 Checked against the live networks on 2026-10-24:
 - H2's check needs the node's raw transaction to hash to the txid it reports. On mainnet and testnet, every transaction in the last 15 blocks of each, 62 in all and including coinbase and coinstake, parses and re-serialises byte for byte, and hashes to its txid. Divi's `baretxid` is a different hash and is not used.
@@ -81,7 +82,7 @@ A second adversarial review of `main` at `4d84d32` found no Critical or High iss
 | EXT-2 Sends and signatures need no password inside the auto-lock window | Fixed: every send and signature carries the password; the wallet locks when its last window closes and when the screen locks | 593fedc, 7654b11 | session-security.test.ts, send-security.test.ts, sign-message-account.test.ts, injection-security.test.ts |
 | EXT-3 M1 works only on Chromium 140+; unencrypted records can be changed | Fixed: the wallet's scripts run only on allowed sites, and accounts, settings, connections and contacts are sealed with an HMAC key kept inside the encrypted secret; changes made outside the wallet are undone on unlock, and a failed `setAccessLevel` is reported | 36d3414, 7edb478 | site-scripts.test.ts, records-seal.test.ts, unlock-retry.test.ts |
 | EXT-4 `signMessage` is the Divi Games spend key but shown as plain text | Fixed: `signGameTx` shows a game transaction as a transaction (kind, recipient, amount, token), only for the Divi Games origin, and `signMessage` refuses text that parses as one | e68435e | game-tx-signing.test.ts, game-tx.test.ts |
-| EXT-5 A site learns the spendable balance | Fixed: a site gets one plain refusal for over-limit and over-balance payments | a3b3f12 | approval-security.test.ts |
+| EXT-5 A site learns the spendable balance | Fixed: a site gets one plain refusal for over-limit and over-balance payments. Since 0.0.9 the owner sees the real reason in the popup banner (session storage only, out of a site's reach), so a refused payment is not a mystery | a3b3f12, 0.0.9 | approval-security.test.ts |
 | EXT-6 A second approval can run while the first is in flight | Fixed | 813f128, 2b92fe0 | approval-security.test.ts, signing-request.test.ts |
 | EXT-7 dApp signing does not check the session's account (L15 residual) | Fixed | e0a33b3 | approval-security.test.ts |
 | EXT-8 The approval window hides the paying account and skips recipient checks | Fixed | 61caf4b | approval-context.test.ts, signing-request.test.ts |
@@ -508,10 +509,10 @@ Residual risks that remain after these fixes:
   - **Location:** `src/lib/signer.ts:35-49`.
   - **Problem:** this is equivalent except for hashes ≥ n.
   - **Evidence:** verified by running. A signature over a digest of all 0xff bytes still verified.
-- **I5. P2SH destinations are refused.**
+- **I5. P2SH destinations are refused.** *(Reversed in 0.0.9; see the table above.)*
   - **Location:** `src/background/wallet-core.ts:178-187` (P2PKH output only).
-  - **Problem:** this is safe, but users will hit it.
-  - **Evidence:** inferred from reading.
+  - **Problem:** this is safe, but users will hit it. They did: DNSDivi (divi.cx) takes its registration fee at a script address, so the wallet could not pay it.
+  - **Evidence:** inferred from reading; confirmed against divi.cx on 2026-10-27.
 - **I6. `window.irondivi` is writable, not frozen.**
   - **Location:** `src/injected/provider.ts:242`.
   - **Problem:** it runs at the page's trust level, so this is cosmetic.

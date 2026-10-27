@@ -114,8 +114,13 @@ describe('parsePaymentUri', () => {
     expect(ok(MAIN, 'mainnet')).toEqual({ address: MAIN });
   });
 
-  it('refuses a script address and garbage', () => {
-    expect(err(addressWith(NETWORKS.testnet.scriptPrefix))).toMatch(/script/);
+  it('accepts a script address on its own network only', () => {
+    const script = addressWith(NETWORKS.testnet.scriptPrefix);
+    expect(ok(`divi:${script}`)).toEqual({ address: script });
+    expect(err(`divi:${script}`, 'mainnet')).toBe('That is a Testnet address; this wallet is on Mainnet');
+  });
+
+  it('refuses garbage', () => {
     expect(err('divi:notanaddress')).toMatch(/not a valid/);
     expect(err('divi:')).toMatch(/no address/);
     expect(err('')).toMatch(/no address/);

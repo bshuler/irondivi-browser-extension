@@ -11,8 +11,7 @@ export const NETWORKS = {
     explorerUrl: 'https://services.divi.domains/explorer/tx/',
     coinType: 301,
     addressPrefix: 0x1e, // pubKeyHash, 'D'
-    scriptPrefix: 0x0d, // scriptHash (13)
-    addressFirstChar: 'D',
+    scriptPrefix: 0x0d, // scriptHash, '6'
   },
   testnet: {
     name: 'Testnet',
@@ -20,8 +19,7 @@ export const NETWORKS = {
     explorerUrl: 'https://services.divi.domains/testnet/explorer/tx/',
     coinType: 1,
     addressPrefix: 0x8b, // pubKeyHash, 'x' or 'y'
-    scriptPrefix: 0x13, // scriptHash (19)
-    addressFirstChar: 'y',
+    scriptPrefix: 0x13, // scriptHash, '8' or '9'
   },
 } as const;
 

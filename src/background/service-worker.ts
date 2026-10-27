@@ -22,6 +22,7 @@ import { checkRecipient, recipientNote } from '../popup/recipient-check';
 import { connectRelay, RELAY_ALARM, RELAY_PREFIX } from './connect-relay';
 import { swapService, SWAP_TICK_ALARM } from './swap-service';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
+import { notePaymentRefused, getPaymentNotice, dismissPaymentNotice } from './payment-notice';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
 installRecordsSeal();
@@ -757,7 +758,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           let built: Awaited<ReturnType<typeof buildSend>>;
           try {
             built = await buildSend(account, request);
-          } catch {
+          } catch (error) {
+            // The site gets no reason; the owner sees it in the popup
+            await notePaymentRefused(origin, request.amount, error instanceof Error ? error.message : String(error));
             return { success: false, error: CANNOT_PAY };
           }
 
@@ -846,11 +849,14 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true, data: { settings: currentSettings } };
       }
 
+      // One banner in the popup: a records warning first, else why a site's
+      // payment was refused
       case MSG.GET_RECORDS_WARNING:
-        return { success: true, data: { warning: await getRecordsWarning() } };
+        return { success: true, data: { warning: await getRecordsWarning() ?? await getPaymentNotice() } };
 
       case MSG.DISMISS_RECORDS_WARNING:
-        await dismissRecordsWarning();
+        if (await getRecordsWarning()) await dismissRecordsWarning();
+        else await dismissPaymentNotice();
         return { success: true };
 
       case MSG.GET_NETWORK: {

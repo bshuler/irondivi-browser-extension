@@ -3,7 +3,7 @@ import { MAX_OP_RETURN_BYTES, opReturnScript, Transaction } from '../lib/transac
 import { bytesToHex } from '../lib/hex';
 import { Signer } from '../lib/signer';
 import { derivePublicKey } from '../lib/secp256k1';
-import { NETWORKS, DUST_THRESHOLD, type NetworkType } from '../shared/constants';
+import { DUST_THRESHOLD, type NetworkType } from '../shared/constants';
 import type { AccountAddress } from '../shared/storage';
 export { deriveAddresses } from '../lib/derivation';
 
@@ -126,8 +126,9 @@ export function satoshisToDivi(satoshis: bigint): number {
 }
 
 /**
- * The P2PKH output script that pays an address:
- * OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+ * The P2PKH output script that pays one of the wallet's own key addresses:
+ * OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG. A payment to
+ * another address uses Address.outputScript, which also pays script addresses.
  */
 export function p2pkhScript(address: string): string {
   return '76a914' + bytesToHex(Address.decode(address).hash) + '88ac';
@@ -184,14 +185,10 @@ export class WalletCore {
       throw new Error(`Fee is above the most this wallet pays, ${satoshisToDivi(MAX_FEE_SATS)} DIVI`);
     }
 
-    // Validate destination address matches network
-    const expectedPrefix = NETWORKS[network].addressFirstChar;
-    if (typeof to !== 'string' || !to.startsWith(expectedPrefix)) {
-      throw new Error(`Invalid ${network} address. Expected address starting with '${expectedPrefix}'.`);
-    }
-    // Full address validation including checksum verification
-    if (!Address.validate(to, network)) {
-      throw new Error('Invalid address: checksum verification failed');
+    // The destination is a key or script address on this network, checksum
+    // included; testnet key addresses start with 'x' or 'y'
+    if (typeof to !== 'string' || !Address.validate(to, network)) {
+      throw new Error(`Invalid ${network} address`);
     }
 
     if (memo !== undefined) {
@@ -283,7 +280,7 @@ export class WalletCore {
         sequence: 0xffffffff,
       });
     }
-    tx.outputs.push({ value: amountSats, script: p2pkhScript(to) });
+    tx.outputs.push({ value: amountSats, script: Address.outputScript(to, network) });
     if (changeSats > 0n) {
       tx.outputs.push({ value: changeSats, script: p2pkhScript(changeAddress) });
     }
@@ -347,7 +344,7 @@ export class WalletCore {
     }
     if (outputs.length < 1 || outputs.length > 2 ||
         outputs[0].value !== intent.amountSats ||
-        scriptToHex(outputs[0].script) !== p2pkhScript(intent.to)) {
+        scriptToHex(outputs[0].script) !== Address.outputScript(intent.to, intent.network)) {
       throw new Error('Transaction does not pay what was asked');
     }
     let outSats = outputs[0].value;

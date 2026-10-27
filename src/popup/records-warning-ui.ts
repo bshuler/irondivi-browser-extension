@@ -1,6 +1,7 @@
 /**
  * The banner shown when the background found the wallet's records changed
- * outside it and put their protections back (records-seal.ts)
+ * outside it and put their protections back (records-seal.ts), or why a
+ * site's payment request was refused (payment-notice.ts)
  */
 import { sendMessage } from './message-api';
 import { MSG } from '../shared/constants';
@@ -24,7 +25,10 @@ export async function showRecordsWarning(): Promise<void> {
         await sendMessage(MSG.DISMISS_RECORDS_WARNING);
       } catch {
         // Shown again next time
+        return;
       }
+      // The next notice waiting, if any
+      void showRecordsWarning();
     };
   } catch {
     // No banner is better than a broken popup

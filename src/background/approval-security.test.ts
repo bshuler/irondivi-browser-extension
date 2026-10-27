@@ -48,6 +48,29 @@ describe('EXT-5 a site is not told why a payment cannot be made', () => {
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/balance/);
   });
+
+  it('the owner sees why a site\'s payment was refused, the site does not', async () => {
+    await h.connectPage();
+    const r = await h.fromTab('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 500 });
+    expect(r).toEqual({ success: false, error: 'The wallet cannot make this payment' });
+    const { warning } = (await h.popup('GET_RECORDS_WARNING')).data;
+    expect(warning).toMatch(/asked this wallet to pay 500 DIVI/);
+    expect(warning).toMatch(/exceeds 10% of balance/);
+    expect(warning).toMatch(/Settings, Security/);
+    // Session storage only, which content scripts cannot read
+    expect(JSON.stringify(h.storage)).not.toMatch(/asked this wallet/);
+    expect((await h.fromTab('GET_RECORDS_WARNING')).success).toBe(false);
+    await h.popup('DISMISS_RECORDS_WARNING');
+    expect((await h.popup('GET_RECORDS_WARNING')).data.warning).toBeNull();
+  });
+
+  it('a payment over the balance names the shortfall to the owner without the limits hint', async () => {
+    await h.connectPage();
+    await h.fromTab('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 5000 });
+    const { warning } = (await h.popup('GET_RECORDS_WARNING')).data;
+    expect(warning).toMatch(/cannot: Insufficient funds/);
+    expect(warning).not.toMatch(/Settings/);
+  });
 });
 
 describe('EXT-6 a request is approved once', () => {

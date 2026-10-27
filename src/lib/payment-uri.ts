@@ -73,7 +73,6 @@ export function addressProblem(address: string, network: NetworkType): string | 
       return `That is a ${params.name} address; this wallet is on ${NETWORKS[network].name}`;
     }
   }
-  if (version === NETWORKS[network].scriptPrefix) return 'This wallet cannot pay a script (multisig) address';
   return 'That is not a valid Divi address';
 }
 

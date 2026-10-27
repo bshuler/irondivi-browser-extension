@@ -69,18 +69,28 @@ function decodeAddress(address: string): { version: number; hash: Uint8Array } {
     };
 }
 
-// Validate address format
+// Whether the wallet can pay this address on this network: a key address
+// (P2PKH) or a script address (P2SH), such as DNSDivi's registration address
 function validateAddress(address: string, network: Network = 'testnet'): boolean {
     try {
-        const decoded = decodeAddress(address);
-        const expectedVersion = NETWORKS[network].pubKeyHash;
-        return decoded.version === expectedVersion;
+        const { version } = decodeAddress(address);
+        return version === NETWORKS[network].pubKeyHash || version === NETWORKS[network].scriptHash;
     } catch {
         return false;
     }
 }
 
+// The output script that pays an address: P2PKH for a key address, P2SH for a script address
+function outputScript(address: string, network: Network): string {
+    const { version, hash } = decodeAddress(address);
+    const h = Array.from(hash, b => b.toString(16).padStart(2, '0')).join('');
+    if (version === NETWORKS[network].pubKeyHash) return '76a914' + h + '88ac';
+    if (version === NETWORKS[network].scriptHash) return 'a914' + h + '87';
+    throw new Error('Address is not on this network');
+}
+
 export const Address = {
+    outputScript,
     fromPublicKey: publicKeyToAddress,
     decode: decodeAddress,
     validate: validateAddress,
