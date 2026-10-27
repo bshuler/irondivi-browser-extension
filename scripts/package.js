@@ -149,7 +149,7 @@ export function writeChecksums(packagesDir, version) {
   return lines;
 }
 
-// releases.json is what browser.divi.domains reads to offer each browser its
+// releases.json is what browser.irondivi.com reads to offer each browser its
 // download, with the same sha256 as SHA256SUMS, and the commit it was built
 // from. The date is the commit's, so rebuilding the commit gives the same file
 export function writeReleases(lines, packagesDir, version, source) {

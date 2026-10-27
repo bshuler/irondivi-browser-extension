@@ -16,7 +16,7 @@ irondivi-browser-extension/
 ├── assets/
 │   └── icons/           # Extension icons
 ├── scripts/             # Build and packaging scripts
-├── site/                # browser.divi.domains page; site/deploy/ publishes it (see DEPLOY.md)
+├── site/                # browser.irondivi.com page; site/deploy/ publishes it (see DEPLOY.md)
 ├── scripts/remote-check.sh # Runs tsc/vitest/build on hp2 (replaces CI)
 ├── manifest.json        # Chrome/Edge manifest (MV3)
 ├── manifest.firefox.json # Firefox-specific overrides
@@ -165,7 +165,7 @@ background and the popup all work out the same way (`src/shared/site-access.ts`)
 
 The default list is exact `https` origins, the same on Mainnet and Testnet, with
 no wildcards: `https://divi.cx`, `https://stakewatch.divi.cx`,
-`https://games.divi.domains`, `https://browser.divi.domains`,
+`https://games.divi.domains`, `https://browser.irondivi.com`,
 `https://services.divi.domains`, `https://intel.divi.domains`,
 `https://irondivi.com`, `https://www.irondivi.com`, `https://app.irondivi.com`,
 `https://dividinos.com` and `https://www.dividinos.com`. A subdomain is not
@@ -335,7 +335,7 @@ in 1Password that never leaves it (`scripts/sign-release.sh` signs through the
 
 Release key fingerprint: `SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ`
 (public key in `site/release-signing/irondivi-release.pub`, also at
-https://browser.divi.domains/release-signing/irondivi-release.pub).
+https://browser.irondivi.com/release-signing/irondivi-release.pub).
 
 To check a download, put `SHA256SUMS-v{version}`, its `.sig` and the packages in
 one folder and run:
@@ -348,7 +348,7 @@ or by hand, with `allowed_signers` from this repository (not from the download
 site, so one compromised host cannot change both):
 
 ```bash
-ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.6.sig < SHA256SUMS-v0.0.6
+ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.6.sig < SHA256SUMS-v0.0.6
 ```
 
 ## License

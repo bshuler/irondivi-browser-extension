@@ -50,7 +50,7 @@ beforeAll(() => {
   execFileSync('ssh-add', ['-q', key], { env: { ...process.env, SSH_AUTH_SOCK: sock } });
   rmSync(key);
   const pub = readFileSync(`${key}.pub`, 'utf8').trim().split(' ').slice(0, 2).join(' ');
-  writeFileSync(join(dir, 'allowed_signers'), `releases@browser.divi.domains namespaces="file" ${pub}\n`);
+  writeFileSync(join(dir, 'allowed_signers'), `releases@browser.irondivi.com namespaces="file" ${pub}\n`);
   env = {
     ...process.env,
     RELEASE_SIGNING_AGENT: sock,
@@ -141,7 +141,7 @@ describe('EXT-1 the published release key', () => {
 
   it('allowed_signers holds that key, for releases and file signatures only', () => {
     const signers = readFileSync(join(repo, 'site/release-signing/allowed_signers'), 'utf8').trim().split('\n');
-    expect(signers).toEqual([`releases@browser.divi.domains namespaces="file" ${pub.split(' ').slice(0, 2).join(' ')}`]);
+    expect(signers).toEqual([`releases@browser.irondivi.com namespaces="file" ${pub.split(' ').slice(0, 2).join(' ')}`]);
   });
 
   it('the README and the page show its fingerprint', () => {

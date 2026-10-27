@@ -2,7 +2,7 @@
 
 The text, answers and files each extension store asks for, kept here so a
 submission is copy and paste. The privacy policy is
-<https://browser.divi.domains/privacy/> (`site/privacy/index.html`).
+<https://browser.irondivi.com/privacy/> (`site/privacy/index.html`).
 
 Screenshots: `STORE_SHOTS=1 npx playwright test tests/store-screenshots.spec.ts`
 against a release build (`npm run build:all`). It writes five 1280x800 PNGs to
@@ -40,7 +40,7 @@ mocked testnet node and never show a recovery phrase.
 
 **Category:** Chrome: Tools (Productivity > Tools). AMO: Other. Edge: Productivity.
 
-**Support / homepage:** https://browser.divi.domains
+**Support / homepage:** https://browser.irondivi.com
 
 **Issues:** https://github.com/bshuler/irondivi-browser-extension/issues
 
@@ -74,7 +74,7 @@ Upload `packages/irondivi-wallet-chrome-v<version>.zip` (Edge:
 collect or transmit personal data. Certify: not sold to third parties, not
 used for unrelated purposes, not used for creditworthiness or lending.
 
-**Privacy policy URL:** https://browser.divi.domains/privacy/
+**Privacy policy URL:** https://browser.irondivi.com/privacy/
 
 ## Firefox Add-ons (AMO)
 

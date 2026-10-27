@@ -35,7 +35,7 @@ This document describes the complete project structure created for the IronDivi 
 │       ├── constants.ts       ✓ Exists
 │       ├── crypto-utils.ts    ✓ Exists
 │       └── storage.ts         ✓ Exists
-├── site/                      ✓ browser.divi.domains page and its deploy script
+├── site/                      ✓ browser.irondivi.com page and its deploy script
 ├── .gitignore                 ✓ Created
 ├── esbuild.config.js          ✓ Created (build configuration)
 ├── manifest.json              ✓ Created (Chrome MV3 manifest)
@@ -137,7 +137,7 @@ To complete the extension, the following source files need to be created:
 ### Supporting Files
 - [ ] `scripts/package.js` - ZIP packaging script
 - [x] `scripts/remote-check.sh` - checks on hp2 (`npm run check:remote`); no GitHub Actions
-- [x] `site/index.html` - browser.divi.domains page
+- [x] `site/index.html` - browser.irondivi.com page
 
 ### Implementation Order
 1. Shared utilities (crypto, storage)

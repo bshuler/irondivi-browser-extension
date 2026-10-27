@@ -12,11 +12,11 @@
   <meta property="og:site_name" content="IronDivi Wallet">
   <meta property="og:title" content="IronDivi Wallet: a browser wallet for Divi">
   <meta property="og:description" content="A Divi wallet in your browser. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Beta: testnet first.">
-  <meta property="og:url" content="https://browser.divi.domains/">
-  <meta property="og:image" content="https://browser.divi.domains/assets/icon-512.png">
+  <meta property="og:url" content="https://browser.irondivi.com/">
+  <meta property="og:image" content="https://browser.irondivi.com/assets/icon-512.png">
   <meta property="og:image:alt" content="IronDivi shield logo">
   <meta name="twitter:card" content="summary">
-  <link rel="canonical" href="https://browser.divi.domains/">
+  <link rel="canonical" href="https://browser.irondivi.com/">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -350,7 +350,7 @@
             </ol>
             <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
             <h4 class="steps-title">Keep it installed</h4>
-            <p>Wait for the Mozilla-signed add-on. It is under review, and this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
+            <p>Wait for the Mozilla-signed add-on: this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
           </div>
 
           <!-- Safari -->
@@ -414,7 +414,7 @@
         <p><span class="mono">SHA256SUMS</span> is signed with our release key, which never leaves our password manager. Its fingerprint is <code class="mono">SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ</code>; compare it with the one in the <a href="https://github.com/bshuler/irondivi-browser-extension#release-signing">source repository</a>, so this site alone cannot vouch for itself. With the files in one folder, in Terminal:</p>
         <div class="cmd">
           <div class="cmd__row">
-            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.5.sig &lt; SHA256SUMS-v0.0.5</code>
+            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.5.sig &lt; SHA256SUMS-v0.0.5</code>
             <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-sig">Copy</button>
           </div>
         </div>

@@ -4,14 +4,14 @@
 #
 #   scripts/reproduce.sh [releases.json URL or file]
 #
-# Default: https://browser.divi.domains/downloads/releases.json. Use the Node
+# Default: https://browser.irondivi.com/downloads/releases.json. Use the Node
 # version in .nvmrc: zlib is part of Node, and another version can compress
 # the same files to other bytes. The Safari app is not compared: its code
 # signature is not reproducible.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-SRC="${1:-https://browser.divi.domains/downloads/releases.json}"
+SRC="${1:-https://browser.irondivi.com/downloads/releases.json}"
 want_node="v$(cat .nvmrc)"
 [[ "$(node --version)" == "$want_node" ]] || echo "warning: node is $(node --version), releases are built with $want_node" >&2
 
