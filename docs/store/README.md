@@ -63,6 +63,7 @@ Upload `packages/irondivi-wallet-chrome-v<version>.zip` (Edge:
 | `alarms` | Locks the wallet after the idle time the user chose, and keeps an IronDivi Connect pairing polling its relay, while the service worker sleeps. |
 | `idle` | Locks the wallet when the computer is idle or the screen locks. |
 | `scripting` | Adds the `window.irondivi` provider only to sites the user allowed, by registering the content script for those sites at run time. |
+| `activeTab` | When the user presses "Scan this tab" on Send, the popup takes one capture of the visible tab and reads a payment QR code from it, in the popup. The capture is never stored or sent anywhere. Only the tab open when the user opened the wallet is reachable, and only while the popup is open. |
 | `https://*/*` (host) | The user can allow any https site to ask the wallet for payments; the wallet registers its content script on that site only after the user allows it, and nowhere else. The same permission lets the wallet reach the IronDivi Connect relay named in a pairing code the user pasted. |
 | `https://games.divi.domains/*` | The Divi Games site, allowed by default. |
 | `https://services.divi.domains/*`, `https://vps1.divi.domains/*` | The Divi network node (RPC) and the faucets the wallet reads balances from and sends transactions through. |

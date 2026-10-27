@@ -10,6 +10,7 @@ import { explainedByMissingAccess } from './service-access';
 import { MSG, NETWORKS } from '../shared/constants';
 import { Account, Transaction, Contact, ConnectedSite, getPrimaryAddress } from './types';
 import QRCode from 'qrcode';
+import { formatPaymentUri } from '../lib/payment-uri';
 
 // A transaction counts as fully accepted at this many confirmations.
 const CONFIRMATIONS_FINAL = 6;
@@ -283,6 +284,30 @@ function populateReceiveAddressDropdown(): void {
   select.value = String(state.selectedReceiveAddressIndex);
 }
 
+// The receive QR, redrawn only by the latest request (drawing is async)
+let qrDraw = 0;
+
+function receiveField(id: string): string {
+  return (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
+}
+
+/**
+ * What the receive QR shows: the bare address when no amount, label or memo
+ * is asked for, else a divi: payment request; an error when a field
+ * could not be paid.
+ */
+function receiveRequest(address: string): { text: string; isRequest: boolean } | { error: string } {
+  const amount = receiveField('receive-amount');
+  const label = receiveField('receive-label');
+  const memo = receiveField('receive-memo');
+  try {
+    const text = formatPaymentUri({ address, amount, label, memo });
+    return { text, isRequest: text !== address };
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : 'That request cannot be paid' };
+  }
+}
+
 /**
  * Update the QR code and address display for selected address
  */
@@ -292,25 +317,69 @@ async function updateReceiveAddressDisplay(): Promise<void> {
   const addr = state.currentAccount.addresses[state.selectedReceiveAddressIndex];
   if (!addr) return;
 
-  const qrContainer = document.getElementById('qr-code') as HTMLDivElement;
-  qrContainer.innerHTML = '';
+  const addressDisplay = document.getElementById('receive-address') as HTMLDivElement;
+  addressDisplay.textContent = addr.address;
 
+  const request = receiveRequest(addr.address);
+  const status = document.getElementById('receive-request-status') as HTMLDivElement | null;
+  const copyRequest = document.getElementById('copy-request-btn') as HTMLButtonElement | null;
+  const qrContainer = document.getElementById('qr-code') as HTMLDivElement;
+
+  if ('error' in request) {
+    // Keep the last good QR from being mistaken for this request
+    qrDraw++;
+    qrContainer.replaceChildren();
+    qrContainer.classList.remove('qr-request');
+    if (status) { status.textContent = request.error; status.className = 'receive-request-status error'; }
+    if (copyRequest) copyRequest.disabled = true;
+    return;
+  }
+
+  if (status) {
+    status.textContent = request.isRequest ? request.text : 'Fill in any field to make a payment request; empty, the QR is just the address.';
+    status.className = 'receive-request-status';
+  }
+  if (copyRequest) copyRequest.disabled = !request.isRequest;
+
+  const draw = ++qrDraw;
   try {
-    const canvas = await QRCode.toCanvas(addr.address, {
-      width: 124,
+    const canvas = await QRCode.toCanvas(request.text, {
+      // Drawn at twice the shown size so a long request stays sharp
+      width: request.isRequest ? 400 : 248,
       margin: 0,
+      errorCorrectionLevel: 'M',
       color: {
         dark: '#000000',
         light: '#ffffff',
       },
     });
-    qrContainer.appendChild(canvas);
+    if (draw !== qrDraw) return;
+    qrContainer.replaceChildren(canvas);
+    qrContainer.classList.toggle('qr-request', request.isRequest);
   } catch (error) {
+    if (draw !== qrDraw) return;
+    qrContainer.replaceChildren();
     console.error('Failed to generate QR code');
   }
+}
 
-  const addressDisplay = document.getElementById('receive-address') as HTMLDivElement;
-  addressDisplay.textContent = addr.address;
+/**
+ * Copy the payment request link shown in the receive QR
+ */
+async function handleCopyRequest(): Promise<void> {
+  const address = getSelectedReceiveAddress();
+  if (!address) return;
+  const request = receiveRequest(address);
+  if ('error' in request || !request.isRequest) {
+    showToast('error' in request ? request.error : 'Fill in an amount, label or memo first', 'error');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(request.text);
+    showToast('Payment link copied to clipboard', 'success');
+  } catch {
+    showToast('Failed to copy the payment link', 'error');
+  }
 }
 
 /**
@@ -537,4 +606,9 @@ export function setupWalletUIHandlers(): void {
   document.getElementById('copy-address-btn')?.addEventListener('click', handleCopyAddress);
   document.getElementById('request-faucet-btn')?.addEventListener('click', handleFaucetRequest);
   document.getElementById('receive-address-select')?.addEventListener('change', handleReceiveAddressChange);
+  // QR ask: the request form redraws the QR as the owner types
+  for (const id of ['receive-amount', 'receive-label', 'receive-memo']) {
+    document.getElementById(id)?.addEventListener('input', () => { void updateReceiveAddressDisplay(); });
+  }
+  document.getElementById('copy-request-btn')?.addEventListener('click', handleCopyRequest);
 }

@@ -1935,3 +1935,74 @@ body:not([data-network]) .network-bar {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* QR pay (Send) and QR ask (Receive) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.qr-scan-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.qr-scan-actions .secondary-btn {
+  flex: 1;
+  text-align: center;
+  cursor: pointer;
+}
+
+.payment-request-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.payment-request-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.payment-request-info .detail-row span:last-child,
+.confirm-memo {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.qr-code.qr-request {
+  width: 200px;
+  height: 200px;
+}
+
+.payment-request-form {
+  width: 100%;
+}
+
+.payment-request-form summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.payment-request-form .form-group input {
+  width: 100%;
+}
+
+.receive-request-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+  word-break: break-all;
+}
+
+.receive-request-status.error {
+  color: var(--danger);
+}

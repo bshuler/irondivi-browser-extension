@@ -68,6 +68,8 @@ export interface PendingSendTx {
   amountText: string;
   fee: number;
   fromAddresses?: string[]; // If set, only use UTXOs from these addresses
+  // Text for the payment's OP_RETURN output, exactly as shown on confirm
+  memo?: string;
 }
 
 import { NetworkType } from '../shared/constants';

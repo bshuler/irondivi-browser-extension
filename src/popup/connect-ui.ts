@@ -10,25 +10,8 @@ import { showToast } from './ui-state';
 import { showConfirmModal } from './modals';
 import { visibleText } from './visible-text';
 import { MSG } from '../shared/constants';
-import { MAX_QR_FILE_BYTES, MAX_QR_SIDE, pairingCodeFrom, pairingCodeFromPixels, pairingLines, type RelaySessionInfo } from './connect-pairing';
-
-async function pixelsOf(file: File): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
-  const bitmap = await createImageBitmap(file);
-  try {
-    const scale = Math.min(1, MAX_QR_SIDE / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) throw new Error('The picture could not be read');
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    return { data: ctx.getImageData(0, 0, width, height).data, width, height };
-  } finally {
-    bitmap.close();
-  }
-}
+import { pixelsOf } from './qr-image';
+import { MAX_QR_FILE_BYTES, pairingCodeFrom, pairingCodeFromPixels, pairingLines, type RelaySessionInfo } from './connect-pairing';
 
 async function pair(code: string): Promise<void> {
   const input = document.getElementById('connect-uri-input') as HTMLTextAreaElement | null;

@@ -11,7 +11,8 @@
     "storage",
     "alarms",
     "idle",
-    "scripting"
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "https://*/*",

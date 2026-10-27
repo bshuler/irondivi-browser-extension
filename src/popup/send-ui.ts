@@ -6,9 +6,12 @@ import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { MSG, DUST_THRESHOLD } from '../shared/constants';
+import { MSG, DUST_THRESHOLD, NETWORKS, type NetworkType } from '../shared/constants';
 import { loadBalance, loadTransactions } from './wallet-ui';
 import { checkRecipient, chunkAddress, recipientNote, type KnownContact } from './recipient-check';
+import { memoProblem, parsePaymentUri, type PaymentRequest } from '../lib/payment-uri';
+import { visibleText } from './visible-text';
+import { canCaptureTab, qrTextFromFile, qrTextFromVisibleTab } from './qr-image';
 
 // ============================================================
 // Send Transaction Handlers
@@ -62,9 +65,24 @@ export async function handleSendConfirm(): Promise<void> {
   const amountInput = document.getElementById('send-amount') as HTMLInputElement;
   const feeInput = document.getElementById('send-fee') as HTMLInputElement;
 
+  // A pasted divi: payment request fills the form for the owner to check
+  if (/^divi:/i.test(toInput.value.trim())) {
+    applyPaymentRequestText(toInput.value);
+    return;
+  }
+
   const to = toInput.value.trim();
   const amount = parseFloat(amountInput.value);
   const fee = parseFloat(feeInput.value);
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  const memo = memoInput?.value.trim() ? memoInput.value : undefined;
+  if (memo !== undefined) {
+    const problem = memoProblem(memo);
+    if (problem) {
+      showToast(problem, 'error');
+      return;
+    }
+  }
 
   if (!to || !amount || amount <= 0) {
     showToast('Please enter a valid address and amount', 'error');
@@ -98,7 +116,8 @@ export async function handleSendConfirm(): Promise<void> {
   const fromValue = fromSelect.value;
   const fromAddresses = fromValue === 'auto' ? undefined : [fromValue];
 
-  state.pendingSendTx = { to, amount, amountText: amountInput.value.trim(), fee, fromAddresses };
+  state.pendingSendTx = { to, amount, amountText: amountInput.value.trim(), fee, fromAddresses, memo };
+  showConfirmMemo(memo);
 
   // Update confirm view
   showRecipient(to, await loadRecipientContacts());
@@ -180,10 +199,12 @@ async function sendTransaction(password: string): Promise<void> {
       amount: state.pendingSendTx.amountText,
       fee: state.pendingSendTx.fee,
       fromAddresses: state.pendingSendTx.fromAddresses,
+      memo: state.pendingSendTx.memo,
     });
 
     showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
     state.pendingSendTx = null;
+    clearPaymentRequest();
 
     // Mark contact as recently used if this address is a contact
     try {
@@ -206,6 +227,106 @@ async function sendTransaction(password: string): Promise<void> {
   } finally {
     hideLoading();
   }
+}
+
+// ============================================================
+// QR pay: fill the send form from a divi: payment request
+// ============================================================
+
+const MAX_SHOWN = 300;
+
+/** Untrusted text from a QR code, with hidden characters made visible */
+function shown(text: string): string {
+  const visible = visibleText(text).text;
+  return visible.length > MAX_SHOWN ? `${visible.slice(0, MAX_SHOWN)}…` : visible;
+}
+
+function setRequestLine(rowId: string, valueId: string, value: string | undefined): void {
+  document.getElementById(rowId)?.classList.toggle('hidden', value === undefined);
+  const el = document.getElementById(valueId);
+  if (el) el.textContent = value === undefined ? '' : shown(value);
+}
+
+/** Show who asked and what for; neither goes on chain */
+function showRequestInfo(request: PaymentRequest | null): void {
+  const label = request?.label;
+  const message = request?.message;
+  setRequestLine('send-request-label-row', 'send-request-label', label);
+  setRequestLine('send-request-message-row', 'send-request-message', message);
+  document.getElementById('send-request-info')?.classList.toggle('hidden', label === undefined && message === undefined);
+}
+
+function clearPaymentRequest(): void {
+  showRequestInfo(null);
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  if (memoInput) memoInput.value = '';
+}
+
+function showConfirmMemo(memo: string | undefined): void {
+  document.getElementById('confirm-memo-row')?.classList.toggle('hidden', memo === undefined);
+  const el = document.getElementById('confirm-memo');
+  if (el) el.textContent = memo === undefined ? '' : visibleText(memo).text;
+}
+
+/**
+ * Fill address, amount and memo from a payment request and show its label
+ * and message. Nothing is sent: the owner checks the form and continues.
+ */
+export function applyPaymentRequestText(text: string): boolean {
+  const network = state.currentAccount?.network;
+  if (!network || !Object.hasOwn(NETWORKS, network)) return false;
+  const parsed = parsePaymentUri(text, network as NetworkType);
+  if (!parsed.ok) {
+    showToast(shown(parsed.error), 'error');
+    return false;
+  }
+  const { request } = parsed;
+  (document.getElementById('send-to') as HTMLInputElement).value = request.address;
+  (document.getElementById('send-amount') as HTMLInputElement).value = request.amount ?? '';
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  if (memoInput) memoInput.value = request.memo ?? '';
+  showRequestInfo(request);
+  showToast(request.amount ? 'Payment request filled in; check it, then Continue' : 'Address filled in; enter the amount', 'success');
+  return true;
+}
+
+async function scanWith(read: () => Promise<string | null>): Promise<void> {
+  let text: string | null;
+  try {
+    text = await read();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'The picture could not be read', 'error');
+    return;
+  }
+  if (text === null) {
+    showToast('No QR code found', 'error');
+    return;
+  }
+  applyPaymentRequestText(text);
+}
+
+function setupQrPay(): void {
+  const tabBtn = document.getElementById('send-scan-tab-btn') as HTMLButtonElement | null;
+  if (tabBtn) {
+    // iOS Safari cannot capture a tab; the picture picker opens the camera there
+    tabBtn.classList.toggle('hidden', !canCaptureTab());
+    tabBtn.addEventListener('click', async () => {
+      tabBtn.disabled = true;
+      try {
+        await scanWith(qrTextFromVisibleTab);
+      } finally {
+        tabBtn.disabled = false;
+      }
+    });
+  }
+
+  const file = document.getElementById('send-qr-input') as HTMLInputElement | null;
+  file?.addEventListener('change', async () => {
+    const picked = file.files?.[0];
+    file.value = '';
+    if (!picked) return;
+    await scanWith(() => qrTextFromFile(picked));
+  });
 }
 
 /**
@@ -294,4 +415,5 @@ export function setupSendUIHandlers(): void {
 
   // Setup contact suggestions
   setupContactSuggestions();
+  setupQrPay();
 }
