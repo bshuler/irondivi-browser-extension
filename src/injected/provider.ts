@@ -30,8 +30,10 @@ interface TransactionRequest {
   amount: number | string;
   fee?: number;
   fromAddresses?: string[];
-  // UTF-8, 1 to 512 bytes, sent unchanged in one OP_RETURN output ("memo")
+  // UTF-8, 1 to 599 bytes, sent unchanged in one OP_RETURN output ("memo")
   memo?: string;
+  // The same as memo, by the name the Divi Name Service page uses
+  opReturn?: string;
 }
 
 // A failed request: message, and the IronDivi Connect code (4001 rejected,
@@ -45,7 +47,7 @@ export class ProviderRpcError extends Error {
   }
 }
 
-const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo'];
+const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
 class IronDiviProvider {
   // Properties
@@ -241,6 +243,7 @@ class IronDiviProvider {
     }
     const params: TransactionRequest = { to: tx.to, amount: tx.amount, fee: tx.fee, fromAddresses: tx.fromAddresses };
     if (tx.memo !== undefined) params.memo = tx.memo;
+    if (tx.opReturn !== undefined) params.opReturn = tx.opReturn;
     const result = await this.sendRequest('SEND_TRANSACTION', params);
     return result?.txid;
   }

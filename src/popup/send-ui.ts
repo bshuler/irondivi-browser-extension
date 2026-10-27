@@ -11,6 +11,8 @@ import { loadBalance, loadTransactions } from './wallet-ui';
 import { checkRecipient, chunkAddress, recipientNote, type KnownContact } from './recipient-check';
 import { memoProblem, parsePaymentUri, type PaymentRequest } from '../lib/payment-uri';
 import { visibleText } from './visible-text';
+import type { PendingSendTx } from './types';
+import { looksLikeName, notifyRecord, resolveName } from '../lib/dvns';
 import { canCaptureTab, qrTextFromFile, qrTextFromVisibleTab } from './qr-image';
 
 // ============================================================
@@ -99,10 +101,38 @@ export async function handleSendConfirm(): Promise<void> {
     return;
   }
 
-  // Validate the recipient address
+  // The recipient: an address, or a Divi Name Service name that resolves to
+  // one (SPEC §8). A name that is not registered, or a lookup that fails,
+  // stops here; nothing else is ever used in its place
+  let toAddress = to;
+  let name: string | undefined;
   try {
-    const validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: to });
-    if (!validation.isValid) {
+    let validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: to });
+    if (!validation.isValid && looksLikeName(to)) {
+      const network = state.currentAccount?.network as NetworkType | undefined;
+      if (!network) return;
+      let resolution;
+      try {
+        showLoading('Looking up name...');
+        resolution = await resolveName(to, network);
+      } catch (error: unknown) {
+        showToast(error instanceof Error ? error.message : 'The name could not be looked up', 'error');
+        return;
+      } finally {
+        hideLoading();
+      }
+      if (resolution.status === 'not-registered') {
+        showToast(`"${resolution.name}" is not registered`, 'error');
+        return;
+      }
+      name = resolution.record.name;
+      toAddress = resolution.record.divi;
+      validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: toAddress });
+      if (!validation.isValid) {
+        showToast(`"${name}" points to an address this wallet cannot pay`, 'error');
+        return;
+      }
+    } else if (!validation.isValid) {
       showToast('Invalid recipient address', 'error');
       return;
     }
@@ -116,19 +146,33 @@ export async function handleSendConfirm(): Promise<void> {
   const fromValue = fromSelect.value;
   const fromAddresses = fromValue === 'auto' ? undefined : [fromValue];
 
-  state.pendingSendTx = { to, amount, amountText: amountInput.value.trim(), fee, fromAddresses, memo };
-  showConfirmMemo(memo);
+  await showSendConfirm({ to: toAddress, amount, amountText: amountInput.value.trim(), fee, fromAddresses, memo, name });
+}
 
-  // Update confirm view
+/**
+ * Show a payment for the owner to check and sign: what it is for, the name
+ * and the address it pays, the amount, any memo and the fee
+ */
+export async function showSendConfirm(tx: PendingSendTx, purpose?: string): Promise<void> {
+  state.pendingSendTx = tx;
+  showConfirmMemo(tx.memo);
+  setRow('confirm-purpose-row', 'confirm-purpose', purpose);
+  setRow('confirm-name-row', 'confirm-name', tx.name);
+
+  const to = tx.to;
   showRecipient(to, await loadRecipientContacts());
-  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} DIVI`;
-  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} DIVI`;
-
-  // Calculate and display total
-  const total = amount + fee;
+  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(tx.amount)} DIVI`;
+  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(tx.fee)} DIVI`;
+  const total = tx.amount + tx.fee;
   (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} DIVI`;
 
   showView(elements.viewSendConfirm);
+}
+
+function setRow(rowId: string, valueId: string, value: string | undefined): void {
+  document.getElementById(rowId)?.classList.toggle('hidden', value === undefined);
+  const el = document.getElementById(valueId);
+  if (el) el.textContent = value ?? '';
 }
 
 /**
@@ -203,7 +247,17 @@ async function sendTransaction(password: string): Promise<void> {
     });
 
     showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
+    const dvns = state.pendingSendTx.dvns;
     state.pendingSendTx = null;
+    // A name record: tell the name service, so it shows as pending. The
+    // payment is made either way; the service also finds it on chain
+    if (dvns && state.currentAccount) {
+      try {
+        await notifyRecord(state.currentAccount.network as NetworkType, response.txid);
+      } catch {
+        showToast('Sent; the name service will see it once it is in a block', 'success');
+      }
+    }
     clearPaymentRequest();
 
     // Mark contact as recently used if this address is a contact
@@ -408,7 +462,10 @@ export function setupSendUIHandlers(): void {
 
   // Send confirm view
   document.getElementById('send-confirm-back-btn')?.addEventListener('click', () => {
-    showView(elements.viewSend);
+    // A name record was prepared on the Names view; go back there
+    const fromNames = state.pendingSendTx?.dvns !== undefined;
+    state.pendingSendTx = null;
+    showView(fromNames ? document.getElementById('view-names')! : elements.viewSend);
   });
 
   document.getElementById('send-submit-btn')?.addEventListener('click', handleSendSubmit);

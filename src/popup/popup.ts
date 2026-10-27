@@ -5,6 +5,7 @@
  * All substantive logic is delegated to specialized modules.
  */
 
+import { setupNamesUIHandlers } from './names-ui';
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
@@ -109,6 +110,7 @@ function setupEventListeners(): void {
   setupContactsUIHandlers();
   setupSettingsUIHandlers();
   setupSigningRequestUIHandlers();
+  setupNamesUIHandlers();
 
   // Tab management
   setupTabHandlers();

@@ -16,8 +16,9 @@ interface TxOutput {
     script: Uint8Array | string;
 }
 
-// The most data an OP_RETURN output carries: an IronDivi Connect memo
-export const MAX_OP_RETURN_BYTES = 512;
+// The most data an OP_RETURN output carries: a Divi Name Service record
+// (SPEC §7, 599 bytes). An IronDivi Connect memo is smaller (MAX_MEMO_BYTES)
+export const MAX_OP_RETURN_BYTES = 599;
 
 // The data's bytes, if it is text that UTF-8 carries unchanged: a lone
 // surrogate would be sent as U+FFFD, which is not what was asked for

@@ -35,8 +35,9 @@ const BLOCKED = { success: false, error: 'BLOCKED: this site is blocked in IronD
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
-// What a site may put in a send; the memo is the "memo" capability
-const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo'];
+// What a site may put in a send; the memo is the "memo" capability, and
+// "opReturn" is the same memo by the name the Divi Name Service page uses
+const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
 /**
  * Unlock with the password given for one send or signature from the popup.
@@ -737,13 +738,17 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
             return { success: false, error: `Unsupported option: ${unknown.join(', ')}`, code: ERR.UNSUPPORTED };
           }
         }
+        // opReturn is another name for memo; two different values are refused
+        if (payload?.opReturn !== undefined && payload?.memo !== undefined && payload.opReturn !== payload.memo) {
+          return { success: false, error: 'memo and opReturn differ; send one of them', code: ERR.INVALID_PARAMS };
+        }
         const request: TransactionRequest = {
           to: payload.to,
           amount: payload.amount,
           // Only the owner, in the popup, may choose the fee; a site's is ignored
           fee: origin ? undefined : payload.fee,
           fromAddresses: payload.fromAddresses,
-          memo: payload.memo,
+          memo: payload?.memo ?? payload?.opReturn,
         };
 
         // From a dApp (has origin): needs a connection, then the user's approval

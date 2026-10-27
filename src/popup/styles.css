@@ -1995,3 +1995,36 @@ body:not([data-network]) .network-bar {
 .receive-request-status.error {
   color: var(--danger);
 }
+
+/* Names view (Divi Name Service) */
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-btn input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.names-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.names-result .detail-row span:last-child {
+  word-break: break-all;
+  text-align: right;
+}
+
+.confirm-name {
+  font-weight: 600;
+  word-break: break-all;
+}

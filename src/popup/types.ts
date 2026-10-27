@@ -70,6 +70,10 @@ export interface PendingSendTx {
   fromAddresses?: string[]; // If set, only use UTXOs from these addresses
   // Text for the payment's OP_RETURN output, exactly as shown on confirm
   memo?: string;
+  // The Divi Name Service name the owner typed; `to` is what it resolved to
+  name?: string;
+  // A Divi Name Service record this payment makes; notified once sent
+  dvns?: { op: 'register' | 'update' | 'delete'; name: string };
 }
 
 import { NetworkType } from '../shared/constants';

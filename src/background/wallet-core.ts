@@ -225,9 +225,16 @@ export class WalletCore {
       availableUtxos = availableUtxos.filter(u => fromAddresses.includes(u.address));
     }
 
-    // Largest first, so the fewest inputs are needed
+    // Coins of the first from-address first, so input 0 (whose address names
+    // the payer, as a name registry reads it) is that address; then largest
+    // first, so the fewest inputs are needed
+    const payer = fromAddresses && fromAddresses.length > 0 ? fromAddresses[0] : undefined;
     availableUtxos = [...availableUtxos].sort((a, b) =>
-      b.satoshis > a.satoshis ? 1 : b.satoshis < a.satoshis ? -1 : 0);
+      (payer !== undefined && (a.address === payer) !== (b.address === payer)) ? (a.address === payer ? -1 : 1)
+        : b.satoshis > a.satoshis ? 1 : b.satoshis < a.satoshis ? -1 : 0);
+    if (payer !== undefined && availableUtxos.length > 0 && availableUtxos[0].address !== payer) {
+      throw new Error(`No spendable coins at ${payer}, the address this payment must come from`);
+    }
 
     // Select UTXOs to cover amount + fee; the fee grows with each input
     const selectedUtxos: UTXO[] = [];

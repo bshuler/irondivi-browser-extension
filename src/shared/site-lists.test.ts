@@ -42,7 +42,7 @@ describe('site-access lists', () => {
     const sites = lists['default-sites.json'] as string[];
     expect([...sites].sort()).toEqual([
       'https://app.irondivi.com', 'https://browser.irondivi.com', 'https://divi.cx', 'https://dividinos.com',
-      'https://games.divi.domains', 'https://intel.divi.domains', 'https://irondivi.com',
+      'https://games.divi.domains', 'https://intel.divi.domains', 'https://irondivi.com', 'https://name.divi.cx',
       'https://services.divi.domains', 'https://stakewatch.divi.cx', 'https://www.dividinos.com',
       'https://www.irondivi.com',
     ]);

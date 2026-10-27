@@ -76,6 +76,10 @@
         <span class="action-icon">↓</span>
         <span>Receive</span>
       </button>
+      <button class="action-btn" id="names-btn">
+        <span class="action-icon">@</span>
+        <span>Names</span>
+      </button>
     </div>
 
     <!-- Tabs -->
@@ -134,7 +138,7 @@
         </div>
         <div class="form-group">
           <label>To Address</label>
-          <input type="text" id="send-to" placeholder="Enter address or select contact" autocomplete="off">
+          <input type="text" id="send-to" placeholder="Address, name or contact" autocomplete="off">
           <div class="contact-suggestions hidden" id="contact-suggestions"></div>
         </div>
         <div class="form-group">
@@ -146,7 +150,7 @@
         </div>
         <div class="form-group">
           <label for="send-memo">Memo (optional, stored on chain)</label>
-          <input type="text" id="send-memo" placeholder="Public note, up to 512 bytes" autocomplete="off">
+          <input type="text" id="send-memo" placeholder="Public note, up to 599 bytes" autocomplete="off">
         </div>
         <div class="form-group">
           <label>Fee</label>
@@ -163,6 +167,14 @@
         <h2>Confirm Send</h2>
       </div>
       <div class="confirm-details">
+        <div class="detail-row hidden" id="confirm-purpose-row">
+          <span>For:</span>
+          <span id="confirm-purpose"></span>
+        </div>
+        <div class="detail-row hidden" id="confirm-name-row">
+          <span>Name:</span>
+          <span id="confirm-name" class="confirm-name"></span>
+        </div>
         <div class="detail-row recipient-row">
           <span>To:</span>
           <span id="confirm-to" class="address-chunks"></span>
@@ -191,6 +203,37 @@
           <input type="password" id="send-password" placeholder="Password" autocomplete="current-password">
         </div>
         <button class="primary-btn" id="send-submit-btn">Send</button>
+      </div>
+    </div>
+
+    <!-- Names View: Divi Name Service -->
+    <div class="view hidden" id="view-names">
+      <div class="view-header">
+        <button class="back-btn" id="names-back-btn">←</button>
+        <h2>Names</h2>
+      </div>
+      <div class="form">
+        <div class="form-group">
+          <label for="names-input">Name</label>
+          <div class="input-with-btn">
+            <input type="text" id="names-input" placeholder="e.g. yourname" autocomplete="off" spellcheck="false">
+            <button class="secondary-btn" id="names-lookup-btn">Look up</button>
+          </div>
+          <div class="field-hint">Names stand for a Divi address, so people can pay you by name.</div>
+        </div>
+        <div id="names-result" class="names-result hidden">
+          <div class="detail-row"><span>Name:</span><span id="names-result-name"></span></div>
+          <div class="detail-row"><span>Status:</span><span id="names-result-status"></span></div>
+          <div class="detail-row hidden" id="names-result-address-row"><span>Pays:</span><span id="names-result-address" class="address-chunks"></span></div>
+          <div class="detail-row hidden" id="names-result-fee-row"><span>Fee:</span><span id="names-result-fee"></span></div>
+          <div class="form-group hidden" id="names-divi-group">
+            <label for="names-divi">Address the name pays</label>
+            <select id="names-divi"></select>
+          </div>
+          <button class="primary-btn hidden" id="names-register-btn">Register</button>
+          <button class="primary-btn hidden" id="names-update-btn">Update</button>
+          <button class="secondary-btn hidden" id="names-delete-btn">Delete</button>
+        </div>
       </div>
     </div>
 

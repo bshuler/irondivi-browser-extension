@@ -10,7 +10,7 @@ import path from 'path';
 //   Playwright's own revision  if `npx playwright install chromium` was run
 //   newest cached revision     any chromium-* already in ~/Library/Caches/ms-playwright
 //                              (avoids a fresh ~350 MB download per Playwright version)
-function resolveLaunch(): { channel?: string; executablePath?: string } {
+export function resolveLaunch(): { channel?: string; executablePath?: string } {
   if (process.env.PW_CHANNEL) return { channel: process.env.PW_CHANNEL };
   if (process.env.PW_CHROMIUM) return { executablePath: process.env.PW_CHROMIUM };
   const bundled = chromium.executablePath();

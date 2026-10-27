@@ -25,6 +25,10 @@ import { Address } from './address';
 import { MAX_OP_RETURN_BYTES, utf8Exact } from './transaction';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 
+// A payment request's memo is an IronDivi Connect memo, 1 to 512 bytes
+// (irondivi-connect SPEC.md), smaller than the most one OP_RETURN carries
+export const PAYMENT_MEMO_BYTES = 512;
+
 export interface PaymentRequest {
   address: string;
   // Decimal DIVI text, exactly as it will be sent
@@ -51,11 +55,11 @@ export function amountProblem(amount: string): string | null {
 }
 
 /** Why a memo cannot go on chain, or null when it can */
-export function memoProblem(memo: string): string | null {
+export function memoProblem(memo: string, max: number = MAX_OP_RETURN_BYTES): string | null {
   const bytes = utf8Exact(memo);
   if (!bytes) return 'The memo must be plain text';
   if (bytes.length === 0) return 'The memo is empty';
-  if (bytes.length > MAX_OP_RETURN_BYTES) return `The memo is ${bytes.length} bytes; at most ${MAX_OP_RETURN_BYTES} fit`;
+  if (bytes.length > max) return `The memo is ${bytes.length} bytes; at most ${max} fit`;
   return null;
 }
 
@@ -90,7 +94,7 @@ export function formatPaymentUri(request: PaymentRequest): string {
       if (problem) throw new Error(problem);
     }
     if (key === 'memo') {
-      const problem = memoProblem(value);
+      const problem = memoProblem(value, PAYMENT_MEMO_BYTES);
       if (problem) throw new Error(problem);
     }
     params.push(`${key}=${encodeURIComponent(value)}`);
@@ -139,7 +143,7 @@ export function parsePaymentUri(text: string, network: NetworkType): ParseResult
       request.amount = value;
     } else if (key === 'memo') {
       if (value === '') continue;
-      const bad = memoProblem(value);
+      const bad = memoProblem(value, PAYMENT_MEMO_BYTES);
       if (bad) return { ok: false, error: bad };
       request.memo = value;
     } else if (value !== '') {
