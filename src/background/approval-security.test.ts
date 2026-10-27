@@ -55,7 +55,7 @@ describe('EXT-5 a site is not told why a payment cannot be made', () => {
     expect(r).toEqual({ success: false, error: 'The wallet cannot make this payment' });
     const { warning } = (await h.popup('GET_RECORDS_WARNING')).data;
     expect(warning).toMatch(/asked this wallet to pay 500 DIVI/);
-    expect(warning).toMatch(/exceeds 10% of balance/);
+    expect(warning).toMatch(/exceeds 10% of balance \(max: [\d.]+ DIVI including the fee\)\. You can change/);
     expect(warning).toMatch(/Settings, Security/);
     // Session storage only, which content scripts cannot read
     expect(JSON.stringify(h.storage)).not.toMatch(/asked this wallet/);

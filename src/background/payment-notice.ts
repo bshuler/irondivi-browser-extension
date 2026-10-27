@@ -24,8 +24,9 @@ function siteName(origin: string): string {
 export async function notePaymentRefused(origin: string, amount: unknown, reason: string): Promise<void> {
   const what = typeof amount === 'number' && Number.isFinite(amount) ? `${amount} DIVI`
     : typeof amount === 'string' && /^\d+(\.\d+)?$/.test(amount) ? `${amount} DIVI`
-    : 'a payment';
-  let message = `${siteName(origin)} asked this wallet to pay ${what} and was told it cannot: ${reason.slice(0, MAX_REASON)}`;
+    : 'an amount';
+  const why = reason.slice(0, MAX_REASON).trim();
+  let message = `${siteName(origin)} asked this wallet to pay ${what} and was told it cannot: ${why}${/[.!?]$/.test(why) ? '' : '.'}`;
   if (/limit|% of balance/i.test(reason)) {
     message += ' You can change the limits in Settings, Security.';
   }
