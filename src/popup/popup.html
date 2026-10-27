@@ -49,10 +49,13 @@
         <button class="menu-item" data-network="testnet">Testnet</button>
       </div>
       <div class="account-menu hidden" id="account-menu">
+        <div class="menu-heading">Wallets on this device</div>
         <div class="account-list" id="account-list"></div>
         <button class="menu-item add-account" id="add-account-btn">
-          <span>+</span> Add Account
+          <span>+</span> Add a wallet
         </button>
+        <button class="menu-item" id="menu-rename-account-btn">Rename this wallet</button>
+        <button class="menu-item danger" id="menu-delete-account-btn">Remove this wallet from this device</button>
       </div>
     </div>
 
@@ -309,15 +312,15 @@
         </div>
         <p class="setting-hint">The wallet also locks sooner if the browser pauses the extension.</p>
         <div class="setting-section">
-          <h3>Account Management</h3>
+          <h3>Wallets on this device</h3>
           <button class="setting-item" id="rename-account-btn">
-            Rename Account
+            Rename this wallet
           </button>
           <button class="setting-item" id="export-mnemonic-btn">
             Export Recovery Phrase
           </button>
           <button class="setting-item danger" id="delete-account-btn">
-            Delete Account
+            Remove this wallet from this device
           </button>
         </div>
         <div class="setting-section">
@@ -380,7 +383,7 @@
     <div class="view hidden" id="view-add-account">
       <div class="view-header">
         <button class="back-btn" id="add-account-back-btn">←</button>
-        <h2>Add Account</h2>
+        <h2>Add a wallet</h2>
       </div>
       <div class="add-account-options">
         <button class="option-btn" id="create-account-btn">
@@ -402,8 +405,8 @@
       </div>
       <div class="form">
         <div class="form-group">
-          <label>Wallet Name</label>
-          <input type="text" id="create-name" placeholder="My Wallet">
+          <label for="create-name">Name your wallet</label>
+          <input type="text" id="create-name" placeholder="My wallet" maxlength="40">
         </div>
         <div class="form-group">
           <label>Password</label>
@@ -433,8 +436,8 @@
       </div>
       <div class="form">
         <div class="form-group">
-          <label>Wallet Name</label>
-          <input type="text" id="import-name" placeholder="My Wallet">
+          <label for="import-name">Name your wallet</label>
+          <input type="text" id="import-name" placeholder="My wallet" maxlength="40">
         </div>
         <div class="form-group">
           <label>Recovery Phrase</label>

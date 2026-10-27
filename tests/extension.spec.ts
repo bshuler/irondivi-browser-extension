@@ -364,3 +364,70 @@ test('should toggle balance visibility', async ({ extensionPage }) => {
   await expect(extensionPage.locator('#view-settings')).not.toBeVisible();
   await expect(extensionPage.locator('#balance-section')).toBeVisible();
 });
+
+// Named wallets: the same labels as the IronDivi web wallet's switcher
+test('should add, switch, rename and remove named wallets', async ({ extensionPage }) => {
+  const page = extensionPage;
+  const shots = process.env.NAMED_WALLETS_SHOTS;
+  const shot = async (name: string) => { if (shots) await page.screenshot({ path: `${shots}/${name}.png` }); };
+  const importWallet = async (name: string, mnemonic: string) => {
+    await expect(page.locator('#view-import-account label[for="import-name"]')).toHaveText('Name your wallet');
+    await page.fill('#import-name', name);
+    await page.fill('#import-mnemonic', mnemonic);
+    await page.fill('#import-password', 'ImportPassword123!');
+    await page.click('#import-submit-btn');
+    await expect(page.locator('#loading')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#current-account-name')).toHaveText(name, { timeout: 10000 });
+  };
+
+  await page.click('#onboard-import-btn');
+  await importWallet('My Money', 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+
+  await page.click('#account-dropdown');
+  const menu = page.locator('#account-menu');
+  await expect(menu.locator('.menu-heading')).toHaveText('Wallets on this device');
+  await expect(menu.locator('#add-account-btn')).toContainText('Add a wallet');
+  await expect(menu.locator('#menu-rename-account-btn')).toHaveText('Rename this wallet');
+  await expect(menu.locator('#menu-delete-account-btn')).toHaveText('Remove this wallet from this device');
+  await shot('01-menu-one-wallet');
+
+  await page.click('#add-account-btn');
+  await expect(page.locator('#view-add-account h2')).toHaveText('Add a wallet');
+  await shot('02-add-a-wallet');
+  await page.click('#import-account-btn');
+  await importWallet('Kids Money', 'legal winner thank year wave sausage worth useful legal winner thank yellow');
+
+  await page.click('#account-dropdown');
+  const items = page.locator('#account-list .menu-item');
+  await expect(items).toHaveCount(2);
+  await expect(page.locator('#account-list [aria-current="true"]')).toContainText('Kids Money');
+  await expect(page.locator('#account-list [aria-current="true"] .check')).toHaveText('✓');
+  await shot('03-two-wallets');
+
+  // Switch back to My Money
+  await items.filter({ hasText: 'My Money' }).click();
+  await expect(page.locator('#current-account-name')).toHaveText('My Money', { timeout: 10000 });
+
+  // Rename from the menu
+  await page.click('#account-dropdown');
+  await page.click('#menu-rename-account-btn');
+  await expect(page.locator('#input-modal-title')).toHaveText('Rename this wallet');
+  await page.fill('#input-modal-input', 'Savings');
+  await page.click('#input-modal-submit');
+  await expect(page.locator('#current-account-name')).toHaveText('Savings', { timeout: 10000 });
+
+  // Remove from the menu: warning, then password
+  await page.click('#account-dropdown');
+  await page.click('#menu-delete-account-btn');
+  await expect(page.locator('#confirm-modal-title')).toHaveText('Remove “Savings” from this device?');
+  await expect(page.locator('#confirm-modal-message')).toContainText('your recovery phrase is the only way back');
+  await expect(page.locator('#confirm-modal-ok')).toHaveText('Remove this wallet');
+  await shot('04-remove-warning');
+  await page.click('#confirm-modal-ok');
+  await page.fill('#password-modal-input', 'ImportPassword123!');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#current-account-name')).toHaveText('Kids Money', { timeout: 10000 });
+  await page.click('#account-dropdown');
+  await expect(items).toHaveCount(1);
+  await shot('05-after-remove');
+});

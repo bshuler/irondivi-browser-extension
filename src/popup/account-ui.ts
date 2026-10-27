@@ -6,7 +6,7 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { showMnemonicModal, showPasswordModal } from './modals';
+import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
 import { MSG, NETWORKS } from '../shared/constants';
 import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-strength';
 import { Account } from './types';
@@ -75,21 +75,28 @@ export async function ensureNetworkAddresses(): Promise<void> {
  */
 export function updateAccountDisplay(): void {
   if (!state.currentAccount) {
-    elements.currentAccountName.textContent = 'No account';
+    elements.currentAccountName.textContent = 'No wallet';
     return;
   }
 
   elements.currentAccountName.textContent = state.currentAccount.name;
 
-  // Update account list
+  // The wallets on this device, a check mark on the open one
   elements.accountList.innerHTML = '';
   state.accounts.forEach(account => {
     const item = document.createElement('button');
     item.className = 'menu-item';
-    item.textContent = account.name;
+    const name = document.createElement('span');
+    name.textContent = account.name;
+    item.appendChild(name);
     if (account.id === state.currentAccount?.id) {
       item.style.color = 'var(--accent)';
       item.style.fontWeight = '700';
+      item.setAttribute('aria-current', 'true');
+      const check = document.createElement('span');
+      check.className = 'check';
+      check.textContent = '✓';
+      item.appendChild(check);
     }
     item.addEventListener('click', () => selectAccount(account.id));
     elements.accountList.appendChild(item);
@@ -119,6 +126,74 @@ export async function selectAccount(accountId: string): Promise<void> {
   } finally {
     hideLoading();
   }
+}
+
+/**
+ * Rename the open wallet (wallet menu and Settings)
+ */
+export async function renameCurrentAccount(): Promise<void> {
+  closeAccountMenu();
+  if (!state.currentAccount) {
+    showToast('No wallet open', 'error');
+    return;
+  }
+
+  const newName = await showInputModal('Rename this wallet', 'Wallet name', state.currentAccount.name);
+  if (!newName) return;
+
+  try {
+    showLoading('Renaming wallet...');
+    await sendMessage(MSG.RENAME_ACCOUNT, { accountId: state.currentAccount.id, name: newName });
+    showToast('Wallet renamed', 'success');
+    await loadAccounts();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'Failed to rename wallet', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * Remove the open wallet from this device (wallet menu and Settings).
+ * Its coins stay on the blockchain; the recovery phrase is the way back.
+ */
+export async function removeCurrentAccount(): Promise<void> {
+  closeAccountMenu();
+  if (!state.currentAccount) {
+    showToast('No wallet open', 'error');
+    return;
+  }
+
+  const confirmed = await showConfirmModal(
+    `Remove “${state.currentAccount.name}” from this device?`,
+    'This deletes the encrypted copy of this wallet from this browser. ' +
+      'Its coins stay on the blockchain, but your recovery phrase is the only way back to them. ' +
+      'Make sure you have it written down before you continue.',
+    'Remove this wallet'
+  );
+  if (!confirmed) return;
+
+  const password = await showPasswordModal('Enter your password to remove this wallet');
+  if (!password) return;
+
+  try {
+    showLoading('Removing wallet...');
+    await sendMessage(MSG.DELETE_ACCOUNT, { accountId: state.currentAccount.id, password });
+    showToast('Wallet removed from this device', 'success');
+    hideView();
+    await loadAccounts();
+    await loadBalance();
+    await loadTransactions();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'Failed to remove wallet', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+function closeAccountMenu(): void {
+  elements.accountMenu.classList.add('hidden');
+  elements.accountDropdown.classList.remove('open');
 }
 
 /**
@@ -169,8 +244,12 @@ async function finalizePendingAccount(name: string, mnemonic: string, password: 
 
     showToast(`Wallet created: ${importResponse.account.name}`, 'success');
 
+    // A wallet just added is the one that opens, as in the web wallet
+    await sendMessage(MSG.SELECT_ACCOUNT, { accountId: importResponse.account.id });
+    state.selectedReceiveAddressIndex = 0;
     await loadAccounts();
     await loadBalance();
+    await loadTransactions();
     hideView();
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create wallet';
@@ -234,8 +313,11 @@ export async function importAccount(name: string, mnemonic: string, password: st
     });
 
     showToast(`Wallet imported: ${response.account.name}`, 'success');
+    await sendMessage(MSG.SELECT_ACCOUNT, { accountId: response.account.id });
+    state.selectedReceiveAddressIndex = 0;
     await loadAccounts();
     await loadBalance();
+    await loadTransactions();
     hideView();
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to import wallet';
@@ -258,7 +340,7 @@ async function handleCreateSubmit(): Promise<void> {
   const confirmInput = document.getElementById('create-password-confirm') as HTMLInputElement;
   const wordCountSelect = document.getElementById('create-word-count') as HTMLSelectElement;
 
-  const name = nameInput.value.trim() || 'My Wallet';
+  const name = nameInput.value.trim() || 'My wallet';
   const password = passwordInput.value;
   const confirm = confirmInput.value;
   const wordCount = parseInt(wordCountSelect.value);
@@ -354,10 +436,11 @@ export function setupAccountUIHandlers(): void {
   });
 
   elements.addAccountBtn.addEventListener('click', () => {
-    elements.accountMenu.classList.add('hidden');
-    elements.accountDropdown.classList.remove('open');
+    closeAccountMenu();
     showView(elements.viewAddAccount);
   });
+  document.getElementById('menu-rename-account-btn')?.addEventListener('click', renameCurrentAccount);
+  document.getElementById('menu-delete-account-btn')?.addEventListener('click', removeCurrentAccount);
 
   // Close account menu when clicking outside
   document.addEventListener('click', (e) => {

@@ -6,13 +6,13 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView } from './ui-state';
 import { sendMessage } from './message-api';
-import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
+import { showMnemonicModal, showPasswordModal } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
 import { canonicalOrigin, DEFAULT_SITES, type SiteAccess } from '../shared/site-access';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { Settings, ConnectedSite } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
-import { loadAccounts, updateAccountDisplay, ensureNetworkAddresses } from './account-ui';
+import { loadAccounts, ensureNetworkAddresses, renameCurrentAccount, removeCurrentAccount } from './account-ui';
 import { loadPairings, setupConnectUIHandlers } from './connect-ui';
 
 // ============================================================
@@ -454,71 +454,7 @@ export function setupSettingsUIHandlers(): void {
     updateSettings({ securityPhrase: input.value.trim() });
   });
 
-  // Rename account button
-  document.getElementById('rename-account-btn')?.addEventListener('click', async () => {
-    if (!state.currentAccount) {
-      showToast('No account selected', 'error');
-      return;
-    }
-
-    const newName = await showInputModal(
-      'Rename Account',
-      'Enter new account name',
-      state.currentAccount.name
-    );
-
-    if (!newName) return;
-
-    try {
-      showLoading('Renaming account...');
-      await sendMessage(MSG.RENAME_ACCOUNT, {
-        accountId: state.currentAccount.id,
-        name: newName,
-      });
-      showToast('Account renamed', 'success');
-      await loadAccounts();
-      updateAccountDisplay();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to rename account';
-      showToast(errorMessage, 'error');
-    } finally {
-      hideLoading();
-    }
-  });
-
-  // Delete account button
-  document.getElementById('delete-account-btn')?.addEventListener('click', async () => {
-    if (!state.currentAccount) {
-      showToast('No account selected', 'error');
-      return;
-    }
-
-    const confirmed = await showConfirmModal(
-      'Delete Account',
-      `Are you sure you want to delete "${state.currentAccount.name}"? This action cannot be undone. Make sure you have backed up your recovery phrase.`
-    );
-
-    if (!confirmed) return;
-
-    const password = await showPasswordModal('Enter password to delete account');
-    if (!password) return;
-
-    try {
-      showLoading('Deleting account...');
-      await sendMessage(MSG.DELETE_ACCOUNT, {
-        accountId: state.currentAccount.id,
-        password,
-      });
-      showToast('Account deleted', 'success');
-      hideView();
-      await loadAccounts();
-      await loadBalance();
-      await loadTransactions();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
-      showToast(errorMessage, 'error');
-    } finally {
-      hideLoading();
-    }
-  });
+  // Rename / remove the open wallet (the same actions as the wallet menu)
+  document.getElementById('rename-account-btn')?.addEventListener('click', renameCurrentAccount);
+  document.getElementById('delete-account-btn')?.addEventListener('click', removeCurrentAccount);
 }
