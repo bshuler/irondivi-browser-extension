@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- The link preview for browser.irondivi.com (Open Graph / Twitter card), 1200x630.
-     Rendered to site/assets/og-image.png by site/deploy/og/render.mjs; not served itself. -->
+     Rendered to site/assets/og-image-v2.png (a new name per redesign: link previews are cached by URL; og-image.png is the old one) by site/deploy/og/render.mjs; not served itself. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -16,12 +16,12 @@
       #0f0f1a;
     padding: 64px 72px; display: flex; flex-direction: column;
   }
-  .brand { display: flex; align-items: center; gap: 18px; }
-  .brand img { width: 72px; height: 72px; filter: drop-shadow(0 8px 24px rgba(233, 69, 96, 0.35)); }
-  .brand span { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
-  .brand b { color: #E94560; font-weight: 800; }
-  .brand i { font-style: normal; font-weight: 600; color: #cbd5e1; margin-left: 4px; }
-  h1 { margin-top: 44px; font-size: 64px; line-height: 1.06; font-weight: 800; letter-spacing: -0.03em; max-width: 960px; }
+  /* Both marks: the wallet's indigo shield and the IronDivi wordmark with its iron shield */
+  .brand { display: flex; align-items: center; gap: 24px; }
+  .brand .wallet { width: 96px; height: 96px; filter: drop-shadow(0 0 24px rgba(99, 102, 241, 0.4)); }
+  .brand .word { height: 64px; width: auto; }
+  .brand span { font-size: 44px; font-weight: 600; color: #cbd5e1; letter-spacing: -0.01em; }
+  h1 { margin-top: 36px; font-size: 64px; line-height: 1.06; font-weight: 800; letter-spacing: -0.03em; max-width: 960px; }
   h1 em { font-style: normal; color: #f7889b; }
   .browsers { margin-top: auto; display: flex; gap: 18px; }
   .b {
@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-  <div class="brand"><img src="../../assets/logo.svg" alt=""><span>Iron<b>Divi</b> <i>Wallet</i></span></div>
+  <div class="brand"><img class="wallet" src="../../assets/brand/irondivi-wallet-mark.svg" alt=""><img class="word" src="../../assets/brand/irondivi-wordmark.svg" alt="IronDivi"><span>Wallet</span></div>
   <h1>The Divi wallet for <em>every desktop browser</em></h1>
   <div class="browsers">
     <div class="b"><img src="../../assets/browsers/chrome.svg" alt=""><span>Chrome</span></div>

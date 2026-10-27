@@ -15,8 +15,8 @@
   <meta property="og:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Open source beta.">
   <meta property="og:url" content="https://browser.irondivi.com/">
   <!-- The link preview: site/deploy/og/ makes it -->
-  <meta property="og:image" content="https://browser.irondivi.com/assets/og-image.png">
-  <meta property="og:image:secure_url" content="https://browser.irondivi.com/assets/og-image.png">
+  <meta property="og:image" content="https://browser.irondivi.com/assets/og-image-v2.png">
+  <meta property="og:image:secure_url" content="https://browser.irondivi.com/assets/og-image-v2.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="IronDivi Wallet: the Divi wallet for every desktop browser">
   <meta name="twitter:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, nothing signed without your approval.">
-  <meta name="twitter:image" content="https://browser.irondivi.com/assets/og-image.png">
+  <meta name="twitter:image" content="https://browser.irondivi.com/assets/og-image-v2.png">
   <meta name="twitter:image:alt" content="IronDivi Wallet, the Divi wallet for every desktop browser: Chrome, Brave, Edge, Opera, Firefox and Safari.">
   <link rel="canonical" href="https://browser.irondivi.com/">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
@@ -47,10 +47,7 @@
   <header class="site-header">
     <div class="container site-header__inner">
       <a class="brand" href="/" aria-label="IronDivi Wallet home">
-        <span class="brand__tile" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-        </span>
-        <span class="brand__word">Iron<span>Divi</span></span>
+        <img class="brand__mark" src="/assets/brand/irondivi-wordmark.svg" alt="IronDivi" width="98" height="28"><span class="brand__product">Wallet</span>
       </a>
       <nav class="site-nav" aria-label="Sections">
         <a href="#features">Features</a>
@@ -69,6 +66,7 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="container hero__grid">
         <div class="hero__copy">
+          <img class="hero__mark" src="/assets/brand/irondivi-wallet-mark.svg" alt="" width="88" height="88">
           <p class="eyebrow">Browser extension for the Divi blockchain</p>
           <h1 id="hero-title">IronDivi Wallet</h1>
           <p class="hero__lead">Keep DIVI in your browser, switch between mainnet and testnet, and approve what Divi sites ask for, one request at a time. Your keys are made and kept encrypted on your own computer.</p>
@@ -97,7 +95,7 @@
         <figure class="hero__visual">
           <div class="mock mock--testnet" role="img" aria-label="Illustration of the IronDivi Wallet popup on testnet: a purple header, a 1,250 DIVI balance, Send and Receive buttons, and recent activity with confirmation counts.">
             <div class="mock__header" aria-hidden="true">
-              <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+              <img class="mock__logo" src="/assets/brand/irondivi-mark-testnet.svg" alt="" width="28" height="28">
               <span class="mock__brand">Iron<span>Divi</span></span>
               <span class="mock__gear"></span>
             </div>
@@ -186,12 +184,12 @@
     <section class="section section--alt" id="networks" aria-labelledby="networks-title">
       <div class="container">
         <h2 id="networks-title">You can always tell which network you're on</h2>
-        <p class="section__lead">Mainnet is real money; testnet is for trying things out. The wallet gives each its own colour, the same ones services.divi.domains uses, across the header, the logo, the network badge and the approval window.</p>
+        <p class="section__lead">Mainnet is real money; testnet is for trying things out. The wallet gives each its own colour, the same ones irondivi.com uses, across the header, the logo, the network badge and the approval window.</p>
         <div class="networks">
           <div class="network network--mainnet">
             <div class="mock mock--mainnet mock--compact" role="img" aria-label="Wallet popup header on mainnet, in Divi red.">
               <div class="mock__header" aria-hidden="true">
-                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <img class="mock__logo" src="/assets/brand/irondivi-mark.svg" alt="" width="28" height="28">
                 <span class="mock__brand">Iron<span>Divi</span></span>
                 <span class="mock__gear"></span>
               </div>
@@ -215,7 +213,7 @@
           <div class="network network--testnet">
             <div class="mock mock--testnet mock--compact" role="img" aria-label="Wallet popup header on testnet, in indigo.">
               <div class="mock__header" aria-hidden="true">
-                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <img class="mock__logo" src="/assets/brand/irondivi-mark-testnet.svg" alt="" width="28" height="28">
                 <span class="mock__brand">Iron<span>Divi</span></span>
                 <span class="mock__gear"></span>
               </div>
@@ -517,7 +515,7 @@
           </details>
           <details>
             <summary>Which sites can use it?</summary>
-            <p>Sites on your Allowed Sites list, which starts as <span class="mono">games.divi.domains</span> alone. That covers Divi Games. The IronDivi web wallet at services.divi.domains is a wallet of its own and does not need this one. The wallet talks to sites through its own <code>window.irondivi</code> provider, not WalletConnect.</p>
+            <p>Sites on your Allowed Sites list, which starts as <span class="mono">games.divi.domains</span> alone. That covers Divi Games. The IronDivi web wallet at wallet.irondivi.com is a wallet of its own and does not need this one. The wallet talks to sites through its own <code>window.irondivi</code> provider, not WalletConnect.</p>
           </details>
         </div>
       </div>
@@ -528,10 +526,7 @@
     <div class="container site-footer__inner">
       <div class="site-footer__brand">
         <span class="brand">
-          <span class="brand__tile" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-          </span>
-          <span class="brand__word">Iron<span>Divi</span> Wallet</span>
+          <img class="brand__mark" src="/assets/brand/irondivi-wordmark.svg" alt="IronDivi" width="98" height="28"><span class="brand__product">Wallet</span>
         </span>
         <p class="site-footer__note">Beta software for the Divi blockchain. Use it at your own risk.</p>
       </div>
@@ -539,7 +534,7 @@
         <a href="https://github.com/bshuler/irondivi-browser-extension" rel="noopener">Source on GitHub</a>
         <a href="https://github.com/bshuler/irondivi-browser-extension/issues" rel="noopener">Report a problem</a>
         <a href="https://games.divi.domains/" rel="noopener">Divi Games</a>
-        <a href="https://services.divi.domains/" rel="noopener">IronDivi web wallet</a>
+        <a href="https://wallet.irondivi.com/" rel="noopener">IronDivi web wallet</a>
         <a href="/downloads/">All downloads</a>
         <a href="/privacy/">Privacy policy</a>
       </nav>

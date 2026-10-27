@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="IronDivi">
+  <title>IronDivi</title>
+  <defs>
+    <!-- One-piece iron rim: a single soft light, no specular bands, so it stays clean at 16 px. -->
+    <linearGradient id="idt-iron" x1="12" y1="4" x2="52" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e9ed"/>
+      <stop offset="0.5" stop-color="#a3aab2"/>
+      <stop offset="1" stop-color="#5f6770"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 2.5 L58 11.5 V30 C58 45.5 46.5 55.8 32 62 C17.5 55.8 6 45.5 6 30 V11.5 Z" fill="url(#idt-iron)"/>
+  <path d="M32 10 L51 16.6 V30 C51 41.4 42.8 49.3 32 54.2 C21.2 49.3 13 41.4 13 30 V16.6 Z" fill="#6366f1" stroke="#262b31" stroke-width="1.2"/>
+  <path d="M18.5 17 H30.6 C39 17 43.8 23 43.8 30.5 C43.8 38 39 44 30.6 44 H20 V30.2 H28 V36.4 H30.4 C33.8 36.4 35.7 34.2 35.7 30.5 C35.7 26.8 33.8 24.6 30.4 24.6 H26.6 C22.8 24.6 19.9 21.6 18.5 17 Z" fill="#ffffff"/>
+</svg>

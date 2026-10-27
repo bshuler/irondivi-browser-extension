@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="IronDivi">
+  <title>IronDivi</title>
+  <defs>
+    <!-- Forged rim, outer face: lit from the top left, with a specular band. -->
+    <linearGradient id="idf-iron" x1="10" y1="4" x2="54" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f1f3f6"/>
+      <stop offset="0.26" stop-color="#aab1b9"/>
+      <stop offset="0.45" stop-color="#6b737c"/>
+      <stop offset="0.55" stop-color="#cdd2d8"/>
+      <stop offset="0.74" stop-color="#7f8790"/>
+      <stop offset="1" stop-color="#4b5259"/>
+    </linearGradient>
+    <!-- Inner bevel: the same light reversed, so the rim reads as a chamfer. -->
+    <linearGradient id="idf-bevel" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5d656e"/>
+      <stop offset="0.5" stop-color="#8a9199"/>
+      <stop offset="1" stop-color="#d5dae0"/>
+    </linearGradient>
+    <linearGradient id="idf-core" x1="32" y1="10" x2="32" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2627b"/>
+      <stop offset="0.55" stop-color="#E94560"/>
+      <stop offset="1" stop-color="#c7344e"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 2.5 L58 11.5 V30 C58 45.5 46.5 55.8 32 62 C17.5 55.8 6 45.5 6 30 V11.5 Z" fill="url(#idf-iron)" stroke="#2b3036" stroke-opacity="0.6" stroke-width="0.8"/>
+  <path d="M32 6 L54.6 13.8 V30 C54.6 43.4 44.6 52.6 32 58.2 C19.4 52.6 9.4 43.4 9.4 30 V13.8 Z" fill="url(#idf-bevel)"/>
+  <path d="M32 10 L51 16.6 V30 C51 41.4 42.8 49.3 32 54.2 C21.2 49.3 13 41.4 13 30 V16.6 Z" fill="url(#idf-core)" stroke="#23272d" stroke-width="0.9"/>
+  <path d="M18.5 17 H30.6 C39 17 43.8 23 43.8 30.5 C43.8 38 39 44 30.6 44 H20 V30.2 H28 V36.4 H30.4 C33.8 36.4 35.7 34.2 35.7 30.5 C35.7 26.8 33.8 24.6 30.4 24.6 H26.6 C22.8 24.6 19.9 21.6 18.5 17 Z" fill="#ffffff"/>
+</svg>
