@@ -79,7 +79,7 @@ used for unrelated purposes, not used for creditworthiness or lending.
 ## Firefox Add-ons (AMO)
 
 Upload `packages/irondivi-wallet-firefox-v<version>.xpi`. The add-on ID is
-`irondivi-wallet@divi.domains` and the manifest declares
+`irondivi-wallet@irondivi.com` and the manifest declares
 `data_collection_permissions: { required: ["none"] }`.
 
 **Summary** (250 characters at most):

@@ -14,6 +14,7 @@ import secrets
 import sys
 import time
 import uuid
+import zipfile
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -22,8 +23,13 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-ADDON_ID = "irondivi-wallet@divi.domains"
 FIREFOX = "/Applications/Firefox.app/Contents/MacOS/firefox"
+
+
+def addon_id(xpi: str) -> str:
+    # From the package itself: releases before 0.0.8 used irondivi-wallet@divi.domains
+    with zipfile.ZipFile(xpi) as z:
+        return json.loads(z.read("manifest.json"))["browser_specific_settings"]["gecko"]["id"]
 
 
 def main(xpi: str) -> int:
@@ -31,7 +37,7 @@ def main(xpi: str) -> int:
     opts = Options()
     opts.binary_location = FIREFOX
     # A fixed internal UUID so the popup has a known moz-extension:// URL
-    opts.set_preference("extensions.webextensions.uuids", json.dumps({ADDON_ID: ext_uuid}))
+    opts.set_preference("extensions.webextensions.uuids", json.dumps({addon_id(xpi): ext_uuid}))
     # WebDriver may not navigate to moz-extension:// itself; the popup is
     # opened from the browser window instead, which needs system access
     driver = webdriver.Firefox(options=opts, service=Service(service_args=["--allow-system-access"]))

@@ -77,7 +77,7 @@ This document describes the complete project structure created for the IronDivi 
 
 ### manifest.firefox.json
 - Browser-specific settings for Firefox
-- Add-on ID: `irondivi-wallet@divi.domains`
+- Add-on ID: `irondivi-wallet@irondivi.com` (0.0.7 and earlier: `irondivi-wallet@divi.domains`)
 - Minimum Firefox version: 109.0
 - Background scripts configuration
 
