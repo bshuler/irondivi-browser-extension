@@ -7,7 +7,9 @@
 # Default: https://browser.irondivi.com/downloads/releases.json. Use the Node
 # version in .nvmrc: zlib is part of Node, and another version can compress
 # the same files to other bytes. The Safari app is not compared: its code
-# signature is not reproducible.
+# signature is not reproducible. A Mozilla-signed .xpi is downloaded from beside
+# releases.json and compared file by file (scripts/xpi-same.py): Mozilla adds
+# its signature and repacks the zip.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -36,6 +38,7 @@ const r = JSON.parse(readFileSync(releases, "utf8"));
 let bad = 0;
 for (const [browser, f] of Object.entries(r.files)) {
   if (browser === "safari") { console.log(`skip  ${f.file} (code signature is not reproducible)`); continue; }
+  if (f.signed) { console.log(`later ${f.file} (signed by Mozilla: compared file by file)`); continue; }
   const got = createHash("sha256").update(readFileSync(`${dir}/${f.file}`)).digest("hex");
   const ok = got === f.sha256;
   if (!ok) bad++;
@@ -43,3 +46,14 @@ for (const [browser, f] of Object.entries(r.files)) {
 }
 process.exit(bad ? 1 : 0);
 ' "$WORK/releases.json" "$WORK/src/packages"
+
+# The signed .xpi: fetch the published one, check it against its sha256, and
+# check it holds exactly the files this rebuild packaged
+signed=$(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const f of Object.values(r.files)) if (f.signed) console.log(f.file + " " + f.sha256)' "$WORK/releases.json")
+while read -r file sha; do
+  [[ -n "$file" ]] || continue
+  if [[ -f "$SRC" ]]; then cp "$(dirname "$SRC")/$file" "$WORK/$file"; else curl -fsS "${SRC%/*}/$file" -o "$WORK/$file"; fi
+  [[ "$(shasum -a 256 "$WORK/$file" | cut -d' ' -f1)" == "$sha" ]] || { echo "DIFF  $file (published file doesn't match releases.json)"; exit 1; }
+  python3 -I scripts/xpi-same.py "$WORK/src/packages/$file" "$WORK/$file" >/dev/null || { echo "DIFF  $file"; exit 1; }
+  echo "same  $file (Mozilla's signature aside)"
+done <<< "$signed"

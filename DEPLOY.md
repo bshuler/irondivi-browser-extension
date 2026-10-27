@@ -10,6 +10,8 @@ needs Xcode.
 npm run build:all            # dist/{chrome,firefox,edge,safari}
 npm run build:safari:app     # universal (arm64 + x86_64) Safari app, ad-hoc signed
 npm run package              # packages/: zips, .xpi, SHA256SUMS-v<version>, releases.json
+scripts/sign-release.sh      # signs SHA256SUMS-v<version> (1Password, Touch ID)
+scripts/sign-firefox.sh      # optional: Mozilla signs the .xpi, then the sums are re-signed
 site/deploy/deploy.sh        # page, this version's packages, nginx vhost, TLS
 ```
 
@@ -31,6 +33,22 @@ The site used to be browser.divi.domains. That name now has its own vhost,
 `site/deploy/nginx/browser.divi.domains.conf`, which sends every path to the same path on
 browser.irondivi.com, so shared links and old download URLs keep working. The first deploy to
 the new name copies the old site's downloads over.
+
+## Firefox
+
+Firefox installs only add-ons Mozilla has signed; anything else loads as a temporary add-on
+that is gone when Firefox restarts. `scripts/sign-firefox.sh` uploads `dist/firefox` to
+addons.mozilla.org on the unlisted channel: Mozilla signs it but doesn't list it, and the
+download stays on browser.irondivi.com. The commit's source goes with it, since the code is
+bundled. The script checks that Mozilla's file holds exactly our files plus its signature
+(`scripts/xpi-same.py`), puts it in place of the unsigned `.xpi`, rewrites the checksums and
+`releases.json` (which marks the file `"signed": "mozilla"`, so the page shows the normal
+install steps), and re-signs the checksums. Mozilla signs each version only once.
+
+The AMO API key (addons.mozilla.org, Developer Hub, Manage API Keys) is in 1Password at
+`op://global_secret_store/amo_api`, fields `issuer` and `secret` (`AMO_OP_ITEM` picks another
+item). The script reads it with `secret get` into web-ext's environment, never onto a command
+line. `npx web-ext lint --source-dir dist/firefox` runs the same checks Mozilla's validator does.
 
 ## Safari
 

@@ -138,7 +138,9 @@ export function writeChecksums(packagesDir, version) {
     .sort()
     .map(name => {
       const data = readFileSync(join(packagesDir, name));
-      return { name, sha256: createHash('sha256').update(data).digest('hex'), bytes: data.length };
+      // scripts/sign-firefox.sh puts Mozilla's signed .xpi in place of ours
+      const signed = name.endsWith('.xpi') && data.includes('META-INF/cose.sig');
+      return { name, sha256: createHash('sha256').update(data).digest('hex'), bytes: data.length, signed };
     });
   const text = lines.map(l => `${l.sha256}  ${l.name}`).join('\n');
   const sumsPath = join(packagesDir, `SHA256SUMS-v${version}`);
@@ -151,12 +153,14 @@ export function writeChecksums(packagesDir, version) {
 
 // releases.json is what browser.irondivi.com reads to offer each browser its
 // download, with the same sha256 as SHA256SUMS, and the commit it was built
-// from. The date is the commit's, so rebuilding the commit gives the same file
+// from. The date is the commit's, so rebuilding the commit gives the same file.
+// A Mozilla-signed .xpi is marked signed: the page then offers it as a normal
+// install, and scripts/reproduce.sh compares its files instead of its bytes
 export function writeReleases(lines, packagesDir, version, source) {
   const files = {};
   for (const l of lines) {
     const browser = l.name.slice('irondivi-wallet-'.length, l.name.indexOf(`-v${version}.`));
-    files[browser] = { file: l.name, sha256: l.sha256, bytes: l.bytes };
+    files[browser] = { file: l.name, sha256: l.sha256, bytes: l.bytes, ...(l.signed && { signed: 'mozilla' }) };
   }
   const release = {
     version,

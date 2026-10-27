@@ -332,6 +332,9 @@ The Safari zip needs `npm run build:safari:app` first. Publishing is in DEPLOY.m
 `SHA256SUMS-v{version}` is signed with the release key, an Ed25519 SSH key kept
 in 1Password that never leaves it (`scripts/sign-release.sh` signs through the
 1Password SSH agent). The site will not deploy a release the key did not sign.
+The Firefox `.xpi` can also be signed by Mozilla (`scripts/sign-firefox.sh`, see DEPLOY.md);
+its checksum is then the signed file's, and `scripts/reproduce.sh` compares its files rather
+than its bytes.
 
 Release key fingerprint: `SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ`
 (public key in `site/release-signing/irondivi-release.pub`, also at

@@ -141,7 +141,8 @@
       out.files[k] = {
         file: f.file,
         sha256: (typeof f.sha256 === 'string' && SAFE_HASH.test(f.sha256)) ? f.sha256.toLowerCase() : null,
-        bytes: (typeof f.bytes === 'number' && isFinite(f.bytes) && f.bytes > 0) ? f.bytes : null
+        bytes: (typeof f.bytes === 'number' && isFinite(f.bytes) && f.bytes > 0) ? f.bytes : null,
+        signed: f.signed === 'mozilla'
       };
     });
     return Object.keys(out.files).length ? out : null;
@@ -320,8 +321,19 @@
         fillSums();
         updateCommands();
         updateHero();
+        showFirefoxSteps();
       })
       .catch(function () { releaseFailed(); });
+  }
+
+  // A Mozilla-signed .xpi installs like any add-on; until there is one the
+  // panel explains the temporary install
+  function showFirefoxSteps() {
+    var entry = fileFor('firefox');
+    var signed = !!(entry && entry.signed);
+    var a = $('firefox-unsigned'), b = $('firefox-signed');
+    if (a) a.hidden = signed;
+    if (b) b.hidden = !signed;
   }
 
   /* ---------- Hero ---------- */

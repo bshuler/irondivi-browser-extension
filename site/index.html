@@ -341,16 +341,29 @@
               </div>
               <a class="btn btn--primary" href="/downloads/" data-download="firefox">Download for Firefox</a>
             </div>
-            <p>The add-on isn't signed by Mozilla yet, so Firefox won't install it permanently.</p>
-            <h4 class="steps-title">Try it now (temporary)</h4>
-            <ol class="steps">
-              <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it. Firefox may offer to install it straight away and then refuse because it's unsigned; that's expected, use the steps below.</li>
-              <li><strong>Open</strong> <code>about:debugging#/runtime/this-firefox</code> in the address bar.</li>
-              <li><strong>Click &ldquo;Load Temporary Add-on&hellip;&rdquo;</strong> and pick the <code>.xpi</code> file.</li>
-            </ol>
-            <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
-            <h4 class="steps-title">Keep it installed</h4>
-            <p>Wait for the Mozilla-signed add-on: this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
+            <div id="firefox-signed" hidden>
+              <p>Mozilla has signed the add-on, so Firefox installs it like any other.</p>
+              <h4 class="steps-title">Install</h4>
+              <ol class="steps">
+                <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it.</li>
+                <li><strong>Open</strong> <code>about:addons</code>, click the gear button and choose <strong>&ldquo;Install Add-on From File&hellip;&rdquo;</strong>, then pick the <code>.xpi</code>. Dragging the file onto a Firefox window does the same.</li>
+                <li><strong>Click Add</strong> when Firefox asks. The wallet's icon appears under the puzzle-piece button; pin it to the toolbar from there.</li>
+              </ol>
+              <h4>Upgrading later</h4>
+              <p>Download and add the new version the same way. Firefox replaces the old one and keeps your wallet.</p>
+            </div>
+            <div id="firefox-unsigned">
+              <p>The add-on isn't signed by Mozilla yet, so Firefox won't install it permanently.</p>
+              <h4 class="steps-title">Try it now (temporary)</h4>
+              <ol class="steps">
+                <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it. Firefox may offer to install it straight away and then refuse because it's unsigned; that's expected, use the steps below.</li>
+                <li><strong>Open</strong> <code>about:debugging#/runtime/this-firefox</code> in the address bar.</li>
+                <li><strong>Click &ldquo;Load Temporary Add-on&hellip;&rdquo;</strong> and pick the <code>.xpi</code> file.</li>
+              </ol>
+              <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
+              <h4 class="steps-title">Keep it installed</h4>
+              <p>Wait for the Mozilla-signed add-on: this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
+            </div>
           </div>
 
           <!-- Safari -->
