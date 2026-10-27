@@ -83,19 +83,8 @@ body.approval-window {
 .logo {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: 0 4px 14px var(--accent-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   flex-shrink: 0;
-}
-
-.logo svg {
-  width: 16px;
-  height: 16px;
-  color: white;
 }
 
 /* "Iron" white, "Divi" in the network colour, as on the web wallet */
