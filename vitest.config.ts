@@ -9,6 +9,8 @@ export default defineConfig({
     // setupWallet derives keys with the real KDF; with every file running at
     // once a beforeEach can take longer than the 10 s default
     hookTimeout: 30000,
+    // and a test that boots the background can take longer than the 5 s default
+    testTimeout: 30000,
     // Inlined so a test can mock the @noble/hashes functions it calls
     server: { deps: { inline: [/@scure\/bip32/] } },
   },

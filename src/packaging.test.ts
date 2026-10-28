@@ -90,7 +90,8 @@ describe('EXT-14 a release can be rebuilt byte for byte', () => {
       rmSync(join(one, '..'), { recursive: true, force: true });
       rmSync(join(two, '..'), { recursive: true, force: true });
     }
-  }, 60000);
+    // two full builds; with every test file running at once that passed 60 s on hp2
+  }, 180000);
 
   it('the entries are sorted and carry the release date, not the file times', async () => {
     // @ts-expect-error plain JS module
