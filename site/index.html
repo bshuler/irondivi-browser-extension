@@ -414,14 +414,14 @@
           <div class="cmd">
             <p class="cmd__label">macOS or Linux, in Terminal</p>
             <div class="cmd__row">
-              <code class="cmd__code" id="cmd-shasum">shasum -a 256 irondivi-wallet-chrome-v0.0.12.zip</code>
+              <code class="cmd__code" id="cmd-shasum">shasum -a 256 irondivi-wallet-chrome-v0.0.13.zip</code>
               <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-shasum">Copy</button>
             </div>
           </div>
           <div class="cmd">
             <p class="cmd__label">Windows, in PowerShell</p>
             <div class="cmd__row">
-              <code class="cmd__code" id="cmd-ps">Get-FileHash irondivi-wallet-chrome-v0.0.12.zip -Algorithm SHA256</code>
+              <code class="cmd__code" id="cmd-ps">Get-FileHash irondivi-wallet-chrome-v0.0.13.zip -Algorithm SHA256</code>
               <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-ps">Copy</button>
             </div>
           </div>
@@ -443,7 +443,7 @@
         <p><span class="mono">SHA256SUMS</span> is signed with our release key, which never leaves our password manager. Its fingerprint is <code class="mono">SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ</code>; compare it with the one in the <a href="https://github.com/bshuler/irondivi-browser-extension#release-signing">source repository</a>, so this site alone cannot vouch for itself. With the files in one folder, in Terminal:</p>
         <div class="cmd">
           <div class="cmd__row">
-            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.12.sig &lt; SHA256SUMS-v0.0.12</code>
+            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.13.sig &lt; SHA256SUMS-v0.0.13</code>
             <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-sig">Copy</button>
           </div>
         </div>
