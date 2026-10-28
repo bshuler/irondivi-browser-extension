@@ -14,6 +14,7 @@ import { getSettings } from '../shared/storage';
 import { NETWORKS } from '../shared/constants';
 import { signingSession } from './signing-session';
 import { rpcClient } from './rpc-client';
+import { filterNftCoins } from './nft-guard';
 import initSwapWasm, { WasmTaker } from '../swap/pkg/swap_wasm.js';
 
 export const SWAP_TICK_ALARM = 'swap-tick';
@@ -132,7 +133,9 @@ async function engine(): Promise<WasmTaker> {
 
 async function syncCoins(t: WasmTaker): Promise<void> {
   const { divi } = JSON.parse(t.addresses());
-  const coins = await rpcClient.getAddressUtxosRaw(divi);
+  const listed = await rpcClient.getAddressUtxosRaw(divi);
+  // Never fund a swap with a Divi NFT coin, or one that cannot be checked
+  const { spendable: coins } = await filterNftCoins('testnet', listed, txid => rpcClient.getRawTransactionHex(txid));
   await t.syncDiviCoins(JSON.stringify(
     coins.map(c => ({ txid: c.txid, outputIndex: c.outputIndex, satoshis: c.satoshis }))
   ));

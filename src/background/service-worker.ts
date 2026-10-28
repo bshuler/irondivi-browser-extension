@@ -13,6 +13,7 @@ import { rpcClient } from './rpc-client';
 import { chain, getServerConfig, saveServerConfig } from './chain';
 import { PUBLIC_ELECTRUM, cleanServerUrl, type ServerConfig, type ServerMode } from '../shared/server-config';
 import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePendingTxs } from './pending-txs';
+import { filterNftCoins, isColored } from './nft-guard';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { accessStatus, askedTooRecently, canonicalOrigin, cleanReason, mayUse, withBlock, withChoice, withoutBlock, withoutGrant, MAX_SITE_ENTRIES, type AccessChoice, type AccessStatus } from '../shared/site-access';
@@ -93,7 +94,10 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
   // so coins this wallet already spent are left out (EXT-27)
   const pendingSpends = await getPendingSpends(account.network);
   const listed = await chain.getUtxos(addresses);
-  const utxos = listed.filter(u => !pendingSpends.has(outpoint(u)));
+  const unspent = listed.filter(u => !pendingSpends.has(outpoint(u)));
+  // A Divi NFT coin is never spent as plain DIVI: that would destroy the NFT
+  // (DIVI-ASSET-STANDARD §10). A coin that cannot be checked is held too.
+  const { spendable: utxos, held } = await filterNftCoins(account.network, unspent, txid => chain.getRawTransactionHex(txid));
 
   let built: BuiltTransaction;
   try {
@@ -105,8 +109,13 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
       memo: request.memo,
     }, account.network);
   } catch (error) {
-    if (utxos.length < listed.length && error instanceof Error && /^Insufficient funds/.test(error.message)) {
-      throw new Error(`${error.message}. Some coins are held by an earlier send until it confirms`);
+    if (error instanceof Error && /^Insufficient funds/.test(error.message)) {
+      if (held.length > 0) {
+        throw new Error(`${error.message}. Some coins carry a Divi NFT or could not be checked and are never spent as DIVI`);
+      }
+      if (unspent.length < listed.length) {
+        throw new Error(`${error.message}. Some coins are held by an earlier send until it confirms`);
+      }
     }
     throw error;
   }
@@ -320,6 +329,9 @@ async function verifyInputs(built: BuiltTransaction): Promise<void> {
       byTxid.set(input.txid, prev);
     }
     const output = prev.outputs[input.vout];
+    if (output && isColored(prev, input.vout)) {
+      throw new Error('A coin carries a Divi NFT; spending it would destroy the NFT');
+    }
     if (!output || output.value !== input.satoshis ||
         bytesToHex(output.script as Uint8Array) !== p2pkhScript(input.address)) {
       throw new Error('A coin the node reported does not match the transaction that made it');

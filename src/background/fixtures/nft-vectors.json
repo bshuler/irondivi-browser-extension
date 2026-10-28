@@ -1,0 +1,143 @@
+[
+  {
+    "name": "plain payment",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": []
+  },
+  {
+    "name": "DVNS OP_RETURN (not DT/1)",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a0c64766e733a616c6963652121",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": []
+  },
+  {
+    "name": "ISSUE to vout 0, change at 2",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a4c4f44495641010100000100070707070707070707070707070707070707070707070707070707070707070724090909090909090909090909090909090909090909090909090909090909090909090909",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": [
+      0
+    ]
+  },
+  {
+    "name": "ISSUE item into collection, royalty",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a4c8644495641010100030101070707070707070707070707070707070707070707070707070707070707070724090909090909090909090909090909090909090909090909090909090909090909090909abababababababababababababababababababababababababababababababab00f4010303030303030303030303030303030303030303",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": [
+      1,
+      0
+    ]
+  },
+  {
+    "name": "sale TRANSFER: carrier to buyer 0, payment to seller 1, change 3",
+    "scripts": [
+      "76a914040404040404040404040404040404040404040488ac",
+      "76a914050505050505050505050505050505050505050588ac",
+      "6a2a44495641010201cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd010001",
+      "76a914040404040404040404040404040404040404040488ac"
+    ],
+    "colored": [
+      0
+    ]
+  },
+  {
+    "name": "TRANSFER two groups",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "76a914020202020202020202020202020202020202020288ac",
+      "76a914030303030303030303030303030303030303030388ac",
+      "6a4c4f44495641010202111111111111111111111111111111111111111111111111111111111111111102000302022222222222222222222222222222222222222222222222222222222222222222010101"
+    ],
+    "colored": [
+      0,
+      2,
+      1
+    ]
+  },
+  {
+    "name": "CERTIFY to vout 1",
+    "scripts": [
+      "6a4c514449564101030707070707070707070707070707070707070707070707070707070707070707240909090909090909090909090909090909090909090909090909090909090909090909090300f1536501",
+      "76a914060606060606060606060606060606060606060688ac",
+      "76a914070707070707070707070707070707070707070788ac"
+    ],
+    "colored": [
+      1
+    ]
+  },
+  {
+    "name": "BURN colors nothing",
+    "scripts": [
+      "6a27444956410104efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef01",
+      "76a914010101010101010101010101010101010101010188ac"
+    ],
+    "colored": []
+  },
+  {
+    "name": "REVOKE colors nothing",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a27444956410105efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef01"
+    ],
+    "colored": []
+  },
+  {
+    "name": "DIVA magic, truncated payload: hold all",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a2744495641010201cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": [
+      0,
+      1,
+      2
+    ]
+  },
+  {
+    "name": "DIVA magic, unknown version: hold all",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a0744495641020100"
+    ],
+    "colored": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "two DT/1 outputs: hold all",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a2a44495641010201cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd010001",
+      "6a2a44495641010201cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd010001",
+      "76a914020202020202020202020202020202020202020288ac"
+    ],
+    "colored": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "name": "TRANSFER naming a vout past the end",
+    "scripts": [
+      "76a914010101010101010101010101010101010101010188ac",
+      "6a2a44495641010201cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd010901"
+    ],
+    "colored": []
+  }
+]
