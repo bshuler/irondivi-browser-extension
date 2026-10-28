@@ -92,6 +92,11 @@ function diviText(sats: bigint): string {
  * protocol, and the default 10% would block a 500 DIVI name below 5,000.
  * Throws with a user-facing message if the send is not allowed.
  */
+/** What the node reports the spendable coins add up to */
+function reported(utxos: { satoshis: bigint }[]): bigint {
+  return utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+}
+
 async function buildSend(account: Account, request: TransactionRequest, recordFee = false): Promise<BuiltTransaction & { balanceSats: bigint }> {
   const addresses = account.addresses.map(a => a.address);
   // The node lists a coin as unspent until the send that spends it is mined,
@@ -125,19 +130,24 @@ async function buildSend(account: Account, request: TransactionRequest, recordFe
   }
 
   const limits = (await getSettings()).transactionLimits;
+  // The Spending limits switch is off: the owner chose to send any amount (ADR 0002)
+  if (!limits.enabled) return { ...built, balanceSats: reported(utxos) };
   const spend = built.amountSats + built.feeSats;
   // Percentages are of the larger of what the node reports now and the most
   // the wallet has seen this week, so a node that hides coins cannot block
   // sends. One that invents coins cannot spend them (sendFromAccount checks
   // the previous transactions) but does loosen the percentages; the absolute
   // limits are the control for that.
-  const reported = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
-  await recordBalance(account.id, account.network, reported);
+  const now = reported(utxos);
+  await recordBalance(account.id, account.network, now);
   const seen = await highWaterBalance(account.id, account.network);
-  const balance = seen > reported ? seen : reported;
+  const balance = seen > now ? seen : now;
 
+  // Every refusal names the limit, the most that can go now, and where to change it
+  const over = (limit: string, most: bigint, note = '') =>
+    new Error(`Over your spending limit: ${limit} (up to ${diviText(most > 0n ? most : 0n)} DIVI now, fee included)${note}. Settings → Spending limits`);
   if (limits.maxAmountAbsolute > 0 && spend > diviToSatoshis(limits.maxAmountAbsolute)) {
-    throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI (amount plus fee)`);
+    throw over(`${limits.maxAmountAbsolute} DIVI per send`, diviToSatoshis(limits.maxAmountAbsolute));
   }
   // Why a name record's fee was held to a percentage limit after all
   const recordNote = !recordFee && request.memo?.startsWith('DVNS1\n')
@@ -146,25 +156,25 @@ async function buildSend(account: Account, request: TransactionRequest, recordFe
   if (limits.maxAmountPercent > 0 && !recordFee) {
     const bp = basisPoints(limits.maxAmountPercent);
     if (spend * 10000n > balance * bp) {
-      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${diviText(balance * bp / 10000n)} DIVI including the fee)${recordNote}`);
+      throw over(`${limits.maxAmountPercent}% of your balance per send`, balance * bp / 10000n, recordNote);
     }
   }
 
   if (limits.dailyLimitAbsolute > 0 || limits.dailyLimitPercent > 0) {
     const spent = await spentToday(account.id, account.network);
     if (limits.dailyLimitAbsolute > 0 && spent + spend > diviToSatoshis(limits.dailyLimitAbsolute)) {
-      throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitAbsolute} DIVI (sent in the last 24 hours: ${diviText(spent)} DIVI)`);
+      throw over(`${limits.dailyLimitAbsolute} DIVI a day`, diviToSatoshis(limits.dailyLimitAbsolute) - spent);
     }
     if (limits.dailyLimitPercent > 0 && !recordFee) {
       // The balance 24 hours ago is roughly today's plus what was sent since
       const bp = basisPoints(limits.dailyLimitPercent);
       if ((spent + spend) * 10000n > (balance + spent) * bp) {
-        throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitPercent}% of balance${recordNote}`);
+        throw over(`${limits.dailyLimitPercent}% of your balance a day`, (balance + spent) * bp / 10000n - spent, recordNote);
       }
     }
   }
 
-  return { ...built, balanceSats: reported };
+  return { ...built, balanceSats: now };
 }
 
 /**

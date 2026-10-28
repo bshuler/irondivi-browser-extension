@@ -27,8 +27,8 @@ export async function notePaymentRefused(origin: string, amount: unknown, reason
     : 'an amount';
   const why = reason.slice(0, MAX_REASON).trim();
   let message = `${siteName(origin)} asked this wallet to pay ${what} and was told it cannot: ${why}${/[.!?]$/.test(why) ? '' : '.'}`;
-  if (/limit|% of balance/i.test(reason)) {
-    message += ' You can change the limits in Settings, Security.';
+  if (/limit|% of balance/i.test(reason) && !/Settings → Spending limits/.test(reason)) {
+    message += ' You can change the limits in Settings, Spending limits.';
   }
   await storage.session.set({ [NOTICE_KEY]: { message, at: Date.now() } });
 }

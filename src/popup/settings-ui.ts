@@ -11,7 +11,7 @@ import { showMnemonicModal, showPasswordModal } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
 import { canonicalOrigin, DEFAULT_SITES, type SiteAccess } from '../shared/site-access';
 import { checkSettingsUpdate } from '../shared/settings-check';
-import { Settings, ConnectedSite } from './types';
+import { Settings, ConnectedSite, TransactionLimits } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
 import { loadAccounts, ensureNetworkAddresses, renameCurrentAccount, removeCurrentAccount } from './account-ui';
 import { loadPairings, setupConnectUIHandlers } from './connect-ui';
@@ -82,14 +82,23 @@ export function updateSettingsDisplay(): void {
   if (securityPhraseInput) securityPhraseInput.value = state.settings.securityPhrase ?? '';
   authTimeoutSelect.value = String(state.settings.authTimeoutMinutes);
 
-  // Transaction limits
-  const limits = state.settings.transactionLimits || { maxAmountPercent: 10, maxAmountAbsolute: 0, dailyLimitPercent: 25, dailyLimitAbsolute: 0 };
+  // Spending limits (ADR 0002): off hides the numbers and says so in words
+  const limits = currentLimits();
+  (document.getElementById('setting-limits-enabled') as HTMLInputElement).checked = limits.enabled;
+  (document.getElementById('limits-numbers') as HTMLElement).hidden = !limits.enabled;
+  (document.getElementById('limits-off-note') as HTMLElement).hidden = limits.enabled;
   txLimitPercentInput.value = limits.maxAmountPercent > 0 ? String(limits.maxAmountPercent) : '';
   txLimitAbsoluteInput.value = limits.maxAmountAbsolute > 0 ? String(limits.maxAmountAbsolute) : '';
   dailyLimitPercentInput.value = limits.dailyLimitPercent > 0 ? String(limits.dailyLimitPercent) : '';
   dailyLimitAbsoluteInput.value = limits.dailyLimitAbsolute > 0 ? String(limits.dailyLimitAbsolute) : '';
 
   updateSiteAccessList();
+}
+
+/** The limits as the background has them, before settings first load: none, switch on */
+function currentLimits(): TransactionLimits {
+  return state.settings.transactionLimits
+    || { enabled: true, maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
 }
 
 const CHOICE_TEXT: Record<string, string> = { allowed: 'allowed', denied: 'never', not_now: 'not now' };
@@ -402,39 +411,41 @@ export function setupSettingsUIHandlers(): void {
   // Export mnemonic button
   document.getElementById('export-mnemonic-btn')?.addEventListener('click', handleExportMnemonic);
 
+  // The Spending limits switch: off asks for the password, on does not
+  document.getElementById('setting-limits-enabled')?.addEventListener('change', (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    updateSettings({ transactionLimits: { ...currentLimits(), enabled } });
+  });
+
   // Transaction limit (percent)
   document.getElementById('setting-tx-limit-percent')?.addEventListener('change', (e) => {
     const percent = parseInt((e.target as HTMLInputElement).value) || 0;
-    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
     updateSettings({
-      transactionLimits: { ...currentLimits, maxAmountPercent: Math.min(100, Math.max(0, percent)) }
+      transactionLimits: { ...currentLimits(), maxAmountPercent: Math.min(100, Math.max(0, percent)) }
     });
   });
 
   // Transaction limit (absolute)
   document.getElementById('setting-tx-limit-absolute')?.addEventListener('change', (e) => {
     const absolute = parseFloat((e.target as HTMLInputElement).value) || 0;
-    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
     updateSettings({
-      transactionLimits: { ...currentLimits, maxAmountAbsolute: Math.max(0, absolute) }
+      transactionLimits: { ...currentLimits(), maxAmountAbsolute: Math.max(0, absolute) }
     });
   });
 
   // Daily limit (percent)
   document.getElementById('setting-daily-limit-percent')?.addEventListener('change', (e) => {
     const percent = parseInt((e.target as HTMLInputElement).value) || 0;
-    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
     updateSettings({
-      transactionLimits: { ...currentLimits, dailyLimitPercent: Math.min(100, Math.max(0, percent)) }
+      transactionLimits: { ...currentLimits(), dailyLimitPercent: Math.min(100, Math.max(0, percent)) }
     });
   });
 
   // Daily limit (absolute)
   document.getElementById('setting-daily-limit-absolute')?.addEventListener('change', (e) => {
     const absolute = parseFloat((e.target as HTMLInputElement).value) || 0;
-    const currentLimits = state.settings.transactionLimits || { maxAmountPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0, dailyLimitPercent: 0 };
     updateSettings({
-      transactionLimits: { ...currentLimits, dailyLimitAbsolute: Math.max(0, absolute) }
+      transactionLimits: { ...currentLimits(), dailyLimitAbsolute: Math.max(0, absolute) }
     });
   });
 

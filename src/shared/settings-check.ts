@@ -1,6 +1,7 @@
 /**
  * What UPDATE_SETTINGS accepts, and which changes loosen a protection and so
- * need the wallet's password: raising or removing a transaction limit, or
+ * need the wallet's password: switching the limits off, raising or removing
+ * a transaction limit, or
  * keeping the wallet unlocked longer. Sites are not a setting: they have
  * SET_SITE_ACCESS (site-access.ts). The background
  * enforces it; the popup uses the same rule to know when to ask.
@@ -9,7 +10,7 @@
 import { NETWORKS } from './constants';
 import type { Settings, TransactionLimits } from './storage';
 
-const LIMIT_KEYS: (keyof TransactionLimits)[] = [
+const LIMIT_KEYS: Exclude<keyof TransactionLimits, 'enabled'>[] = [
   'maxAmountAbsolute', 'maxAmountPercent', 'dailyLimitAbsolute', 'dailyLimitPercent',
 ];
 const PERCENT_KEYS = new Set<keyof TransactionLimits>(['maxAmountPercent', 'dailyLimitPercent']);
@@ -62,10 +63,16 @@ export function checkSettingsUpdate(raw: unknown, current: Settings): SettingsCh
       case 'transactionLimits': {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: 'Invalid limits' };
         const v = value as Record<string, unknown>;
-        if (Object.keys(v).some(k => !LIMIT_KEYS.includes(k as keyof TransactionLimits))) {
+        if (Object.keys(v).some(k => k !== 'enabled' && !LIMIT_KEYS.includes(k as typeof LIMIT_KEYS[number]))) {
           return { ok: false, error: 'Invalid limits' };
         }
         const limits = { ...current.transactionLimits };
+        // Switching the limits off loosens; switching them on does not
+        if ('enabled' in v) {
+          if (typeof v.enabled !== 'boolean') return { ok: false, error: 'Invalid limits' };
+          if (!v.enabled && current.transactionLimits.enabled) loosens = true;
+          limits.enabled = v.enabled;
+        }
         for (const k of LIMIT_KEYS) {
           if (!(k in v)) continue;
           if (!isLimit(v[k], PERCENT_KEYS.has(k))) return { ok: false, error: 'Invalid limits' };

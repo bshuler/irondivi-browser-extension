@@ -1,6 +1,7 @@
 // End-to-end: the spending limits in the built extension, with screenshots.
-// The defaults refuse a send of 40% of the balance; clearing the limits in
-// Settings (which asks for the password) lets the user send the whole wallet.
+// The defaults refuse a send of 40% of the balance; the Spending limits switch
+// in Settings (off asks for the password, ADR 0002) lets the user send the
+// whole wallet.
 // The testnet RPC is mocked with context.route, so nothing is broadcast.
 import { test as base, expect, BrowserContext, Page } from '@playwright/test';
 import path from 'path';
@@ -34,12 +35,6 @@ const test = base.extend<{ context: BrowserContext; extensionId: string }>({
 async function shot(popup: Page, name: string) {
   await popup.waitForTimeout(300);
   await popup.screenshot({ path: path.join(SHOTS, `${name}.png`) });
-}
-
-/** Change one limit field the way a person does: type, then leave the field */
-async function setLimitField(popup: Page, id: string, value: string) {
-  await popup.fill(`#${id}`, value);
-  await popup.dispatchEvent(`#${id}`, 'change');
 }
 
 test('the default limits refuse a large send, and the user can switch them off', async ({ context, extensionId }) => {
@@ -88,7 +83,8 @@ test('the default limits refuse a large send, and the user can switch them off',
 
   // Settings → Security, as shipped: 10% a send, 25% a day
   await popup.click('#settings-btn');
-  await popup.locator('#setting-tx-limit-percent').scrollIntoViewIfNeeded();
+  await popup.locator('#setting-limits-enabled').scrollIntoViewIfNeeded();
+  await expect(popup.locator('#setting-limits-enabled')).toBeChecked();
   await expect(popup.locator('#setting-tx-limit-percent')).toHaveValue('10');
   await expect(popup.locator('#setting-daily-limit-percent')).toHaveValue('25');
   await shot(popup, '2-settings-default-limits');
@@ -106,26 +102,26 @@ test('the default limits refuse a large send, and the user can switch them off',
     await popup.click('#send-submit-btn');
   }
   await send('800');
-  await expect(popup.locator('#toast.error')).toContainText('10% of balance', { timeout: 30000 });
+  await expect(popup.locator('#toast.error')).toContainText('Over your spending limit: 10% of your balance per send', { timeout: 30000 });
   await shot(popup, '3-send-800-refused');
   expect(broadcasts).toHaveLength(0);
 
-  // The user switches the limits off: blank = no limit, password asked once each
+  // The user switches the limits off: one switch, the password once
   await popup.goto(`chrome-extension://${extensionId}/popup.html`);
   await expect(popup.locator('#balance-section')).toBeVisible({ timeout: 30000 });
   await popup.click('#settings-btn');
-  for (const id of ['setting-tx-limit-percent', 'setting-daily-limit-percent']) {
-    await popup.locator(`#${id}`).scrollIntoViewIfNeeded();
-    await setLimitField(popup, id, '');
-    await expect(popup.locator('#password-modal')).toBeVisible();
-    if (id === 'setting-tx-limit-percent') await shot(popup, '4-password-to-remove-limit');
-    await popup.fill('#password-modal-input', PASSWORD);
-    await popup.click('#password-modal-submit');
-    await expect(popup.locator('#toast')).toContainText('Settings updated', { timeout: 15000 });
-  }
-  await popup.locator('#setting-tx-limit-percent').scrollIntoViewIfNeeded();
-  await expect(popup.locator('#setting-tx-limit-percent')).toHaveValue('');
-  await expect(popup.locator('#setting-daily-limit-percent')).toHaveValue('');
+  await popup.locator('#setting-limits-enabled').scrollIntoViewIfNeeded();
+  await popup.click('#setting-limits-enabled');
+  await expect(popup.locator('#password-modal')).toBeVisible();
+  await shot(popup, '4-password-to-switch-limits-off');
+  await popup.fill('#password-modal-input', PASSWORD);
+  await popup.click('#password-modal-submit');
+  await expect(popup.locator('#toast')).toContainText('Settings updated', { timeout: 15000 });
+  await expect(popup.locator('#setting-limits-enabled')).not.toBeChecked();
+  await expect(popup.locator('#limits-off-note')).toBeVisible();
+  await expect(popup.locator('#limits-off-note')).toContainText('Off: any amount can be sent');
+  await expect(popup.locator('#limits-numbers')).toBeHidden();
+  await popup.locator('#setting-limits-enabled').scrollIntoViewIfNeeded();
   await shot(popup, '5-settings-limits-off');
   await popup.click('#settings-back-btn');
 

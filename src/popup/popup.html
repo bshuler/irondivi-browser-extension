@@ -349,22 +349,29 @@
         <div class="setting-section">
           <h3>Security</h3>
           <div class="setting-item">
-            <span>Max Transaction (%)</span>
-            <input type="number" id="setting-tx-limit-percent" min="0" max="100" step="1" placeholder="10">
+            <span>Spending limits</span>
+            <input type="checkbox" id="setting-limits-enabled">
           </div>
-          <div class="setting-item">
-            <span>Max Transaction (DIVI)</span>
-            <input type="number" id="setting-tx-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
+          <p class="setting-hint" id="limits-off-note" hidden>Off: any amount can be sent. Every send still asks for your password.</p>
+          <div id="limits-numbers">
+            <div class="setting-item">
+              <span>Per send (% of balance)</span>
+              <input type="number" id="setting-tx-limit-percent" min="0" max="100" step="1" placeholder="none">
+            </div>
+            <div class="setting-item">
+              <span>Per send (DIVI)</span>
+              <input type="number" id="setting-tx-limit-absolute" min="0" step="0.01" placeholder="none">
+            </div>
+            <div class="setting-item">
+              <span>Per day (% of balance)</span>
+              <input type="number" id="setting-daily-limit-percent" min="0" max="100" step="1" placeholder="none">
+            </div>
+            <div class="setting-item">
+              <span>Per day (DIVI)</span>
+              <input type="number" id="setting-daily-limit-absolute" min="0" step="0.01" placeholder="none">
+            </div>
+            <p class="setting-hint">The balance is the highest this wallet has seen in 7 days. A day is any 24 hours, fees included. A limit in DIVI does not depend on the balance a node reports. Empty = no limit. Raising a limit or switching them off asks for your password.</p>
           </div>
-          <div class="setting-item">
-            <span>Daily Limit (%)</span>
-            <input type="number" id="setting-daily-limit-percent" min="0" max="100" step="1" placeholder="25">
-          </div>
-          <div class="setting-item">
-            <span>Daily Limit (DIVI)</span>
-            <input type="number" id="setting-daily-limit-absolute" min="0" step="0.01" placeholder="0 = no limit">
-          </div>
-          <p class="setting-hint">The first two apply to each transaction, the daily ones to everything sent in 24 hours, fee included. A limit in DIVI is the strongest: it does not depend on the balance a node reports. 0 = no limit.</p>
           <div class="setting-item">
             <span>Security Phrase</span>
             <input type="text" id="setting-security-phrase" maxlength="40" placeholder="e.g. blue heron" autocomplete="off">

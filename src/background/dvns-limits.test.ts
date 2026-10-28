@@ -66,7 +66,7 @@ describe('a name record\'s fee and the transaction limits', () => {
       const payee = to === 'other' ? await foreignTestnetAddress() : to;
       const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: payee, amount, memo });
       expect(r.success).toBe(false);
-      expect(r.error).toMatch(/10% of balance/);
+      expect(r.error).toMatch(/10% of your balance per send/);
       if (memo) expect(r.error).toMatch(/only when the popup pays the registry exactly its fee/);
       expect(h.broadcasts).toHaveLength(0);
     });
@@ -76,7 +76,7 @@ describe('a name record\'s fee and the transaction limits', () => {
     await setLimits(h, { maxAmountAbsolute: 100 });
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: REGISTRY, amount: '500', memo: RECORD });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/maximum amount limit of 100 DIVI/);
+    expect(r.error).toMatch(/100 DIVI per send/);
     expect(h.broadcasts).toHaveLength(0);
   });
 
@@ -88,7 +88,7 @@ describe('a name record\'s fee and the transaction limits', () => {
     expect((await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: REGISTRY, amount: '500', memo: RECORD })).success).toBe(true);
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 150 });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/daily limit of 25%/);
+    expect(r.error).toMatch(/25% of your balance a day/);
     expect(h.broadcasts).toHaveLength(1);
   });
 });

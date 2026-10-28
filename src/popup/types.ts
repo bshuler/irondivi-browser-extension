@@ -43,6 +43,7 @@ export interface ConnectedSite {
 }
 
 export interface TransactionLimits {
+  enabled: boolean;
   maxAmountAbsolute: number;
   maxAmountPercent: number;
   dailyLimitAbsolute: number;

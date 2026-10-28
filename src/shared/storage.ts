@@ -50,6 +50,8 @@ export interface Contact {
 }
 
 export interface TransactionLimits {
+  // The Spending limits switch (ADR 0002): off, no limit below applies
+  enabled: boolean;
   // Absolute limit in DIVI (0 = no limit)
   maxAmountAbsolute: number;
   // Percentage of total balance (0-100, 0 = no limit)
@@ -296,6 +298,7 @@ export const DEFAULT_SETTINGS: Settings = {
   siteAccess: emptyAccess(),
   // Default transaction limits: 10% of the balance per transaction, 25% a day
   transactionLimits: {
+    enabled: true,
     maxAmountAbsolute: 0, // No absolute limit
     maxAmountPercent: 10, // 10% of balance
     dailyLimitAbsolute: 0, // No daily absolute limit
@@ -309,6 +312,11 @@ export async function getSettings(): Promise<Settings> {
   return normalizeSettings(settings);
 }
 
+/** Whether any of the four limits is above 0 */
+export function limitsSet(l: Omit<TransactionLimits, 'enabled'>): boolean {
+  return l.maxAmountAbsolute > 0 || l.maxAmountPercent > 0 || l.dailyLimitAbsolute > 0 || l.dailyLimitPercent > 0;
+}
+
 /** Stored settings (or none) as the wallet uses them */
 export function normalizeSettings(settings: Partial<Settings> | undefined): Settings {
   // Merge with defaults to ensure new fields are present
@@ -319,6 +327,8 @@ export function normalizeSettings(settings: Partial<Settings> | undefined): Sett
   if (settings && (settings.limitsVersion ?? 1) < 2 && !limits.dailyLimitAbsolute && !limits.dailyLimitPercent) {
     limits.dailyLimitPercent = DEFAULT_SETTINGS.transactionLimits.dailyLimitPercent;
   }
+  // Settings saved before the switch: on if any limit was set (ADR 0002)
+  if (typeof settings?.transactionLimits?.enabled !== 'boolean') limits.enabled = limitsSet(limits);
   const out: Settings = {
     ...merged,
     transactionLimits: limits,

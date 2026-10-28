@@ -13,7 +13,7 @@ async function foreignTestnetAddress(): Promise<string> {
   return a.address;
 }
 
-async function setLimits(h: Harness, limits: Record<string, number>) {
+async function setLimits(h: Harness, limits: Record<string, number | boolean>) {
   const { data } = await h.popup('GET_SETTINGS');
   const r = await h.popup('UPDATE_SETTINGS', {
     transactionLimits: { ...data.settings.transactionLimits, ...limits },
@@ -125,7 +125,7 @@ describe('H3 transaction limits', () => {
   it('the default refuses one send of more than 10% of the balance', async () => {
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 150 });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/10% of balance/);
+    expect(r.error).toMatch(/10% of your balance per send/);
     expect(h.broadcasts).toHaveLength(0);
   });
 
@@ -138,7 +138,7 @@ describe('H3 transaction limits', () => {
     expect(first.success).toBe(true);
     const second = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 2 });
     expect(second.success).toBe(false);
-    expect(second.error).toMatch(/daily limit/i);
+    expect(second.error).toMatch(/Over your spending limit: 3 DIVI a day \(up to 0\.99995 DIVI now, fee included\)/);
     expect(h.broadcasts).toHaveLength(1);
   });
 
@@ -155,7 +155,7 @@ describe('H3 transaction limits', () => {
     await setLimits(h, { maxAmountAbsolute: 1 });
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 1 });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/maximum amount/i);
+    expect(r.error).toMatch(/1 DIVI per send/);
   });
 });
 
@@ -205,7 +205,7 @@ describe('EXT-16 limits that a node cannot switch off', () => {
     }
     const fourth = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to, amount: 95 });
     expect(fourth.success).toBe(false);
-    expect(fourth.error).toMatch(/daily limit/i);
+    expect(fourth.error).toMatch(/of your balance a day/);
     expect(h.broadcasts).toHaveLength(3);
   });
 
@@ -230,7 +230,7 @@ describe('EXT-16 limits that a node cannot switch off', () => {
     h.fund(own, 20 * 1e8);
     const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 5 });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/10% of balance/);
+    expect(r.error).toMatch(/10% of your balance per send/);
   });
 });
 
@@ -246,4 +246,59 @@ describe('EXT-16 the owner can see and set the daily limits', () => {
     expect(ui).toMatch(/dailyLimitPercent: Math\.min\(100/);
     expect(ui).toMatch(/dailyLimitAbsolute: Math\.max\(0/);
   });
+});
+
+describe('ADR 0002 the Spending limits switch', () => {
+  it('a new wallet has the switch on', async () => {
+    const { data } = await h.popup('GET_SETTINGS');
+    expect(data.settings.transactionLimits.enabled).toBe(true);
+  });
+
+  it('switching it off needs the password, switching it on does not', async () => {
+    const { data } = await h.popup('GET_SETTINGS');
+    const off = { ...data.settings.transactionLimits, enabled: false };
+    expect((await h.popup('UPDATE_SETTINGS', { transactionLimits: off })).success).toBe(false);
+    expect((await h.popup('UPDATE_SETTINGS', { transactionLimits: off, password: TEST_PASSWORD })).success).toBe(true);
+    const on = { ...off, enabled: true };
+    expect((await h.popup('UPDATE_SETTINGS', { transactionLimits: on })).success).toBe(true);
+  });
+
+  it('a switch that is not true or false is refused', async () => {
+    const r = await h.popup('UPDATE_SETTINGS', { transactionLimits: { enabled: 'no' }, password: TEST_PASSWORD });
+    expect(r).toEqual({ success: false, error: 'Invalid limits' });
+  });
+
+  it('off, the whole wallet can be sent, past the fixed DIVI caps too', async () => {
+    await setLimits(h, { maxAmountAbsolute: 1, dailyLimitAbsolute: 1 });
+    await setLimits(h, { enabled: false });
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 999 });
+    expect(r.success).toBe(true);
+    expect(h.broadcasts).toHaveLength(1);
+  });
+
+  it('off, every send still needs the password', async () => {
+    await setLimits(h, { enabled: false });
+    const r = await h.popup('SEND_TRANSACTION', { to: await foreignTestnetAddress(), amount: 999 });
+    expect(r.success).toBe(false);
+    expect(h.broadcasts).toHaveLength(0);
+  });
+
+  it('a refusal names the limit, the most that can go now, and where to change it', async () => {
+    const r = await h.popup('SEND_TRANSACTION', { password: TEST_PASSWORD, to: await foreignTestnetAddress(), amount: 500 });
+    expect(r.error).toBe('Over your spending limit: 10% of your balance per send (up to 100 DIVI now, fee included). Settings → Spending limits');
+  });
+
+  for (const [what, numbers, enabled] of [
+    ['with a limit set is on', { maxAmountPercent: 10, dailyLimitPercent: 0 }, true],
+    ['with only a DIVI cap set is on', { maxAmountPercent: 0, dailyLimitPercent: 0, maxAmountAbsolute: 50 }, true],
+    ['with every limit at 0 is off', { maxAmountPercent: 0, dailyLimitPercent: 0, maxAmountAbsolute: 0, dailyLimitAbsolute: 0 }, false],
+  ] as const) {
+    it(`settings from before the switch ${what}`, async () => {
+      const { data } = await h.popup('GET_SETTINGS');
+      const limits = { ...data.settings.transactionLimits, ...numbers };
+      delete limits.enabled;
+      h.storage.settings = { ...data.settings, transactionLimits: limits };
+      expect((await h.popup('GET_SETTINGS')).data.settings.transactionLimits.enabled).toBe(enabled);
+    });
+  }
 });
