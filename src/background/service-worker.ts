@@ -40,7 +40,7 @@ const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
 // What a site may put in a send; the memo is the "memo" capability, and
-// "opReturn" is the same memo by the name the Divi Name Service page uses
+// "opReturn" is the same memo by the name the IronDivi Name Service page uses
 const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
 /**

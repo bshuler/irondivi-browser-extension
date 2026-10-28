@@ -32,8 +32,8 @@ describe('names (SPEC §1)', () => {
 });
 
 describe('the API base', () => {
-  it('is name.divi.cx in a release build', () => {
-    expect(DVNS_API).toBe('https://name.divi.cx/api/v1');
+  it('is name.irondivi.com in a release build', () => {
+    expect(DVNS_API).toBe('https://name.irondivi.com/api/v1');
     expect(dvnsApiBase()).toBe(DVNS_API);
   });
 });

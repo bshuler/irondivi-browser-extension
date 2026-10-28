@@ -1,5 +1,5 @@
 /**
- * Names: look up, register, update and delete Divi Name Service names
+ * Names: look up, register, update and delete IronDivi Name Service names
  * (divi-name-service SPEC.md §7). Each change is one payment the service
  * builds: the fee to the registry with the record as its memo, from the
  * account's address that pays (and so owns) the name. The owner checks and

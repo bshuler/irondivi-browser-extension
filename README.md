@@ -164,7 +164,7 @@ background and the popup all work out the same way (`src/shared/site-access.ts`)
 | `"denied"` | The user chose **Never** | As `"not_allowed"`, but `requestAccess()` resolves `"denied"` and opens no window |
 
 The default list is exact `https` origins, the same on Mainnet and Testnet, with
-no wildcards: `https://divi.cx`, `https://name.divi.cx`, `https://stakewatch.divi.cx`,
+no wildcards: `https://divi.cx`, `https://name.irondivi.com`, `https://stakewatch.divi.cx`,
 `https://games.divi.domains`, `https://browser.irondivi.com`,
 `https://services.divi.domains`, `https://intel.divi.domains`,
 `https://irondivi.com`, `https://www.irondivi.com`, `https://app.irondivi.com`,

@@ -32,7 +32,7 @@ interface TransactionRequest {
   fromAddresses?: string[];
   // UTF-8, 1 to 599 bytes, sent unchanged in one OP_RETURN output ("memo")
   memo?: string;
-  // The same as memo, by the name the Divi Name Service page uses
+  // The same as memo, by the name the IronDivi Name Service page uses
   opReturn?: string;
 }
 

@@ -32,7 +32,7 @@ describe('the OP_RETURN script', () => {
     expect(opReturnScript('x'.repeat(256))).toBe('6a4d0001' + hex('x'.repeat(256)));
     expect(opReturnScript('x'.repeat(300))).toBe('6a4d2c01' + hex('x'.repeat(300)));
     expect(opReturnScript('x'.repeat(512))).toBe('6a4d0002' + hex('x'.repeat(512)));
-    // A Divi Name Service record is at most 599 bytes (SPEC §7)
+    // A IronDivi Name Service record is at most 599 bytes (SPEC §7)
     expect(opReturnScript('x'.repeat(599))).toBe('6a4d5702' + hex('x'.repeat(599)));
     expect(() => opReturnScript('x'.repeat(600))).toThrow(/599/);
   });

@@ -2014,7 +2014,7 @@ body:not([data-network]) .network-bar {
   color: var(--danger);
 }
 
-/* Names view (Divi Name Service) */
+/* Names view (IronDivi Name Service) */
 .input-with-btn {
   display: flex;
   gap: 8px;

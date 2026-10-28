@@ -1,5 +1,5 @@
 /**
- * Divi Name Service (DVNS) client: names that stand for Divi addresses.
+ * IronDivi Name Service (DVNS) client: names that stand for Divi addresses.
  *
  * Protocol: divi-name-service SPEC.md. §1 says what a name is, §7 how a
  * wallet pays a record (POST build, send `send.amount` to `send.to` with
@@ -7,7 +7,7 @@
  * §8 how it sends to a name (GET resolve; show the name and the address; a
  * 404 is "not registered", never a fallback).
  *
- * The API is https://name.divi.cx/api/v1 for both networks (`?network=`).
+ * The API is https://name.irondivi.com/api/v1 for both networks (`?network=`).
  * A dev build (IRONDIVI_DEV=1) may point it elsewhere with IRONDIVI_DVNS_API,
  * e.g. a tunnel to the dev server; a release build cannot.
  */
@@ -17,7 +17,7 @@ import type { NetworkType } from '../shared/constants';
 declare const __IRONDIVI_DEV__: boolean | undefined;
 declare const __IRONDIVI_DVNS_API__: string | undefined;
 
-export const DVNS_API = 'https://name.divi.cx/api/v1';
+export const DVNS_API = 'https://name.irondivi.com/api/v1';
 
 export function dvnsApiBase(): string {
   const dev = typeof __IRONDIVI_DEV__ !== 'undefined' && __IRONDIVI_DEV__;
@@ -100,7 +100,7 @@ async function call(fetchImpl: Fetch, url: string, init?: RequestInit): Promise<
   try {
     res = await fetchImpl(url, { ...init, signal: ctl.signal });
   } catch {
-    throw new Error('The Divi Name Service could not be reached');
+    throw new Error('The IronDivi Name Service could not be reached');
   } finally {
     clearTimeout(timer);
   }
@@ -115,7 +115,7 @@ async function call(fetchImpl: Fetch, url: string, init?: RequestInit): Promise<
 
 function apiError(status: number, body: any): Error {
   const why = typeof body?.error === 'string' ? body.error : `HTTP ${status}`;
-  return new Error(`Divi Name Service: ${why}`);
+  return new Error(`IronDivi Name Service: ${why}`);
 }
 
 function post(fetchImpl: Fetch, path: string, data: unknown) {
@@ -139,7 +139,7 @@ export async function resolveName(name: string, network: NetworkType, fetchImpl:
   if (status === 404) return { status: 'not-registered', name: wanted };
   if (status !== 200 || !body) throw apiError(status, body);
   if (body.name !== wanted || body.network !== network || typeof body.divi !== 'string' || !body.divi) {
-    throw new Error('Divi Name Service: the answer was not for this name and network');
+    throw new Error('IronDivi Name Service: the answer was not for this name and network');
   }
   return {
     status: 'found',
@@ -182,7 +182,7 @@ export async function buildRecord(req: BuildRequest, fetchImpl: Fetch = fetch): 
   if (send.from !== req.payer || lines[0] !== 'DVNS1' ||
       !lines.includes(`op=${req.op}`) || !lines.includes(`name=${req.name}`) ||
       typeof send.to !== 'string' || !/^\d+(\.\d{1,8})?$/.test(String(send.amount))) {
-    throw new Error('Divi Name Service: the payment it built is not the one asked for');
+    throw new Error('IronDivi Name Service: the payment it built is not the one asked for');
   }
   return {
     name: req.name,

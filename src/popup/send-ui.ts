@@ -101,7 +101,7 @@ export async function handleSendConfirm(): Promise<void> {
     return;
   }
 
-  // The recipient: an address, or a Divi Name Service name that resolves to
+  // The recipient: an address, or a IronDivi Name Service name that resolves to
   // one (SPEC §8). A name that is not registered, or a lookup that fails,
   // stops here; nothing else is ever used in its place
   let toAddress = to;
