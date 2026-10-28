@@ -17,7 +17,9 @@ Picked from four options: **one switch, on for new wallets.**
    - **Per day:** up to N% of the balance across all sends in 24 hours, fees
      included (default 25).
    The balance is the highest balance the wallet has seen in the last 7 days,
-   so draining the wallet in steps does not shrink the limit.
+   so draining the wallet in steps does not shrink the limit. The day's cap is
+   (that balance + what was sent today) x the percentage, less what was sent
+   today; all three wallets compute it the same way.
 2. **New wallets start with the switch on.**
 3. **Turning it off asks for the password once.** After that any amount can be
    sent, including the whole wallet (MAX). Every send still asks for the
@@ -29,7 +31,9 @@ Picked from four options: **one switch, on for new wallets.**
    reads as "still on" (the bug the 2026-10-28 screenshots showed).
 6. A refused send says which limit, the most that can be sent now, and where
    to change it: "Over your spending limit: 10% of your balance per send (up
-   to 200 DIVI now). Settings → Spending limits."
+   to 200 DIVI now, fee included). Settings → Spending limits." The amount
+   includes the network fee, so the most the Amount box can take is that
+   less the fee.
 7. **Name fees:** paying the name registry exactly a record's fee from the
    wallet's own Names screen skips the percentage limits, still counts toward
    the day's total, and still needs the password. A site asking for the same
