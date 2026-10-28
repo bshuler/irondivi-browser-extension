@@ -198,3 +198,56 @@ export async function notifyRecord(network: NetworkType, txid: string, fetchImpl
   const { status, body } = await post(fetchImpl, 'notify', { network, txid });
   if (status < 200 || status >= 300) throw apiError(status, body);
 }
+
+/**
+ * The registry address on each network (SPEC §6: set at launch, published at
+ * /api/v1/info, never changed for DVNS1). Kept here so the wallet does not
+ * take the payee from the name service's answer on trust.
+ */
+export const DVNS_REGISTRY: Record<NetworkType, string> = {
+  mainnet: 'DLvH4kN6HHDoBDJPaK471tuJ73uvKcVmvF',
+  testnet: 'yKmDgfDZJmVTiPCkcWXfqGe1KAWL3bkXgx',
+};
+
+const RESERVED = new Set(['divi', 'telegram', 'name', 'names', 'admin', 'support', 'official', 'wallet', 'irondivi']);
+
+const SATS = 100_000_000n;
+
+/**
+ * What the record in `memo` costs (SPEC §4), in satoshis, or null when the
+ * memo is not one record of an operation and name a wallet would send.
+ * A reserved name (registry only, 1 DIVI) is null: it never needs a limit
+ * lifted.
+ */
+export function recordFeeSats(memo: string): bigint | null {
+  const lines = memo.split('\n');
+  if (lines[0] !== 'DVNS1') return null;
+  const fields = new Map<string, string>();
+  for (const line of lines.slice(1)) {
+    const at = line.indexOf('=');
+    if (at < 1) return null;
+    const key = line.slice(0, at);
+    if (fields.has(key)) return null;
+    fields.set(key, line.slice(at + 1));
+  }
+  const op = fields.get('op');
+  const name = fields.get('name') ?? '';
+  if (normalizeName(name) !== name) return null;
+  if (op === 'update' || op === 'delete') return 10n * SATS;
+  if (op !== 'register') return null;
+  if (name.includes('@')) return 10n * SATS;
+  if (RESERVED.has(name)) return null;
+  const fee = name.length === 3 ? 10_000n : name.length === 4 ? 5_000n : name.length === 5 ? 1_000n : 500n;
+  return fee * SATS;
+}
+
+/**
+ * True when a payment is a name record's fee and nothing more: to the
+ * registry of `network`, exactly the fee SPEC §4 sets for the record in its
+ * memo.
+ */
+export function isRecordFee(network: NetworkType, to: string, amountSats: bigint, memo: string | undefined): boolean {
+  if (to !== DVNS_REGISTRY[network] || memo === undefined) return false;
+  const fee = recordFeeSats(memo);
+  return fee !== null && fee === amountSats;
+}

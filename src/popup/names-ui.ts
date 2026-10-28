@@ -10,7 +10,7 @@ import { state } from './state';
 import { chunkAddress } from './recipient-check';
 import { showLoading, hideLoading, showToast, showView, hideView } from './ui-state';
 import { showSendConfirm } from './send-ui';
-import { buildRecord, nameFee, normalizeName, resolveName, type DvnsOp, type DvnsRecord } from '../lib/dvns';
+import { buildRecord, DVNS_REGISTRY, nameFee, normalizeName, resolveName, type DvnsOp, type DvnsRecord } from '../lib/dvns';
 import type { NetworkType } from '../shared/constants';
 
 // The fee an ordinary send of this size pays; the background works out the
@@ -143,6 +143,10 @@ export async function handleNameChange(op: DvnsOp): Promise<void> {
         ? { network: net, op, name, payer }
         : { network: net, op, name, payer, divi, fields: op === 'update' ? record?.fields : undefined },
     );
+    // The payee is the registry this wallet knows, not one the answer names
+    if (built.send.to !== DVNS_REGISTRY[net]) {
+      throw new Error('The name service asked for a payment to an address that is not the name registry');
+    }
     const amount = Number(built.send.amount);
     const verb = op === 'register' ? 'Register' : op === 'update' ? 'Update' : 'Delete';
     await showSendConfirm({
@@ -153,7 +157,7 @@ export async function handleNameChange(op: DvnsOp): Promise<void> {
       fromAddresses: [built.send.from],
       memo: built.send.memo,
       dvns: { op, name },
-    }, `${verb} the name ${name}; ${built.fee} DIVI goes to the name registry`);
+    }, `${verb} the name ${name}; ${built.fee} DIVI goes to the name registry. A record's exact fee is allowed past the percentage limits in Settings`);
     if (built.warnings.length) showToast(built.warnings.join('; '), 'error');
   } catch (error: unknown) {
     showToast(error instanceof Error ? error.message : 'The name service could not prepare that', 'error');

@@ -26,6 +26,7 @@ import { connectRelay, RELAY_ALARM, RELAY_PREFIX } from './connect-relay';
 import { swapService, SWAP_TICK_ALARM } from './swap-service';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
 import { notePaymentRefused, getPaymentNotice, dismissPaymentNotice } from './payment-notice';
+import { isRecordFee } from '../lib/dvns';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
 installRecordsSeal();
@@ -86,9 +87,12 @@ function diviText(sats: bigint): string {
 /**
  * Build (unsigned) a send from the account, enforcing the transaction limits
  * on what leaves the wallet: the amount plus the fee.
+ * A name record's fee paid from the popup (`recordFee`, see isRecordFee) is
+ * held to the absolute limits only: its payee and amount are fixed by the
+ * protocol, and the default 10% would block a 500 DIVI name below 5,000.
  * Throws with a user-facing message if the send is not allowed.
  */
-async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction & { balanceSats: bigint }> {
+async function buildSend(account: Account, request: TransactionRequest, recordFee = false): Promise<BuiltTransaction & { balanceSats: bigint }> {
   const addresses = account.addresses.map(a => a.address);
   // The node lists a coin as unspent until the send that spends it is mined,
   // so coins this wallet already spent are left out (EXT-27)
@@ -135,10 +139,14 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
   if (limits.maxAmountAbsolute > 0 && spend > diviToSatoshis(limits.maxAmountAbsolute)) {
     throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI (amount plus fee)`);
   }
-  if (limits.maxAmountPercent > 0) {
+  // Why a name record's fee was held to a percentage limit after all
+  const recordNote = !recordFee && request.memo?.startsWith('DVNS1\n')
+    ? '. A name record goes past the percentage limits only when the popup pays the registry exactly its fee'
+    : '';
+  if (limits.maxAmountPercent > 0 && !recordFee) {
     const bp = basisPoints(limits.maxAmountPercent);
     if (spend * 10000n > balance * bp) {
-      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${diviText(balance * bp / 10000n)} DIVI including the fee)`);
+      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${diviText(balance * bp / 10000n)} DIVI including the fee)${recordNote}`);
     }
   }
 
@@ -147,11 +155,11 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
     if (limits.dailyLimitAbsolute > 0 && spent + spend > diviToSatoshis(limits.dailyLimitAbsolute)) {
       throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitAbsolute} DIVI (sent in the last 24 hours: ${diviText(spent)} DIVI)`);
     }
-    if (limits.dailyLimitPercent > 0) {
+    if (limits.dailyLimitPercent > 0 && !recordFee) {
       // The balance 24 hours ago is roughly today's plus what was sent since
       const bp = basisPoints(limits.dailyLimitPercent);
       if ((spent + spend) * 10000n > (balance + spent) * bp) {
-        throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitPercent}% of balance`);
+        throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitPercent}% of balance${recordNote}`);
       }
     }
   }
@@ -353,9 +361,10 @@ class FeeRoseError extends Error {
 async function sendFromAccount(
   account: Account,
   request: TransactionRequest,
-  maxFeeSats?: bigint
+  maxFeeSats?: bigint,
+  recordFee = false
 ): Promise<{ txid: string; fee: number }> {
-  const built = await buildSend(account, request);
+  const built = await buildSend(account, request, recordFee);
   if (maxFeeSats !== undefined && built.feeSats > maxFeeSats) {
     throw new FeeRoseError();
   }
@@ -813,7 +822,14 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         // From the popup: every send needs the password, so an open session
         // alone sends nothing
         if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
-        const sent = await sendFromAccount(account, request);
+        // Only the owner, in the popup, gets a name record's fee past the
+        // percentage limits; a site's payment never does. A bad amount is
+        // left for the build to name.
+        let recordFee = false;
+        try {
+          recordFee = isRecordFee(account.network, request.to, parseDiviAmount(request.amount), request.memo);
+        } catch { /* not a record fee */ }
+        const sent = await sendFromAccount(account, request, undefined, recordFee);
         return { success: true, data: sent };
       }
 

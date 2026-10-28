@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildRecord, DVNS_API, dvnsApiBase, looksLikeName, normalizeName, notifyRecord, resolveName } from './dvns';
+import { buildRecord, DVNS_API, DVNS_REGISTRY, dvnsApiBase, isRecordFee, looksLikeName, normalizeName, notifyRecord, recordFeeSats, resolveName } from './dvns';
 
 const PAYER = 'y2wgejXn4xeS95Jw5vdHzyQkfPjAihXYBU';
 const REGISTRY = 'yKmDgfDZJmVTiPCkcWXfqGe1KAWL3bkXgx';
@@ -91,5 +91,40 @@ describe('build and notify (SPEC §7)', () => {
     await notifyRecord('testnet', 'ab'.repeat(32), f);
     expect(JSON.parse(String(f.mock.calls[0][1]?.body))).toEqual({ network: 'testnet', txid: 'ab'.repeat(32) });
     await expect(notifyRecord('testnet', 'x', reply(400, { error: 'bad txid' }))).rejects.toThrow(/bad txid/);
+  });
+});
+
+describe('a record\'s fee (SPEC §4, §6)', () => {
+  const DIVI = 100_000_000n;
+  const memo = (op: string, name: string, extra = '') => `DVNS1\nop=${op}\nname=${name}${extra}`;
+
+  it('is priced from the record alone', () => {
+    expect(recordFeeSats(memo('register', 'abc', `\ndivi=${PAYER}`))).toBe(10_000n * DIVI);
+    expect(recordFeeSats(memo('register', 'abcd'))).toBe(5_000n * DIVI);
+    expect(recordFeeSats(memo('register', 'abcde'))).toBe(1_000n * DIVI);
+    expect(recordFeeSats(memo('register', 'siegeworlds'))).toBe(500n * DIVI);
+    expect(recordFeeSats(memo('register', 'bert@telegram'))).toBe(10n * DIVI);
+    expect(recordFeeSats(memo('update', 'siegeworlds'))).toBe(10n * DIVI);
+    expect(recordFeeSats(memo('delete', 'bert@telegram'))).toBe(10n * DIVI);
+  });
+
+  it('is unknown for anything that is not one plain record', () => {
+    expect(recordFeeSats('hello')).toBeNull();
+    expect(recordFeeSats(memo('register', 'divi'))).toBeNull(); // reserved: registry only
+    expect(recordFeeSats(memo('transfer', 'siegeworlds'))).toBeNull();
+    expect(recordFeeSats(memo('register', 'Siegeworlds'))).toBeNull();
+    expect(recordFeeSats(memo('register', '@bert'))).toBeNull();
+    expect(recordFeeSats(memo('register', 'siegeworlds', '\nname=abc'))).toBeNull();
+    expect(recordFeeSats(memo('register', 'siegeworlds', '\nno equals'))).toBeNull();
+  });
+
+  it('counts only when the registry of the network gets exactly that fee', () => {
+    const m = memo('register', 'siegeworlds');
+    expect(DVNS_REGISTRY.testnet).toBe(REGISTRY);
+    expect(isRecordFee('testnet', REGISTRY, 500n * DIVI, m)).toBe(true);
+    expect(isRecordFee('mainnet', REGISTRY, 500n * DIVI, m)).toBe(false);
+    expect(isRecordFee('testnet', PAYER, 500n * DIVI, m)).toBe(false);
+    expect(isRecordFee('testnet', REGISTRY, 501n * DIVI, m)).toBe(false);
+    expect(isRecordFee('testnet', REGISTRY, 500n * DIVI, undefined)).toBe(false);
   });
 });
