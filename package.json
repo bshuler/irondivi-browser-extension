@@ -1,6 +1,6 @@
 {
   "name": "irondivi-browser-extension",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "IronDivi Wallet Browser Extension",
   "type": "module",
   "engines": {
