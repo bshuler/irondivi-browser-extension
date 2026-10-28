@@ -89,7 +89,7 @@ export interface Harness {
    */
   restartWorker: () => Promise<void>;
   /** Open a wallet window's port to the background, as the popup does; from another URL if given */
-  openUiPort: (url?: string) => { disconnect: () => void };
+  openUiPort: (url?: string) => { disconnect: () => void; messages: any[] };
   /** Tell the background the idle state changed ('active', 'idle' or 'locked') */
   setIdleState: (state: string) => void;
   /** Whether the running worker's signing session is open (for the account) */
@@ -424,9 +424,10 @@ export async function createHarness(
     restartWorker,
     openUiPort: (url = `${EXT_BASE}popup.html`) => {
       const onDisconnect = event();
-      const port = { name: 'irondivi-ui', sender: { id: EXT_ID, url }, onDisconnect, onMessage: event() };
+      const messages: any[] = [];
+      const port = { name: 'irondivi-ui', sender: { id: EXT_ID, url }, onDisconnect, onMessage: event(), postMessage: (m: any) => { messages.push(m); } };
       onConnect.listeners.forEach(l => l(port));
-      return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)) };
+      return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)), messages };
     },
     setIdleState: (state) => onIdle.listeners.forEach(l => l(state)),
     isAuthenticated: async (accountId?: string) =>

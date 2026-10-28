@@ -28,6 +28,12 @@
       <button class="link-btn" id="records-warning-dismiss">Dismiss</button>
     </div>
 
+    <!-- The server chosen in Settings is not reachable. There is no silent fallback. -->
+    <div class="records-warning hidden" id="server-banner" role="alert">
+      <span id="server-banner-text"></span>
+      <button class="link-btn" id="server-banner-default">Use IronDivi until I close the wallet</button>
+    </div>
+
     <!-- Safari grants host permissions per website: ask for the Divi services -->
     <div class="records-warning hidden" id="service-access" role="alert">
       <span>Allow IronDivi to reach the Divi network so it can show your balance and history and send.</span>
@@ -58,6 +64,9 @@
         <button class="menu-item danger" id="menu-delete-account-btn">Remove this wallet from this device</button>
       </div>
     </div>
+
+    <!-- Shown whenever the server is not the default, so nobody forgets they switched -->
+    <div class="server-label hidden" id="server-label"></div>
 
     <!-- Main Balance Display -->
     <div class="balance-section" id="balance-section">
@@ -311,6 +320,20 @@
           </select>
         </div>
         <p class="setting-hint">The wallet also locks sooner if the browser pauses the extension.</p>
+        <div class="setting-section" id="server-section">
+          <h3 id="server-heading">Server</h3>
+          <label class="server-choice"><input type="radio" name="server-mode" value="default"> IronDivi (standard)</label>
+          <label class="server-choice"><input type="radio" name="server-mode" value="public"> IronDivi public Electrum <span class="server-host">electrum.irondivi.com</span></label>
+          <label class="server-choice"><input type="radio" name="server-mode" value="own"> My own server</label>
+          <input type="text" id="server-url" class="server-url" placeholder="wss://mybox.tail1234.ts.net:50004" autocomplete="off" spellcheck="false">
+          <div class="server-actions">
+            <button class="secondary-btn" id="server-test-btn">Test</button>
+            <button class="primary-btn" id="server-save-btn" disabled>Save</button>
+          </div>
+          <p class="setting-hint" id="server-result" role="status"></p>
+          <p class="setting-hint" id="server-using"></p>
+          <p class="setting-hint">Keys never leave this device on any setting. The faucet, explorer links and atomic swaps always use IronDivi. Your own server is trusted the way IronDivi is today, but nobody else sees your addresses. Use <a href="https://irondivi.com/electrum/" target="_blank" rel="noopener">the guide</a> to run one.</p>
+        </div>
         <div class="setting-section">
           <h3>Wallets on this device</h3>
           <button class="setting-item" id="rename-account-btn">

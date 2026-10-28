@@ -2,6 +2,7 @@
  * Wallet UI - balance display, transaction list, address display
  */
 
+import { refreshServerUI } from './server-ui';
 import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showToast, showView, hideView } from './ui-state';
@@ -54,6 +55,7 @@ export async function loadBalance(): Promise<void> {
     updateBalanceDisplay();
   } catch (error) {
     console.error('Failed to load balance');
+    void refreshServerUI();
     if (await explainedByMissingAccess()) return;
     showToast('Failed to load balance. Please try again.', 'error');
   }
@@ -71,6 +73,7 @@ export async function loadTransactions(): Promise<void> {
     updateTransactionList();
   } catch (error) {
     console.error('Failed to load transactions');
+    void refreshServerUI();
     if (await explainedByMissingAccess()) return;
     showToast('Failed to load transactions. Please try again.', 'error');
   }

@@ -2,6 +2,7 @@
  * Settings UI - settings panel, network switching, connected sites
  */
 
+import { refreshServerUI } from './server-ui';
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView } from './ui-state';
@@ -58,6 +59,7 @@ export async function loadConnectedSites(): Promise<void> {
 export function updateSettingsDisplay(): void {
   // The stylesheet colours the whole popup by network (red Mainnet, purple Testnet)
   document.body.dataset.network = state.settings.network;
+  void refreshServerUI();
 
   const networkName = elements.networkBadge.querySelector('.network-name');
   if (networkName) {

@@ -10,6 +10,8 @@ import { Transaction, bytesToHex } from '../lib/transaction';
 import { recordSpend, spentToday } from './spend-ledger';
 import { highWaterBalance, recordBalance } from './balance-record';
 import { rpcClient } from './rpc-client';
+import { chain, getServerConfig, saveServerConfig } from './chain';
+import { PUBLIC_ELECTRUM, cleanServerUrl, type ServerConfig, type ServerMode } from '../shared/server-config';
 import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePendingTxs } from './pending-txs';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
@@ -90,7 +92,7 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
   // The node lists a coin as unspent until the send that spends it is mined,
   // so coins this wallet already spent are left out (EXT-27)
   const pendingSpends = await getPendingSpends(account.network);
-  const listed = await rpcClient.getUtxos(addresses);
+  const listed = await chain.getUtxos(addresses);
   const utxos = listed.filter(u => !pendingSpends.has(outpoint(u)));
 
   let built: BuiltTransaction;
@@ -311,7 +313,7 @@ async function verifyInputs(built: BuiltTransaction): Promise<void> {
   for (const input of built.inputs) {
     let prev = byTxid.get(input.txid);
     if (!prev) {
-      prev = Transaction.fromHex(await rpcClient.getRawTransactionHex(input.txid));
+      prev = Transaction.fromHex(await chain.getRawTransactionHex(input.txid));
       if (prev.txid() !== input.txid) {
         throw new Error('Node returned a different transaction than the coin being spent');
       }
@@ -375,7 +377,7 @@ async function sendFromAccount(
       network: account.network,
       memo: request.memo,
     });
-    const txid = await rpcClient.broadcastTransaction(signedHex);
+    const txid = await chain.broadcastTransaction(signedHex);
     await recordSpend(account.id, account.network, built.amountSats + built.feeSats);
     await addPendingTx(account.network, txid, built.inputs);
     return { txid, fee: built.fee };
@@ -563,7 +565,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         const addresses = payload?.address
           ? [resolveAddress(account, payload.address).address]
           : account.addresses.map(a => a.address);
-        const balance = await rpcClient.getBalance(addresses);
+        const balance = await chain.getBalance(addresses);
         if (!payload?.address && Number.isFinite(balance) && balance > 0) {
           await recordBalance(account.id, account.network, diviToSatoshis(balance));
         }
@@ -584,7 +586,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         const ourAddresses = account.addresses.map(a => a.address);
         const ourAddressSet = new Set(ourAddresses);
         const pendingTxids = await getPendingTxids(account.network);
-        const history = await rpcClient.getTransactionHistory(ourAddresses, payload?.limit || 50, pendingTxids);
+        const history = await chain.getTransactionHistory(ourAddresses, payload?.limit || 50, pendingTxids);
         await prunePendingTxs(account.network, new Set(history.filter(tx => tx.confirmations > 0).map(tx => tx.txid)));
 
         // Map to UI Transaction format
@@ -844,7 +846,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true };
 
       case MSG.VALIDATE_ADDRESS: {
-        const isValid = await rpcClient.validateAddress(payload.address);
+        const isValid = await chain.validateAddress(payload.address);
         return { success: true, data: { isValid } };
       }
 
@@ -858,6 +860,46 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
       // payment was refused
       case MSG.GET_RECORDS_WARNING:
         return { success: true, data: { warning: await getRecordsWarning() ?? await getPaymentNotice() } };
+
+      case MSG.GET_SERVER:
+        return { success: true, data: await chain.status() };
+
+      // Test a server address without saving it (design §5, §6)
+      case MSG.TEST_SERVER: {
+        const url = cleanServerUrl(payload?.url);
+        if (!url) return { success: false, error: 'Use an address that starts with wss://' };
+        return { success: true, data: await chain.test(url, rpcClient.getNetwork()) };
+      }
+
+      // Save is only for a server that passed the test just now
+      case MSG.SET_SERVER: {
+        const network = payload?.network as NetworkType;
+        const mode = payload?.mode as ServerMode;
+        if (!Object.prototype.hasOwnProperty.call(NETWORKS, network) || !['default', 'public', 'own'].includes(mode)) {
+          return { success: false, error: 'Invalid server setting' };
+        }
+        const current = await getServerConfig();
+        const next: ServerConfig = { ...current };
+        if (mode === 'own' || mode === 'public') {
+          const url = mode === 'public' ? PUBLIC_ELECTRUM[network] : cleanServerUrl(payload.url);
+          if (!url) return { success: false, error: 'Use an address that starts with wss://' };
+          const check = await chain.test(url, network);
+          if (!check.ok) return { success: false, error: check.message };
+          next[network] = mode === 'own' ? { mode, url } : { mode };
+        } else {
+          next[network] = { mode };
+        }
+        await saveServerConfig(next);
+        chain.reset();
+        stopPush();
+        void startPush();
+        return { success: true, data: await chain.status() };
+      }
+
+      case MSG.USE_DEFAULT_SERVER_SESSION:
+        chain.useDefaultThisSession();
+        stopPush();
+        return { success: true, data: await chain.status() };
 
       case MSG.DISMISS_RECORDS_WARNING:
         if (await getRecordsWarning()) await dismissRecordsWarning();
@@ -901,6 +943,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         // Update RPC client network if changed
         if (updates.network) {
           rpcClient.setNetwork(updates.network);
+          chain.reset();
+          stopPush();
+          void startPush();
         }
         // The wallet's scripts follow the allowed sites
 
@@ -1200,11 +1245,50 @@ runtime.onConnect?.addListener((port: chrome.runtime.Port) => {
   // Only the extension's own pages; a content script's port has a web page URL
   if (port.name !== UI_PORT || !port.sender?.url?.startsWith(runtime.getURL(''))) return;
   openUiPorts.add(port);
+  void startPush();
   port.onDisconnect.addListener(() => {
     openUiPorts.delete(port);
-    if (openUiPorts.size === 0) void signingSession.clearSession();
+    if (openUiPorts.size === 0) {
+      void signingSession.clearSession();
+      stopPush();
+      chain.endSession();
+    }
   });
 });
+
+// With a chosen Electrum server the node pushes new blocks and changes to our
+// addresses; tell the open windows to refresh. The default path has no push.
+let stopWatching: Array<() => void> = [];
+let pushStarting = false;
+function tellWindows(): void {
+  for (const port of openUiPorts) {
+    try { port.postMessage({ type: 'chain-push' }); } catch { /* window went away */ }
+  }
+}
+async function startPush(): Promise<void> {
+  if (stopWatching.length > 0 || pushStarting) return;
+  pushStarting = true;
+  try {
+    const off: Array<() => void> = [];
+    const blocks = await chain.watchBlocks(tellWindows);
+    if (blocks) off.push(blocks);
+    const account = await accountManager.getSelectedAccount();
+    if (account && blocks) {
+      const addrs = await chain.watchAddresses(account.addresses.map(a => a.address), tellWindows);
+      if (addrs) off.push(addrs);
+    }
+    stopWatching = off;
+    if (openUiPorts.size === 0) stopPush();
+  } catch {
+    // No push is not an error: the wallet refreshes when asked
+  } finally {
+    pushStarting = false;
+  }
+}
+function stopPush(): void {
+  stopWatching.forEach(off => off());
+  stopWatching = [];
+}
 
 // Lock when the screen locks
 idle.onStateChanged?.addListener((state: string) => {

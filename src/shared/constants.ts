@@ -78,6 +78,10 @@ export const MSG = {
   UPDATE_SETTINGS: 'UPDATE_SETTINGS',
   // The notice left when the records were found changed outside the wallet
   GET_RECORDS_WARNING: 'GET_RECORDS_WARNING',
+  GET_SERVER: 'GET_SERVER',
+  TEST_SERVER: 'TEST_SERVER',
+  SET_SERVER: 'SET_SERVER',
+  USE_DEFAULT_SERVER_SESSION: 'USE_DEFAULT_SERVER_SESSION',
   DISMISS_RECORDS_WARNING: 'DISMISS_RECORDS_WARNING',
 
   // dApp connection
@@ -271,6 +275,10 @@ export type WalletMessage =
   | { type: typeof MSG.GET_SETTINGS; payload?: GetSettingsPayload }
   | { type: typeof MSG.UPDATE_SETTINGS; payload: UpdateSettingsPayload }
   | { type: typeof MSG.GET_RECORDS_WARNING; payload?: undefined }
+  | { type: typeof MSG.GET_SERVER; payload?: undefined }
+  | { type: typeof MSG.TEST_SERVER; payload: { url: string } }
+  | { type: typeof MSG.SET_SERVER; payload: { network: NetworkType; mode: string; url?: string } }
+  | { type: typeof MSG.USE_DEFAULT_SERVER_SESSION; payload?: undefined }
   | { type: typeof MSG.DISMISS_RECORDS_WARNING; payload?: undefined }
   | { type: typeof MSG.CONNECT; payload?: ConnectPayload }
   | { type: typeof MSG.DISCONNECT; payload?: DisconnectPayload }

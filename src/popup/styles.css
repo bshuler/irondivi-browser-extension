@@ -2046,3 +2046,40 @@ body:not([data-network]) .network-bar {
   font-weight: 600;
   word-break: break-all;
 }
+
+/* Settings -> Server, the home-screen label and the unreachable banner */
+.server-label {
+  margin: 6px 12px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+  align-self: center;
+}
+.server-label.hidden { display: none; }
+.server-choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.server-host { color: var(--text-muted); font-size: 11px; }
+.server-url {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.server-url:disabled { opacity: 0.5; }
+.server-actions { display: flex; gap: 8px; }
+.server-actions button { flex: 1; }
+#server-result[data-ok="true"] { color: var(--success); }
+#server-result[data-ok="false"] { color: var(--danger); }
