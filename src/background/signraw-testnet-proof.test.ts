@@ -69,7 +69,7 @@ function findMnemonic(words: string[]): string {
       if (Mnemonic.validate(cand)) return cand;
     }
   }
-  throw new Error('seed format unrecognized (not a BIP39 mnemonic in the note) — PAUSED for Bert');
+  throw new Error('seed format unrecognized (not a BIP39 mnemonic in the note) — PAUSED for Human');
 }
 
 /** Derive {priv, address} at an index. Copies priv out before wiping the HD material. */
