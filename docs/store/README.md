@@ -118,5 +118,5 @@ git archive --format=zip -o packages/store/irondivi-wallet-source-v$v.zip v$v
 ## Safari (Mac App Store)
 
 `scripts/safari.sh` builds the app with Xcode. Signing, notarization and the
-App Store listing need Bert's Apple Developer account; reuse the text above,
+App Store listing need Human's Apple Developer account; reuse the text above,
 the privacy policy URL, and "Data Not Collected" for App Privacy.

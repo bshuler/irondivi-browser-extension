@@ -11,15 +11,15 @@ function reply(status: number, body: unknown) {
 
 describe('names (SPEC §1)', () => {
   it('lowercases, reads @handle as handle@telegram, and keeps tags', () => {
-    expect(normalizeName('BertShuler')).toBe('bertshuler');
-    expect(normalizeName(' @Bert ')).toBe('bert@telegram');
-    expect(normalizeName('bert@siegeworlds')).toBe('bert@siegeworlds');
+    expect(normalizeName('Human')).toBe('human');
+    expect(normalizeName(' @Human ')).toBe('human@telegram');
+    expect(normalizeName('human@siegeworlds')).toBe('human@siegeworlds');
     expect(normalizeName('a@siegeworlds')).toBe('a@siegeworlds');
     expect(normalizeName('my_name-2')).toBe('my_name-2');
   });
 
   it('refuses what is not a name', () => {
-    for (const bad of ['', 'ab', '-abc', 'abc-', '_abc', 'a b c', 'a@b@c', 'x'.repeat(33), 'bert@ab', 'bé', 'a.b.c']) {
+    for (const bad of ['', 'ab', '-abc', 'abc-', '_abc', 'a b c', 'a@b@c', 'x'.repeat(33), 'human@ab', 'bé', 'a.b.c']) {
       expect(normalizeName(bad), bad).toBeNull();
     }
   });
@@ -39,13 +39,13 @@ describe('the API base', () => {
 });
 
 describe('resolve (SPEC §8)', () => {
-  const found = { name: 'bertshuler', network: 'testnet', divi: PAYER, owner: PAYER, fields: { kind: 'person' } };
+  const found = { name: 'human', network: 'testnet', divi: PAYER, owner: PAYER, fields: { kind: 'person' } };
 
   it('returns the address for a registered name', async () => {
     const f = reply(200, found);
-    const r = await resolveName('BertShuler', 'testnet', f);
+    const r = await resolveName('Human', 'testnet', f);
     expect(r).toEqual({ status: 'found', record: { ...found } });
-    expect(f.mock.calls[0][0]).toBe(`${DVNS_API}/resolve/bertshuler?network=testnet`);
+    expect(f.mock.calls[0][0]).toBe(`${DVNS_API}/resolve/human?network=testnet`);
   });
 
   it('a 404 is "not registered"', async () => {
@@ -54,13 +54,13 @@ describe('resolve (SPEC §8)', () => {
   });
 
   it('any other answer is an error, never an address', async () => {
-    await expect(resolveName('bertshuler', 'testnet', reply(500, { error: 'boom' }))).rejects.toThrow(/boom/);
-    await expect(resolveName('bertshuler', 'testnet', vi.fn(async () => { throw new TypeError('offline'); })))
+    await expect(resolveName('human', 'testnet', reply(500, { error: 'boom' }))).rejects.toThrow(/boom/);
+    await expect(resolveName('human', 'testnet', vi.fn(async () => { throw new TypeError('offline'); })))
       .rejects.toThrow(/could not be reached/);
     // An answer for another network or name is refused
-    await expect(resolveName('bertshuler', 'mainnet', reply(200, found))).rejects.toThrow(/not for this name/);
+    await expect(resolveName('human', 'mainnet', reply(200, found))).rejects.toThrow(/not for this name/);
     await expect(resolveName('telegram', 'testnet', reply(200, found))).rejects.toThrow(/not for this name/);
-    await expect(resolveName('bertshuler', 'testnet', reply(200, { ...found, divi: '' }))).rejects.toThrow();
+    await expect(resolveName('human', 'testnet', reply(200, { ...found, divi: '' }))).rejects.toThrow();
   });
 });
 
@@ -103,9 +103,9 @@ describe('a record\'s fee (SPEC §4, §6)', () => {
     expect(recordFeeSats(memo('register', 'abcd'))).toBe(5_000n * DIVI);
     expect(recordFeeSats(memo('register', 'abcde'))).toBe(1_000n * DIVI);
     expect(recordFeeSats(memo('register', 'siegeworlds'))).toBe(500n * DIVI);
-    expect(recordFeeSats(memo('register', 'bert@telegram'))).toBe(10n * DIVI);
+    expect(recordFeeSats(memo('register', 'human@telegram'))).toBe(10n * DIVI);
     expect(recordFeeSats(memo('update', 'siegeworlds'))).toBe(10n * DIVI);
-    expect(recordFeeSats(memo('delete', 'bert@telegram'))).toBe(10n * DIVI);
+    expect(recordFeeSats(memo('delete', 'human@telegram'))).toBe(10n * DIVI);
   });
 
   it('is unknown for anything that is not one plain record', () => {
@@ -113,7 +113,7 @@ describe('a record\'s fee (SPEC §4, §6)', () => {
     expect(recordFeeSats(memo('register', 'divi'))).toBeNull(); // reserved: registry only
     expect(recordFeeSats(memo('transfer', 'siegeworlds'))).toBeNull();
     expect(recordFeeSats(memo('register', 'Siegeworlds'))).toBeNull();
-    expect(recordFeeSats(memo('register', '@bert'))).toBeNull();
+    expect(recordFeeSats(memo('register', '@human'))).toBeNull();
     expect(recordFeeSats(memo('register', 'siegeworlds', '\nname=abc'))).toBeNull();
     expect(recordFeeSats(memo('register', 'siegeworlds', '\nno equals'))).toBeNull();
   });

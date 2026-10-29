@@ -94,7 +94,7 @@ Safari build is a two-step: `dist/safari/` holds the extension, and
 instead (the team's account must be added in Xcode > Settings > Accounts).
 Safari turns Allow Unsigned Extensions off every time it quits, and then
 reports an ad-hoc build as "no longer valid". For a Mac you use every day,
-sign with the team instead: on Bert's Mac that is
+sign with the team instead: on Human's Mac that is
 `SAFARI_SIGN=VGX52CQGPT npm run build:safari:app`, which needs no Develop
 setting. Re-signing resets Safari's on/off switch and website access for the
 extension, so enable it again afterwards.

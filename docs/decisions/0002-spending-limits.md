@@ -1,6 +1,6 @@
 # ADR 0002: One spending-limits switch, the same in every IronDivi wallet
 
-Date: 2026-10-28. Decided by Bert.
+Date: 2026-10-28. Decided by Human.
 
 ## Ruling
 
