@@ -51,16 +51,47 @@ async function chooseOwn(): Promise<void> {
 }
 
 describe('the default server', () => {
-  it('is IronDivi (standard): no Electrum socket, today’s RPC calls', async () => {
+  // The default asks IronDivi's public Electrum server; the test points it at the fake
+  async function publicServerAt(url: string): Promise<void> {
+    const { chain } = await import('./chain');
+    chain.webSocket = class extends WS { constructor() { super(url); sockets++; } };
+  }
+
+  it('is IronDivi (standard): public Electrum first, no RPC proxy calls', async () => {
+    const addr = account.addresses[0].address;
+    server.setBalance(addr, 700 * 1e8, 5 * 1e8);
+    await publicServerAt(server.url);
     const status = await h.popup('GET_SERVER');
     expect(status.data.config).toEqual({ mainnet: { mode: 'default' }, testnet: { mode: 'default' } });
     expect(status.data.problem).toBeNull();
-    const bal = await h.popup('GET_BALANCE');
-    expect(bal.data.balance).toBe(1000);
+    expect(status.data.fellBack).toBe(false);
+    expect((await h.popup('GET_BALANCE')).data.balance).toBe(705);
     expect(await h.popup('GET_TRANSACTIONS')).toMatchObject({ success: true });
-    expect(sockets).toBe(0);
-    expect(rpcMethods()).toContain('getaddressbalance');
+    expect(sockets).toBeGreaterThan(0);
+    expect(rpcMethods().filter(m => m !== 'getblockcount')).toEqual([]);
     expect(h.storage.server).toBeUndefined();
+  });
+
+  it('falls back to the RPC proxy, silently, for the rest of the session when Electrum is down', async () => {
+    await server.stop();
+    await publicServerAt(server.url);
+    const bal = await h.popup('GET_BALANCE');
+    expect(bal.success).toBe(true);
+    expect(bal.data.balance).toBe(1000);
+    const status = await h.popup('GET_SERVER');
+    expect(status.data.problem).toBeNull();
+    expect(status.data.fellBack).toBe(true);
+    expect(rpcMethods()).toContain('getaddressbalance');
+    // Not tried again until the wallet closes, and never saved
+    const tried = sockets;
+    await h.popup('GET_BALANCE');
+    expect(sockets).toBe(tried);
+    expect(h.storage.server).toBeUndefined();
+    const port = h.openUiPort();
+    port.disconnect();
+    expect((await h.popup('GET_SERVER')).data.fellBack).toBe(false);
+    server = new FakeElectrum('testnet');
+    await server.start();
   });
 });
 
@@ -179,6 +210,8 @@ describe('a chosen Electrum server (against the fake server)', () => {
   it('goes back to the default by choice', async () => {
     const r = await h.popup('SET_SERVER', { network: 'testnet', mode: 'default' });
     expect(r.data.config.testnet).toEqual({ mode: 'default' });
-    expect((await h.popup('GET_BALANCE')).data.balance).toBe(1000);
+    // The test's socket factory stands in for public Electrum too
+    expect((await h.popup('GET_BALANCE')).data.balance).toBe(705);
+    expect((await h.popup('GET_SERVER')).data).toMatchObject({ problem: null, fellBack: false });
   });
 });

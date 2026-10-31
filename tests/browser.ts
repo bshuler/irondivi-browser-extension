@@ -38,7 +38,13 @@ export function resolveLaunch(): { channel?: string; executablePath?: string } {
   );
 }
 
-export async function launchWithExtension(extensionPath: string): Promise<BrowserContext> {
+// The default server tries IronDivi's public Electrum first. Tests that mock the
+// RPC proxy make its name unresolvable so the wallet falls back to the mock (a
+// route would not do: Playwright does not see the service worker's sockets); a
+// live test passes { liveElectrum: true } to reach the real server.
+export async function launchWithExtension(
+  extensionPath: string, { liveElectrum = false }: { liveElectrum?: boolean } = {},
+): Promise<BrowserContext> {
   const launch = resolveLaunch();
   return chromium.launchPersistentContext('', {
     ...launch,
@@ -49,6 +55,7 @@ export async function launchWithExtension(extensionPath: string): Promise<Browse
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      ...(liveElectrum ? [] : ['--host-resolver-rules=MAP electrum.irondivi.com ~NOTFOUND']),
     ],
   });
 }

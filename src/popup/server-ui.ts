@@ -13,6 +13,7 @@ interface Status {
   config: Record<string, ServerChoice>;
   sessionDefault: boolean;
   problem: string | null;
+  fellBack: boolean;
 }
 interface Check { ok: boolean; message: string }
 
@@ -33,7 +34,7 @@ function syncButtons(): void {
   const url = $<HTMLInputElement>('server-url');
   if (url) url.disabled = mode !== 'own';
   const test = $<HTMLButtonElement>('server-test-btn');
-  if (test) test.disabled = mode === 'default';
+  if (test) test.disabled = false;
   const save = $<HTMLButtonElement>('server-save-btn');
   if (save) save.disabled = mode !== 'default' && passedKey !== candidate();
 }
@@ -66,7 +67,8 @@ export async function refreshServerUI(): Promise<void> {
   const usingText = $('server-using');
   if (usingText) {
     usingText.textContent = `Using: ${serverLabel(using)}` +
-      (status.sessionDefault ? ' (until you close the wallet)' : '');
+      (status.sessionDefault ? ' (until you close the wallet)'
+        : using.mode === 'default' ? (status.fellBack ? ' · RPC proxy (Electrum unavailable)' : ' · public Electrum') : '');
   }
 
   const label = $('server-label');
@@ -93,7 +95,7 @@ export async function refreshServerUI(): Promise<void> {
 async function test(): Promise<void> {
   const mode = selectedMode();
   const typed = $<HTMLInputElement>('server-url')?.value.trim() ?? '';
-  const url = mode === 'public' ? PUBLIC_ELECTRUM[state.settings.network] : typed;
+  const url = mode === 'own' ? typed : PUBLIC_ELECTRUM[state.settings.network];
   say('Testing…', null);
   try {
     const check = await sendMessage<Check>(MSG.TEST_SERVER, { url });

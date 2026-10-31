@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    setupFiles: ['src/test-support/no-network.ts'],
     // setupWallet derives keys with the real KDF; with every file running at
     // once a beforeEach can take longer than the 10 s default
     hookTimeout: 30000,

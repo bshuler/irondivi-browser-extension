@@ -17,7 +17,7 @@ const PASSWORD = 'LiveCheck-' + Math.random().toString(36).slice(2) + '!A1';
 
 const test = base.extend<{ context: BrowserContext; extensionId: string }>({
   context: async ({}, use) => {
-    const context = await launchWithExtension(PKG);
+    const context = await launchWithExtension(PKG, { liveElectrum: true });
     await use(context);
     await context.close();
   },

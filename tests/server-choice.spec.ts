@@ -73,7 +73,7 @@ test('Server setting: choices, test before save, label, banner, no silent fallba
   await popup.click('#settings-btn');
   await expect(popup.locator('#server-heading')).toHaveText('Server for Testnet');
   await expect(popup.locator('input[name="server-mode"][value="default"]')).toBeChecked();
-  await expect(popup.locator('#server-using')).toHaveText('Using: IronDivi (standard)');
+  await expect(popup.locator('#server-using')).toHaveText('Using: IronDivi (standard) · RPC proxy (Electrum unavailable)');
   await expect(popup.locator('#server-save-btn')).toBeEnabled();
   await popup.locator('#server-section').scrollIntoViewIfNeeded();
   await popup.waitForTimeout(800);

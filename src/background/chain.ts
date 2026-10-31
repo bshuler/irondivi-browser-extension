@@ -1,14 +1,16 @@
 /**
- * The wallet's view of the chain. With the default server setting every call
- * goes straight to rpcClient, exactly as before. With a chosen Electrum server
- * it goes to an ElectrumBackend instead, and never falls back to IronDivi on
- * its own: an unreachable chosen server is reported, and only the owner can
- * pick IronDivi for the rest of the session (design §6).
+ * The wallet's view of the chain. With the default server setting calls go to
+ * IronDivi's public Electrum server first; if it cannot be reached or fails its
+ * checks, they go to rpcClient for the rest of the session, without a banner,
+ * and the next time the wallet is opened it tries Electrum again (ADR 0003).
+ * A chosen Electrum server never falls back to IronDivi on its own: an
+ * unreachable chosen server is reported, and only the owner can pick IronDivi
+ * for the rest of the session (design §6).
  */
 import { storage } from '../shared/browser-polyfill';
 import type { NetworkType } from '../shared/constants';
 import {
-  DEFAULT_SERVER_CONFIG, normalizeServerConfig, serverUrl,
+  DEFAULT_SERVER_CONFIG, PUBLIC_ELECTRUM, normalizeServerConfig, serverUrl,
   type ServerChoice, type ServerConfig,
 } from '../shared/server-config';
 import { Address } from '../lib/address';
@@ -41,14 +43,20 @@ export interface ServerStatus {
   sessionDefault: boolean;
   /** The chosen server could not be reached or failed its checks; the words to show */
   problem: string | null;
+  /** On the default setting, public Electrum failed and the RPC proxy stands in */
+  fellBack: boolean;
 }
 
 class Chain {
   private backend: ElectrumBackend | null = null;
   private backendKey = '';
   private verified = false;
+  /** The open backend is the default's public Electrum, not a chosen server */
+  private backendStandard = false;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly sessionDefault = new Set<NetworkType>();
+  /** Networks where the default's public Electrum failed this session */
+  private readonly fellBack = new Set<NetworkType>();
   private problem: { network: NetworkType; message: string } | null = null;
   private lastTip: Partial<Record<NetworkType, number>> = {};
   /** For tests: the WebSocket class to use in place of the browser's */
@@ -60,6 +68,7 @@ class Chain {
       config: await getServerConfig(),
       sessionDefault: this.sessionDefault.has(network),
       problem: this.problem?.network === network ? this.problem.message : null,
+      fellBack: this.fellBack.has(network),
     };
   }
 
@@ -73,6 +82,7 @@ class Chain {
   /** The wallet's windows are all closed: the per-session choice ends */
   endSession(): void {
     this.sessionDefault.clear();
+    this.fellBack.clear();
     this.problem = null;
     this.drop();
   }
@@ -80,6 +90,7 @@ class Chain {
   /** A choice was saved or the network changed: connect afresh */
   reset(): void {
     this.problem = null;
+    this.fellBack.clear();
     this.drop();
   }
 
@@ -101,23 +112,47 @@ class Chain {
     this.lastTip[network] = tip;
   }
 
-  /** The Electrum backend to use now, or null for the default path */
-  private async electrum(): Promise<ElectrumBackend | null> {
-    const network = rpcClient.getNetwork();
+  /** The Electrum server to use now, or null for the RPC proxy */
+  private async electrumUrl(network: NetworkType): Promise<{ url: string; standard: boolean } | null> {
     if (this.sessionDefault.has(network)) return null;
     const choice: ServerChoice = (await getServerConfig())[network];
+    if (choice.mode === 'default') {
+      return this.fellBack.has(network) ? null : { url: PUBLIC_ELECTRUM[network], standard: true };
+    }
     const url = serverUrl(choice, network);
-    if (!url) return null;
+    return url ? { url, standard: false } : null;
+  }
+
+  /** The default's public Electrum failed: the RPC proxy until the wallet closes */
+  private fallBack(network: NetworkType): void {
+    this.fellBack.add(network);
+    this.drop();
+  }
+
+  /** The Electrum backend to use now, or null for the RPC proxy */
+  private async electrum(): Promise<ElectrumBackend | null> {
+    const network = rpcClient.getNetwork();
+    const server = await this.electrumUrl(network);
+    if (!server) return null;
+    const { url } = server;
 
     const key = `${network} ${url}`;
     if (this.backend && this.backendKey !== key) this.drop();
     if (!this.backend) {
       this.backend = new ElectrumBackend({ url, network, lastSeenTip: this.lastTip[network], WebSocket: this.webSocket });
       this.backendKey = key;
+      this.backendStandard = server.standard;
     }
     if (!this.verified) {
-      const check = await this.backend.connect();
+      const backend = this.backend;
+      const check = await backend.connect();
+      // A new choice or a network switch closed it while it connected: start again on the current setting
+      if (this.backend !== backend) return this.electrum();
       if (!check.ok) {
+        if (server.standard) {
+          this.fallBack(network);
+          return null;
+        }
         this.drop();
         throw this.fail(network, check.problem === 'unreachable' ? 'Can\u2019t reach your server' : check.message,
           check.problem === 'unreachable' ? 'unreachable' : 'bad-reply');
@@ -135,17 +170,29 @@ class Chain {
     return new BackendError(code, message);
   }
 
-  /** Run a call on the chosen server; a dropped connection is reported as unreachable, never retried elsewhere */
+  /**
+   * Run a call on Electrum. On the default setting a dropped connection sends
+   * this call and the rest of the session to the RPC proxy; on a chosen server
+   * it is reported as unreachable, never retried elsewhere.
+   */
   private async run<T>(electrumCall: (b: ElectrumBackend) => Promise<T>, rpcCall: () => Promise<T>): Promise<T> {
+    const network = rpcClient.getNetwork();
     const b = await this.electrum();
     if (!b) return rpcCall();
+    const standard = this.backendStandard;
     try {
       const out = await electrumCall(b);
       this.problem = null;
       return out;
     } catch (e: any) {
       const code: string | undefined = e?.code;
+      // Closed under the call by a new choice or another call's fallback: run it again on the current setting
+      if (this.backend !== b) return this.run(electrumCall, rpcCall);
       if (code === 'unreachable' || code === 'bad-reply' || code === 'wrong-network' || code === 'behind') {
+        if (standard) {
+          this.fallBack(network);
+          return rpcCall();
+        }
         this.drop();
         throw this.fail(rpcClient.getNetwork(), e.code === 'unreachable'
           ? 'Can’t reach your server' : e.message, e.code);
@@ -231,16 +278,14 @@ class Chain {
     return this.run(b => b.broadcast(hex), () => rpcClient.broadcastTransaction(hex));
   }
 
-  /** Locally on a chosen Electrum server (it has no validateaddress, and the node is not asked); the default path asks the node */
+  /** Locally while on Electrum (it has no validateaddress, and the node is not asked); on the RPC proxy the node is asked */
   async validateAddress(address: string): Promise<boolean> {
     const network = rpcClient.getNetwork();
-    if (this.sessionDefault.has(network) || !serverUrl((await getServerConfig())[network], network)) {
-      return rpcClient.validateAddress(address);
-    }
+    if (!(await this.electrumUrl(network))) return rpcClient.validateAddress(address);
     return Address.validate(address, network);
   }
 
-  /** Subscribe to new blocks while a window is open; null on the default path */
+  /** Subscribe to new blocks while a window is open; null on the RPC proxy */
   async watchBlocks(cb: (height: number) => void): Promise<(() => void) | null> {
     const b = await this.electrum().catch(() => null);
     return b ? b.onNewBlock(cb) : null;
