@@ -27,6 +27,6 @@ export function errorCode(message: string | undefined): number {
   if (/^unsupported/i.test(m)) return ERR.UNSUPPORTED;
   if (/locked|not authenticated/i.test(m)) return ERR.LOCKED;
   if (/network/i.test(m)) return ERR.NETWORK_MISMATCH;
-  if (/invalid|required|must be|too long|empty|below the dust/i.test(m)) return ERR.INVALID_PARAMS;
+  if (/invalid|required|must be|too long|empty|below the dust|not in this wallet/i.test(m)) return ERR.INVALID_PARAMS;
   return ERR.INTERNAL;
 }

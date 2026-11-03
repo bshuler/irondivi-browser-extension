@@ -279,9 +279,12 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
       if (!request.data.message) {
         return { success: false, error: 'Message is required for sign_message' };
       }
+      // Checked again against the account as it is now (unlock re-derived its
+      // addresses), so only the exact address shown in the window can sign
+      const signer = resolveAddress(account, request.data.address, request.data.addressIndex);
       const signature = await signingSession.signMessage(
         request.data.message,
-        request.data.addressIndex || 0,
+        signer.index,
         account.network,
         request.accountId
       );
@@ -425,9 +428,15 @@ async function sendFromAccount(
  */
 function resolveAddress(account: Account, address?: unknown, addressIndex?: unknown): AccountAddress {
   let found: AccountAddress | undefined;
-  if (address !== undefined && address !== null && address !== '') {
+  if (address !== undefined) {
+    if (typeof address !== 'string' || !address) {
+      throw new Error('Invalid address');
+    }
     found = account.addresses.find(a => a.address === address);
   } else if (addressIndex !== undefined && addressIndex !== null) {
+    if (typeof addressIndex !== 'number' || !Number.isInteger(addressIndex) || addressIndex < 0) {
+      throw new Error('Invalid address index');
+    }
     found = account.addresses.find(a => a.index === addressIndex);
   } else {
     found = account.addresses[0];
@@ -677,8 +686,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           if (!isConnected) return NOT_CONNECTED;
           if (account.addresses.length === 0) return noAddressesOn(account);
 
-          // Sign with the address the site asked for, which must be ours
-          const signer = resolveAddress(account, payload?.address, payload?.addressIndex);
+          // Sign with the address the site asked for, which must be ours; a
+          // site names addresses, never internal derivation indexes
+          const signer = resolveAddress(account, payload?.address);
 
           try {
             // A game transaction is refused here; a session grant comes only

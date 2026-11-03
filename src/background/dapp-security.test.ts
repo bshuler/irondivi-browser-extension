@@ -264,6 +264,8 @@ describe('#6 signMessage and getBalance honour the address argument', () => {
 
     const signed = h.provider().signMessage('hello divi', addr1);
     const req = await h.waitForPending('sign_message');
+    expect(req.data.address).toBe(addr1);
+    expect(req.data.addressIndex).toBe(1);
     const ok = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
     expect(ok.success).toBe(true);
 
@@ -273,12 +275,103 @@ describe('#6 signMessage and getBalance honour the address argument', () => {
     await expect(signed).resolves.toBe(expected);
   });
 
-  it('refuses an address the wallet does not own', async () => {
+  it('request({ method: "irondivi_signMessage", params: { message, address } }) honours address and returns the signature string', async () => {
+    h = await createHarness();
+    const account = await h.setupWallet();
+    const addr1 = await secondAddress(account);
+    await h.connectPage();
+
+    const signed = h.provider().request({
+      method: 'irondivi_signMessage',
+      params: { message: 'hc-challenge-v1', address: addr1 },
+    });
+    const req = await h.waitForPending('sign_message');
+    expect(req.data.address).toBe(addr1);
+    expect(req.data.addressIndex).toBe(1);
+    const ok = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
+    expect(ok.success).toBe(true);
+
+    const hd = await HDKey.fromMasterSeed(await Mnemonic.toSeed(TEST_MNEMONIC));
+    const key = await hd.derive("m/44'/1'/0'/0/1");
+    const expected = await Signer.signMessage('hc-challenge-v1', key.privateKey!, key.publicKey!);
+    await expect(signed).resolves.toBe(expected);
+  });
+
+  it('request({ method: "irondivi_signMessage" }) requires connection and request({ method: "irondivi_accounts" }) returns string[]', async () => {
+    h = await createHarness();
+    const account = await h.setupWallet();
+    const addr1 = await secondAddress(account);
+
+    await expect(
+      h.provider().request({ method: 'irondivi_signMessage', params: { message: 'hi', address: addr1 } }),
+    ).rejects.toMatchObject({ code: 4100 });
+
+    await h.connectPage();
+    const accounts = await h.provider().request({ method: 'irondivi_accounts' });
+    expect(accounts).toEqual([account.addresses[0].address, addr1]);
+  });
+
+  it('refuses an address the wallet does not own or a malformed address with -32602', async () => {
     h = await createHarness();
     await h.setupWallet();
     await h.connectPage();
-    await expect(h.provider().signMessage('hello', await foreignTestnetAddress())).rejects.toThrow(/not .*this wallet|not owned/i);
+    const foreign = await foreignTestnetAddress();
+    await expect(h.provider().signMessage('hello', foreign)).rejects.toMatchObject({
+      code: -32602,
+      message: expect.stringMatching(/not .*this wallet|not owned/i),
+    });
+    await expect(
+      h.provider().request({ method: 'irondivi_signMessage', params: { message: 'hello', address: foreign } }),
+    ).rejects.toMatchObject({ code: -32602 });
+    await expect(h.provider().signMessage('hello', '')).rejects.toMatchObject({ code: -32602 });
+    await expect(h.provider().signMessage('hello', null as unknown as string)).rejects.toMatchObject({ code: -32602 });
     expect(h.createdWindows.filter(w => w.url.includes('approve=sign'))).toHaveLength(0);
+  });
+
+  it('ignores page-supplied addressIndex when address is omitted', async () => {
+    h = await createHarness();
+    const account = await h.setupWallet();
+    await secondAddress(account);
+    await h.connectPage();
+
+    const signed = h.provider().request({
+      method: 'irondivi_signMessage',
+      params: { message: 'default-addr', addressIndex: 1 },
+    });
+    const req = await h.waitForPending('sign_message');
+    expect(req.data.address).toBe(account.addresses[0].address);
+    expect(req.data.addressIndex).toBe(0);
+    const ok = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
+    expect(ok.success).toBe(true);
+
+    const hd = await HDKey.fromMasterSeed(await Mnemonic.toSeed(TEST_MNEMONIC));
+    const key0 = await hd.derive("m/44'/1'/0'/0/0");
+    const expected = await Signer.signMessage('default-addr', key0.privateKey!, key0.publicKey!);
+    await expect(signed).resolves.toBe(expected);
+  });
+
+  it('re-verifies the requested address after unlock restores derived addresses', async () => {
+    h = await createHarness();
+    const account = await h.setupWallet();
+    await secondAddress(account);
+    await h.connectPage();
+    const foreign = await foreignTestnetAddress();
+
+    // Lock the worker and tamper stored address[1] before the request arrives
+    await h.popup('LOCK');
+    h.storage.accounts[0].addresses[1].address = foreign;
+    await h.restartWorker();
+
+    const signed = h.provider().signMessage('tampered-check', foreign);
+    const req = await h.waitForPending('sign_message');
+    expect(req.data.address).toBe(foreign);
+
+    // Unlocking re-derives the real addresses from the seed, so foreign is no longer in the wallet
+    const approved = await h.approvalWindow('APPROVE_SIGNING_REQUEST', { requestId: req.id, password: TEST_PASSWORD });
+    expect(approved.success).toBe(false);
+    expect(approved.error).toMatch(/not in this wallet/i);
+    h.closeWindow(h.createdWindows.at(-1)!.id);
+    await expect(signed).rejects.toThrow(/rejected/i);
   });
 
   it('getBalance(address) returns that address\'s balance', async () => {

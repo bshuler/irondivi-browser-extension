@@ -299,6 +299,12 @@ class IronDiviProvider {
     if (args.method === 'irondivi_getNetwork') {
       return this.getNetwork();
     }
+    if (args.method === 'irondivi_accounts') {
+      return this.getAccounts();
+    }
+    if (args.method === 'irondivi_signMessage') {
+      return this.signMessage(args.params?.message, args.params?.address);
+    }
     if (args.method === 'irondivi_getAccessStatus') return this.getAccessStatus();
     if (args.method === 'irondivi_requestAccess') return this.requestAccess(args.params);
 
