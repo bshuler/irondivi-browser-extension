@@ -6,6 +6,7 @@
  */
 
 import { setupNamesUIHandlers } from './names-ui';
+import { setupPlayerCertUIHandlers } from './player-cert-ui';
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
@@ -113,6 +114,7 @@ function setupEventListeners(): void {
   setupSettingsUIHandlers();
   setupSigningRequestUIHandlers();
   setupNamesUIHandlers();
+  setupPlayerCertUIHandlers();
 
   // Tab management
   setupTabHandlers();

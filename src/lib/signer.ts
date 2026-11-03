@@ -4,7 +4,9 @@
 
 import { Hash } from './hash';
 import { bytesToHex } from './hex';
-import { isValidPrivateKey, secp } from './secp256k1';
+import { isValidPrivateKey, recoverPublicKeyFromCompact, secp } from './secp256k1';
+import { Address } from './address';
+import type { NetworkType } from '../shared/constants';
 
 // ECDSA over a 32-byte hash: RFC 6979 nonce and low S (BIP 62), from
 // @noble/secp256k1. Returns r, s and the recovery id.
@@ -81,25 +83,26 @@ function varintEncode(n: number): Uint8Array {
     }
 }
 
-// Sign a message with Bitcoin-style prefix and return base64 compact signature
-async function signMessage(message: string, privateKey: Uint8Array, publicKey: Uint8Array): Promise<string> {
-    // Construct prefixed message
+// Double-SHA256 Divi DarkNet signed-message digest
+function messageHash(message: string): Uint8Array {
     // DarkNet Signed Message prefix (Divi, and therefore IronDivi, uses this)
     // \x18 = 24 = length of "DarkNet Signed Message:\n"
     const prefix = "\x18DarkNet Signed Message:\n";
     const messageBytes = new TextEncoder().encode(message);
     const messageLen = varintEncode(messageBytes.length);
 
-    // Concatenate: prefix + varint(len) + message
     const prefixBytes = new TextEncoder().encode(prefix);
     const fullMessage = new Uint8Array(prefixBytes.length + messageLen.length + messageBytes.length);
     fullMessage.set(prefixBytes, 0);
     fullMessage.set(messageLen, prefixBytes.length);
     fullMessage.set(messageBytes, prefixBytes.length + messageLen.length);
 
-    // Double SHA256 hash
-    const hash1 = Hash.sha256(fullMessage);
-    const hash2 = Hash.sha256(hash1);
+    return Hash.doubleSha256(fullMessage);
+}
+
+// Sign a message with Bitcoin-style prefix and return base64 compact signature
+async function signMessage(message: string, privateKey: Uint8Array, publicKey: Uint8Array): Promise<string> {
+    const hash2 = messageHash(message);
 
     // The recovery id is for the key's own public key, so the two must match
     if (!isValidPrivateKey(privateKey)) throw new Error('Invalid private key');
@@ -121,4 +124,40 @@ async function signMessage(message: string, privateKey: Uint8Array, publicKey: U
     return btoa(String.fromCharCode(...compactSig));
 }
 
-export const Signer = { signHash, createScriptSig, signMessage };
+// Decode a strict standard Base64 string to bytes (returns null on malformed input)
+function decodeBase64Strict(b64: string): Uint8Array | null {
+    const trimmed = b64.trim();
+    if (!trimmed || trimmed.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) {
+        return null;
+    }
+    try {
+        const bin = atob(trimmed);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    } catch {
+        return null;
+    }
+}
+
+// Recover P2PKH address from a Divi DarkNet compact base64 signature
+function recoverMessageAddress(message: string, signatureBase64: string, network: NetworkType): string | null {
+    const sigBytes = decodeBase64Strict(signatureBase64);
+    if (!sigBytes || sigBytes.length !== 65) return null;
+    const pub = recoverPublicKeyFromCompact(messageHash(message), sigBytes);
+    if (!pub) return null;
+    return Address.fromPublicKey(pub, network);
+}
+
+// Verify that a Divi DarkNet compact base64 signature was produced by `address`
+function verifyMessage(address: string, signatureBase64: string, message: string, network: NetworkType): boolean {
+    try {
+        const decoded = Address.decode(address);
+        if (decoded.version !== Address.NETWORKS[network].pubKeyHash) return false;
+    } catch {
+        return false;
+    }
+    return recoverMessageAddress(message, signatureBase64, network) === address;
+}
+
+export const Signer = { signHash, createScriptSig, signMessage, messageHash, recoverMessageAddress, verifyMessage };

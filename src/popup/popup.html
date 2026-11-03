@@ -92,6 +92,10 @@
         <span class="action-icon">@</span>
         <span>Names</span>
       </button>
+      <button class="action-btn" id="player-cert-btn">
+        <span class="action-icon">▶</span>
+        <span>Players</span>
+      </button>
     </div>
 
     <!-- Tabs -->
@@ -245,6 +249,80 @@
           <button class="primary-btn hidden" id="names-register-btn">Register</button>
           <button class="primary-btn hidden" id="names-update-btn">Update</button>
           <button class="secondary-btn hidden" id="names-delete-btn">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player Certificate View (Sidechain Licence Service §12.1 / §15 #16) -->
+    <div class="view hidden" id="view-player-cert">
+      <div class="view-header">
+        <button class="back-btn" id="player-cert-back-btn">←</button>
+        <h2>Authorise Player</h2>
+      </div>
+      <div class="form">
+        <p class="setting-hint">Sign a public player certificate so VLC or another media player can unlock licensed tracks held by this wallet without holding your wallet key.</p>
+        <div class="form-group">
+          <label for="player-cert-address">Licence Holder Address</label>
+          <select id="player-cert-address"></select>
+        </div>
+        <div class="form-group qr-scan-group">
+          <label for="player-cert-key-input">Player Public Key (33-byte compressed)</label>
+          <textarea id="player-cert-key-input" class="player-cert-textarea" rows="3" placeholder="02... or 03... (66 hex chars, or paste a QR image)" spellcheck="false" autocomplete="off"></textarea>
+          <div class="qr-scan-actions">
+            <button type="button" class="secondary-btn" id="player-cert-scan-tab-btn">Scan this tab</button>
+            <label class="secondary-btn file-pick-btn" for="player-cert-qr-input">Pick a picture</label>
+            <input type="file" id="player-cert-qr-input" accept="image/*" capture="environment" class="visually-hidden">
+          </div>
+          <div class="field-hint player-cert-status" id="player-cert-key-status" role="status"></div>
+        </div>
+        <div class="form-group">
+          <label for="player-cert-expires-preset">Certificate Lifetime</label>
+          <select id="player-cert-expires-preset">
+            <option value="none">Until licence ends (default)</option>
+            <option value="24h">24 hours</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+            <option value="custom">Custom UTC time…</option>
+          </select>
+        </div>
+        <div class="form-group hidden" id="player-cert-custom-group">
+          <label for="player-cert-expires-custom">Custom Expiry (UTC)</label>
+          <input type="datetime-local" id="player-cert-expires-custom">
+        </div>
+        <div class="player-cert-preview hidden" id="player-cert-preview">
+          <div class="payment-request-title">Certificate to Sign</div>
+          <div class="detail-row"><span>Document:</span><span id="player-cert-preview-doc"></span></div>
+          <div class="detail-row"><span>Service:</span><span id="player-cert-preview-domain"></span></div>
+          <div class="detail-row"><span>Network:</span><span id="player-cert-preview-network"></span></div>
+          <div class="detail-row"><span>Scope:</span><span id="player-cert-preview-scope"></span></div>
+          <div class="detail-row"><span>Holder:</span><span id="player-cert-preview-holder" class="address-chunks"></span></div>
+          <div class="detail-row"><span>Player Key:</span><span id="player-cert-preview-player" class="address-chunks"></span></div>
+          <div class="detail-row">
+            <span>Serial:</span>
+            <span class="player-cert-serial-row">
+              <span id="player-cert-preview-serial" class="player-cert-mono"></span>
+              <button type="button" class="link-btn" id="player-cert-new-serial-btn">New</button>
+            </span>
+          </div>
+          <div class="detail-row"><span>Expires:</span><span id="player-cert-preview-expires"></span></div>
+        </div>
+        <button class="primary-btn" id="player-cert-sign-btn" disabled>Sign Player Certificate</button>
+        <div class="player-cert-result hidden" id="player-cert-result">
+          <div class="payment-request-title">Signed Player Certificate</div>
+          <div class="qr-code player-cert-qr" id="player-cert-qr"></div>
+          <div class="form-group">
+            <label for="player-cert-format">Export Format</label>
+            <select id="player-cert-format">
+              <option value="text">VLC certificate text (.txt)</option>
+              <option value="base64">Base64 single line</option>
+              <option value="json">JSON envelope (.json)</option>
+            </select>
+          </div>
+          <textarea id="player-cert-output" class="player-cert-textarea player-cert-mono" rows="6" readonly spellcheck="false"></textarea>
+          <div class="qr-scan-actions">
+            <button type="button" class="secondary-btn" id="player-cert-copy-btn">📋 Copy Certificate</button>
+            <button type="button" class="secondary-btn" id="player-cert-download-btn">⬇ Download</button>
+          </div>
         </div>
       </div>
     </div>
@@ -405,6 +483,13 @@
             <label class="secondary-btn connect-qr-label">QR screenshot…<input type="file" id="connect-qr-input" accept="image/*" hidden></label>
           </div>
           <div id="connect-pairings-list"></div>
+        </div>
+        <div class="setting-section">
+          <h3>Media Players</h3>
+          <p class="setting-hint">Authorise VLC or another media player to unlock licensed tracks held by an address in this wallet using a signed player certificate.</p>
+          <button class="setting-item" id="settings-player-cert-btn">
+            Sign a player certificate…
+          </button>
         </div>
       </div>
     </div>

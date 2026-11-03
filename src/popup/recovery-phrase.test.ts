@@ -21,5 +21,8 @@ describe('L6 the recovery phrase cannot be copied', () => {
     expect(read('wallet-ui.ts').match(/clipboard\s*\.\s*write\w*\(([^)]*)\)/g)).toEqual(['clipboard.writeText(request.text)', 'clipboard.writeText(primaryAddress)']);
     // request.text is only ever formatPaymentUri of the selected address
     expect(read('wallet-ui.ts')).toMatch(/const text = formatPaymentUri\(\{ address, amount, label, memo \}\)/);
+    // player-cert-ui.ts only copies a verified public player certificate export
+    expect(read('player-cert-ui.ts').match(/clipboard\s*\.\s*write\w*\(([^)]*)\)/g)).toEqual(['clipboard.writeText(signedCertificateOut)']);
+    expect(read('player-cert-ui.ts')).toMatch(/const signedCertificateOut = exportPlayerCertificate\(lastSignedCert, format\)/);
   });
 });
