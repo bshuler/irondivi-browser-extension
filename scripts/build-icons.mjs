@@ -10,6 +10,8 @@
 
 import { chromium } from '@playwright/test';
 import { writeFile, mkdir } from 'node:fs/promises';
+import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -29,8 +31,23 @@ const iconSvg = (rim) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1
 const args = process.argv.slice(2);
 const previewDir = args.includes('--preview') ? path.resolve(args[args.indexOf('--preview') + 1]) : null;
 
-// CHROMIUM_PATH: use an already-installed Chromium instead of the pinned download.
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+function resolveShell() {
+  if (process.env.CHROMIUM_PATH) return { executablePath: process.env.CHROMIUM_PATH, headless: true };
+  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH
+    || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Caches/ms-playwright') : path.join(os.homedir(), '.cache/ms-playwright'));
+  if (fs.existsSync(cache)) {
+    const shells = fs.readdirSync(cache).filter(d => /^chromium_headless_shell-\d+$/.test(d))
+      .sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()));
+    for (const d of shells) {
+      const hit = ['chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell', 'chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell']
+        .map(r => path.join(cache, d, r)).find(fs.existsSync);
+      if (hit) return { executablePath: hit, headless: true };
+    }
+  }
+  return { headless: true };
+}
+// CHROMIUM_PATH: use an already-installed Chromium/headless-shell instead of the pinned download.
+const browser = await chromium.launch(resolveShell());
 const page = await (await browser.newContext({ deviceScaleFactor: 1 })).newPage();
 const shoot = async (html, w, h, transparent) => {
   await page.setViewportSize({ width: w, height: h });

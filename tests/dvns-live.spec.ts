@@ -23,7 +23,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Transaction } from '../src/lib/transaction';
 import { Address } from '../src/lib/address';
-import { resolveLaunch } from './browser';
+import { allowHeaded, resolveLaunch } from './browser';
 
 const DIR = process.env.DVNS_LIVE || '';
 const STEP = process.env.DVNS_LIVE_STEP || '';
@@ -48,7 +48,7 @@ function letters(n: number): string {
 async function launch(): Promise<{ context: BrowserContext; id: string; broadcasts: string[] }> {
   const context = await chromium.launchPersistentContext(path.join(DIR, 'profile'), {
     ...resolveLaunch(),
-    headless: process.env.PW_HEADED !== '1',
+    headless: !allowHeaded(),
     viewport: { width: 400, height: 600 },
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   });

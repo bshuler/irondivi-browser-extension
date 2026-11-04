@@ -46,8 +46,8 @@ irondivi-browser-extension/
 ```json
 {
   "scripts": {
-    "test": "playwright test",           // Run all tests
-    "test:headed": "PW_HEADED=1 playwright test --headed",  // Visible browser
+    "test": "playwright test",           // Run all tests (headless Chromium DOM)
+    "test:headed": "PW_HEADED=1 playwright test",  // Visible browser (manual human use only)
     "test:unit": "vitest"                // Unit tests (existing)
   }
 }
@@ -63,10 +63,9 @@ python run-remote.py bshuler@hp1 "extension"
 ```
 
 This ensures:
-- Headed browser mode (required for extensions)
-- Xvfb virtual display
+- Headless Chromium DOM execution (loads extensions natively with zero desktop window or focus steal)
 - Consistent test environment
-- No local browser dependencies
+- No local visible browser windows
 
 ## Test Architecture
 

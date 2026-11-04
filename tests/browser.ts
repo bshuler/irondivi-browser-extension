@@ -38,6 +38,43 @@ export function resolveLaunch(): { channel?: string; executablePath?: string } {
   );
 }
 
+// Automated AI agent sessions (Antigravity / Claude Code) stay strictly headless
+// unless HUMAN_HEADED_OK=1 is explicitly set for a human-watched session.
+export function allowHeaded(requested = process.env.PW_HEADED === '1'): boolean {
+  if (!requested) return false;
+  if ((process.env.ANTIGRAVITY_AGENT || process.env.CLAUDECODE) && process.env.HUMAN_HEADED_OK !== '1') {
+    return false;
+  }
+  return true;
+}
+
+// Pure CLI headless shell for non-extension DOM/icon/OG rendering (zero macOS AppKit/Dock registration).
+export function resolveHeadlessShell(): { executablePath?: string } {
+  if (process.env.CHROMIUM_PATH || process.env.PW_CHROMIUM) {
+    return { executablePath: process.env.CHROMIUM_PATH || process.env.PW_CHROMIUM };
+  }
+  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH
+    || (process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library/Caches/ms-playwright')
+      : path.join(os.homedir(), '.cache/ms-playwright'));
+  if (fs.existsSync(cache)) {
+    const shells = fs.readdirSync(cache)
+      .filter((d) => /^chromium_headless_shell-\d+$/.test(d))
+      .sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()));
+    for (const d of shells) {
+      const base = path.join(cache, d);
+      const hit = [
+        path.join(base, 'chrome-headless-shell-mac-arm64/chrome-headless-shell'),
+        path.join(base, 'chrome-headless-shell-mac-x64/chrome-headless-shell'),
+        path.join(base, 'chrome-headless-shell-linux64/chrome-headless-shell'),
+        path.join(base, 'chrome-linux/headless_shell'),
+      ].find((p) => fs.existsSync(p));
+      if (hit) return { executablePath: hit };
+    }
+  }
+  return resolveLaunch();
+}
+
 // The default server tries IronDivi's public Electrum first. Tests that mock the
 // RPC proxy make its name unresolvable so the wallet falls back to the mock (a
 // route would not do: Playwright does not see the service worker's sockets); a
@@ -51,7 +88,7 @@ export async function launchWithExtension(
     // Headless unless asked (npm run test:headed): a visible window lands on
     // whoever's screen the tests run on. Chrome's own headless mode loads
     // extensions; only the separate headless shell can't.
-    headless: process.env.PW_HEADED !== '1',
+    headless: !allowHeaded(),
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,

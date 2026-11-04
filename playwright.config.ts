@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { allowHeaded } from './tests/browser';
 
 export default defineConfig({
   testDir: './tests',
@@ -6,7 +7,7 @@ export default defineConfig({
   timeout: 60000,
   retries: 1,
   use: {
-    headless: process.env.PW_HEADED !== '1',
+    headless: !allowHeaded(),
     viewport: { width: 400, height: 600 },
     screenshot: 'only-on-failure',
   },

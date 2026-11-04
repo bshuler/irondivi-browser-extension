@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """The published Firefox package against the real sites.
 
     uv venv /tmp/ffvenv && uv pip install --python /tmp/ffvenv -r tests/firefox/requirements.txt
@@ -10,6 +11,7 @@ default list, is told not_allowed and gets 4300 with no window opening.
 Selenium Manager fetches geckodriver if it is not installed.
 """
 import json
+import os
 import secrets
 import sys
 import time
@@ -32,10 +34,21 @@ def addon_id(xpi: str) -> str:
         return json.loads(z.read("manifest.json"))["browser_specific_settings"]["gecko"]["id"]
 
 
+def allow_headed() -> bool:
+    if os.environ.get("PW_HEADED") != "1" and os.environ.get("HEADED") != "1":
+        return False
+    return not (
+        (os.environ.get("ANTIGRAVITY_AGENT") or os.environ.get("CLAUDECODE"))
+        and os.environ.get("HUMAN_HEADED_OK") != "1"
+    )
+
+
 def main(xpi: str) -> int:
     ext_uuid = str(uuid.uuid4())
     opts = Options()
-    opts.binary_location = FIREFOX
+    opts.binary_location = os.environ.get("FIREFOX_BINARY", FIREFOX)
+    if not allow_headed():
+        opts.add_argument("-headless")
     # A fixed internal UUID so the popup has a known moz-extension:// URL
     opts.set_preference("extensions.webextensions.uuids", json.dumps({addon_id(xpi): ext_uuid}))
     # WebDriver may not navigate to moz-extension:// itself; the popup is
