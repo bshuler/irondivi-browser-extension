@@ -10,7 +10,7 @@ import path from 'path';
 //   Playwright's own revision  if `npx playwright install chromium` was run
 //   newest cached revision     any chromium-* already in ~/Library/Caches/ms-playwright
 //                              (avoids a fresh ~350 MB download per Playwright version)
-function resolveLaunch(): { channel?: string; executablePath?: string } {
+export function resolveLaunch(): { channel?: string; executablePath?: string } {
   if (process.env.PW_CHANNEL) return { channel: process.env.PW_CHANNEL };
   if (process.env.PW_CHROMIUM) return { executablePath: process.env.PW_CHROMIUM };
   const bundled = chromium.executablePath();
@@ -38,14 +38,24 @@ function resolveLaunch(): { channel?: string; executablePath?: string } {
   );
 }
 
-export async function launchWithExtension(extensionPath: string): Promise<BrowserContext> {
+// The default server tries IronDivi's public Electrum first. Tests that mock the
+// RPC proxy make its name unresolvable so the wallet falls back to the mock (a
+// route would not do: Playwright does not see the service worker's sockets); a
+// live test passes { liveElectrum: true } to reach the real server.
+export async function launchWithExtension(
+  extensionPath: string, { liveElectrum = false }: { liveElectrum?: boolean } = {},
+): Promise<BrowserContext> {
   const launch = resolveLaunch();
   return chromium.launchPersistentContext('', {
     ...launch,
-    headless: false,
+    // Headless unless asked (npm run test:headed): a visible window lands on
+    // whoever's screen the tests run on. Chrome's own headless mode loads
+    // extensions; only the separate headless shell can't.
+    headless: process.env.PW_HEADED !== '1',
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      ...(liveElectrum ? [] : ['--host-resolver-rules=MAP electrum.irondivi.com ~NOTFOUND']),
     ],
   });
 }

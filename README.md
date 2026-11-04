@@ -16,7 +16,7 @@ irondivi-browser-extension/
 ├── assets/
 │   └── icons/           # Extension icons
 ├── scripts/             # Build and packaging scripts
-├── site/                # browser.divi.domains page; site/deploy/ publishes it (see DEPLOY.md)
+├── site/                # browser.irondivi.com page; site/deploy/ publishes it (see DEPLOY.md)
 ├── scripts/remote-check.sh # Runs tsc/vitest/build on hp2 (replaces CI)
 ├── manifest.json        # Chrome/Edge manifest (MV3)
 ├── manifest.firefox.json # Firefox-specific overrides
@@ -83,9 +83,21 @@ Safari build is a two-step: `dist/safari/` holds the extension, and
    macOS registers the extension
 3. In Safari: Develop > Allow Unsigned Extensions (ad-hoc builds only), then
    Settings > Extensions > enable IronDivi Wallet
+4. Click the toolbar icon and choose **Always Allow** for the site you're on;
+   then in the wallet click **Allow** on the "reach the Divi network" banner,
+   and **Always Allow** again.
+   Safari grants an extension's websites one at a time, so until then the
+   wallet can't reach the Divi network (services.divi.domains,
+   vps1.divi.domains) for balance, history or sends.
 
 `SAFARI_SIGN=<team id> npm run build:safari:app` signs with an Apple team
 instead (the team's account must be added in Xcode > Settings > Accounts).
+Safari turns Allow Unsigned Extensions off every time it quits, and then
+reports an ad-hoc build as "no longer valid". For a Mac you use every day,
+sign with the team instead: on Human's Mac that is
+`SAFARI_SIGN=VGX52CQGPT npm run build:safari:app`, which needs no Develop
+setting. Re-signing resets Safari's on/off switch and website access for the
+extension, so enable it again afterwards.
 Distribution outside the Mac App Store needs Developer ID + notarization;
 that is not wired up yet.
 
@@ -152,8 +164,8 @@ background and the popup all work out the same way (`src/shared/site-access.ts`)
 | `"denied"` | The user chose **Never** | As `"not_allowed"`, but `requestAccess()` resolves `"denied"` and opens no window |
 
 The default list is exact `https` origins, the same on Mainnet and Testnet, with
-no wildcards: `https://divi.cx`, `https://stakewatch.divi.cx`,
-`https://games.divi.domains`, `https://browser.divi.domains`,
+no wildcards: `https://divi.cx`, `https://name.irondivi.com`, `https://stakewatch.divi.cx`,
+`https://games.divi.domains`, `https://browser.irondivi.com`,
 `https://services.divi.domains`, `https://intel.divi.domains`,
 `https://irondivi.com`, `https://www.irondivi.com`, `https://app.irondivi.com`,
 `https://dividinos.com` and `https://www.dividinos.com`. A subdomain is not
@@ -320,10 +332,13 @@ The Safari zip needs `npm run build:safari:app` first. Publishing is in DEPLOY.m
 `SHA256SUMS-v{version}` is signed with the release key, an Ed25519 SSH key kept
 in 1Password that never leaves it (`scripts/sign-release.sh` signs through the
 1Password SSH agent). The site will not deploy a release the key did not sign.
+The Firefox `.xpi` can also be signed by Mozilla (`scripts/sign-firefox.sh`, see DEPLOY.md);
+its checksum is then the signed file's, and `scripts/reproduce.sh` compares its files rather
+than its bytes.
 
 Release key fingerprint: `SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ`
 (public key in `site/release-signing/irondivi-release.pub`, also at
-https://browser.divi.domains/release-signing/irondivi-release.pub).
+https://browser.irondivi.com/release-signing/irondivi-release.pub).
 
 To check a download, put `SHA256SUMS-v{version}`, its `.sig` and the packages in
 one folder and run:
@@ -336,7 +351,7 @@ or by hand, with `allowed_signers` from this repository (not from the download
 site, so one compromised host cannot change both):
 
 ```bash
-ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.6.sig < SHA256SUMS-v0.0.6
+ssh-keygen -Y verify -f site/release-signing/allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.13.sig < SHA256SUMS-v0.0.13
 ```
 
 ## License

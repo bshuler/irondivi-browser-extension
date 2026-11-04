@@ -18,7 +18,11 @@ const commonConfig = {
   // the build paths, and the store review reads the minified code as shipped
   sourcemap: isDev,
   minify: !isWatch,
-  define: { __IRONDIVI_DEV__: String(isDev) },
+  define: {
+    __IRONDIVI_DEV__: String(isDev),
+    // Dev builds only: the Divi Name Service API, e.g. a tunnel to the dev server
+    __IRONDIVI_DVNS_API__: JSON.stringify(isDev ? (process.env.IRONDIVI_DVNS_API ?? '') : ''),
+  },
 };
 
 // The commit this build comes from; a tree with uncommitted changes to

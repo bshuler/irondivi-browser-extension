@@ -23,6 +23,22 @@ describe('L12, EXT-20/21 no page can find or load the wallet\'s scripts', () => 
   });
 });
 
+describe('every browser loads the background as the ES module it is built as', () => {
+  // Safari's override once replaced the background without "type": "module",
+  // so Safari never ran it: the popup stuck on "Loading..." and no site could
+  // find the wallet. esbuild.config.js shallow-merges each override.
+  for (const name of ['manifest.firefox.json', 'manifest.safari.json']) {
+    it(`${name} keeps "type": "module"`, () => {
+      const merged = { ...JSON.parse(read('manifest.json')), ...JSON.parse(read(name)) };
+      expect(merged.background.type).toBe('module');
+    });
+  }
+
+  it('the background is built as ESM', () => {
+    expect(read('esbuild.config.js')).toMatch(/format: 'esm'/);
+  });
+});
+
 describe('L13 release builds ship no source maps', () => {
   it('source maps follow the dev flag, and each build starts from an empty folder', () => {
     const src = read('esbuild.config.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

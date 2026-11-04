@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-25
-- **Decided by:** Bert Shuler (protocol: irondivi-connect ADR 0001)
+- **Decided by:** human (protocol: irondivi-connect ADR 0001)
 - **Scope:** this extension's in-page provider (`window.irondivi`), its relay
   client (`src/background/connect-relay.ts`, `src/lib/irondivi-connect.ts`)
   and the pairing screen in Settings

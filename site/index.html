@@ -6,17 +6,27 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IronDivi Wallet: a browser wallet for Divi</title>
-  <meta name="description" content="IronDivi Wallet is a browser extension for the Divi blockchain: an HD wallet with mainnet and testnet, multiple accounts, and an approval window for every site request. Beta, open source, desktop browsers.">
+  <meta name="description" content="IronDivi Wallet is a browser extension for the Divi blockchain, for Chrome, Brave, Edge, Opera, Firefox and Safari: an HD wallet with mainnet and testnet, multiple accounts, and an approval window for every site request. Beta, open source.">
   <meta name="theme-color" content="#0f0f1a">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="IronDivi Wallet">
-  <meta property="og:title" content="IronDivi Wallet: a browser wallet for Divi">
-  <meta property="og:description" content="A Divi wallet in your browser. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Beta: testnet first.">
-  <meta property="og:url" content="https://browser.divi.domains/">
-  <meta property="og:image" content="https://browser.divi.domains/assets/icon-512.png">
-  <meta property="og:image:alt" content="IronDivi shield logo">
-  <meta name="twitter:card" content="summary">
-  <link rel="canonical" href="https://browser.divi.domains/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="IronDivi Wallet: the Divi wallet for every desktop browser">
+  <meta property="og:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, and nothing signed without your approval. Open source beta.">
+  <meta property="og:url" content="https://browser.irondivi.com/">
+  <!-- The link preview: site/deploy/og/ makes it -->
+  <meta property="og:image" content="https://browser.irondivi.com/assets/og-image-v2.png">
+  <meta property="og:image:secure_url" content="https://browser.irondivi.com/assets/og-image-v2.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="IronDivi Wallet, the Divi wallet for every desktop browser: Chrome, Brave, Edge, Opera, Firefox and Safari.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IronDivi Wallet: the Divi wallet for every desktop browser">
+  <meta name="twitter:description" content="Chrome, Brave, Edge, Opera, Firefox and Safari. Mainnet and testnet in one build, keys encrypted on your own machine, nothing signed without your approval.">
+  <meta name="twitter:image" content="https://browser.irondivi.com/assets/og-image-v2.png">
+  <meta name="twitter:image:alt" content="IronDivi Wallet, the Divi wallet for every desktop browser: Chrome, Brave, Edge, Opera, Firefox and Safari.">
+  <link rel="canonical" href="https://browser.irondivi.com/">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -37,10 +47,7 @@
   <header class="site-header">
     <div class="container site-header__inner">
       <a class="brand" href="/" aria-label="IronDivi Wallet home">
-        <span class="brand__tile" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-        </span>
-        <span class="brand__word">Iron<span>Divi</span></span>
+        <img class="brand__mark" src="/assets/brand/irondivi-wordmark.svg" alt="IronDivi" width="98" height="28"><span class="brand__product">Wallet</span>
       </a>
       <nav class="site-nav" aria-label="Sections">
         <a href="#features">Features</a>
@@ -59,6 +66,7 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="container hero__grid">
         <div class="hero__copy">
+          <img class="hero__mark" src="/assets/brand/irondivi-wallet-mark.svg" alt="" width="88" height="88">
           <p class="eyebrow">Browser extension for the Divi blockchain</p>
           <h1 id="hero-title">IronDivi Wallet</h1>
           <p class="hero__lead">Keep DIVI in your browser, switch between mainnet and testnet, and approve what Divi sites ask for, one request at a time. Your keys are made and kept encrypted on your own computer.</p>
@@ -70,6 +78,14 @@
             </a>
             <a class="btn btn--ghost btn--lg" id="hero-steps" href="#install">Install steps</a>
           </div>
+          <ul class="browser-strip" aria-label="Supported browsers">
+            <li><a href="#install" data-pick="chrome"><img src="/assets/browsers/chrome.svg" alt="" width="28" height="28"><span>Chrome</span></a></li>
+            <li><a href="#install" data-pick="brave"><img src="/assets/browsers/brave.svg" alt="" width="28" height="28"><span>Brave</span></a></li>
+            <li><a href="#install" data-pick="edge"><img src="/assets/browsers/edge.svg" alt="" width="28" height="28"><span>Edge</span></a></li>
+            <li><a href="#install" data-pick="opera"><img src="/assets/browsers/opera.svg" alt="" width="28" height="28"><span>Opera</span></a></li>
+            <li><a href="#install" data-pick="firefox"><img src="/assets/browsers/firefox.svg" alt="" width="28" height="28"><span>Firefox</span></a></li>
+            <li><a href="#install" data-pick="safari"><img src="/assets/browsers/safari.svg" alt="" width="28" height="28"><span>Safari</span></a></li>
+          </ul>
           <p class="hero__meta" id="hero-meta">Chrome, Brave, Edge, Opera, Firefox and Safari on desktop. Not in the browser stores yet: store listings are coming.</p>
           <p class="notice notice--info" id="mobile-notice" hidden></p>
 
@@ -79,7 +95,7 @@
         <figure class="hero__visual">
           <div class="mock mock--testnet" role="img" aria-label="Illustration of the IronDivi Wallet popup on testnet: a purple header, a 1,250 DIVI balance, Send and Receive buttons, and recent activity with confirmation counts.">
             <div class="mock__header" aria-hidden="true">
-              <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+              <img class="mock__logo" src="/assets/brand/irondivi-wallet-mark.svg" alt="" width="28" height="28">
               <span class="mock__brand">Iron<span>Divi</span></span>
               <span class="mock__gear"></span>
             </div>
@@ -138,7 +154,7 @@
           <li class="card feature">
             <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v18M5 8h14M7 8l-3 7h6zM17 8l-3 7h6z"/></svg>
             <h3>Spending limits</h3>
-            <p>By default one send can move at most 10% of your balance. Change the percentage or set a fixed DIVI cap in Settings.</p>
+            <p>By default one send can move at most 10% of your balance. Change the percentage or set a fixed DIVI cap in Settings. A site asking for more is told only that the wallet cannot pay; the wallet tells you why.</p>
           </li>
           <li class="card feature">
             <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6zM6 3v18M10 9h5M10 13h5"/></svg>
@@ -168,12 +184,12 @@
     <section class="section section--alt" id="networks" aria-labelledby="networks-title">
       <div class="container">
         <h2 id="networks-title">You can always tell which network you're on</h2>
-        <p class="section__lead">Mainnet is real money; testnet is for trying things out. The wallet gives each its own colour, the same ones services.divi.domains uses, across the header, the logo, the network badge and the approval window.</p>
+        <p class="section__lead">Mainnet is real money; testnet is for trying things out. The wallet gives each its own colour, the same ones irondivi.com uses, across the header bar, the network badge and the approval window.</p>
         <div class="networks">
           <div class="network network--mainnet">
             <div class="mock mock--mainnet mock--compact" role="img" aria-label="Wallet popup header on mainnet, in Divi red.">
               <div class="mock__header" aria-hidden="true">
-                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <img class="mock__logo" src="/assets/brand/irondivi-wallet-mark.svg" alt="" width="28" height="28">
                 <span class="mock__brand">Iron<span>Divi</span></span>
                 <span class="mock__gear"></span>
               </div>
@@ -197,7 +213,7 @@
           <div class="network network--testnet">
             <div class="mock mock--testnet mock--compact" role="img" aria-label="Wallet popup header on testnet, in indigo.">
               <div class="mock__header" aria-hidden="true">
-                <span class="mock__logo"><svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>
+                <img class="mock__logo" src="/assets/brand/irondivi-wallet-mark.svg" alt="" width="28" height="28">
                 <span class="mock__brand">Iron<span>Divi</span></span>
                 <span class="mock__gear"></span>
               </div>
@@ -341,16 +357,29 @@
               </div>
               <a class="btn btn--primary" href="/downloads/" data-download="firefox">Download for Firefox</a>
             </div>
-            <p>The add-on isn't signed by Mozilla yet, so Firefox won't install it permanently.</p>
-            <h4 class="steps-title">Try it now (temporary)</h4>
-            <ol class="steps">
-              <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it. Firefox may offer to install it straight away and then refuse because it's unsigned; that's expected, use the steps below.</li>
-              <li><strong>Open</strong> <code>about:debugging#/runtime/this-firefox</code> in the address bar.</li>
-              <li><strong>Click &ldquo;Load Temporary Add-on&hellip;&rdquo;</strong> and pick the <code>.xpi</code> file.</li>
-            </ol>
-            <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
-            <h4 class="steps-title">Keep it installed</h4>
-            <p>Wait for the Mozilla-signed add-on. It is under review, and this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
+            <div id="firefox-signed" hidden>
+              <p>Mozilla has signed the add-on, so Firefox installs it like any other.</p>
+              <h4 class="steps-title">Install</h4>
+              <ol class="steps">
+                <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it.</li>
+                <li><strong>Open</strong> <code>about:addons</code>, click the gear button and choose <strong>&ldquo;Install Add-on From File&hellip;&rdquo;</strong>, then pick the <code>.xpi</code>. Dragging the file onto a Firefox window does the same.</li>
+                <li><strong>Click Add</strong> when Firefox asks. The wallet's icon appears under the puzzle-piece button; pin it to the toolbar from there.</li>
+              </ol>
+              <h4>Upgrading later</h4>
+              <p>Download and add the new version the same way. Firefox replaces the old one and keeps your wallet.</p>
+            </div>
+            <div id="firefox-unsigned">
+              <p>The add-on isn't signed by Mozilla yet, so Firefox won't install it permanently.</p>
+              <h4 class="steps-title">Try it now (temporary)</h4>
+              <ol class="steps">
+                <li><strong>Download the <code>.xpi</code></strong> and save it somewhere you can find it. Firefox may offer to install it straight away and then refuse because it's unsigned; that's expected, use the steps below.</li>
+                <li><strong>Open</strong> <code>about:debugging#/runtime/this-firefox</code> in the address bar.</li>
+                <li><strong>Click &ldquo;Load Temporary Add-on&hellip;&rdquo;</strong> and pick the <code>.xpi</code> file.</li>
+              </ol>
+              <p class="notice notice--warn">A temporary add-on is removed when Firefox restarts, and its wallet data may go with it. Write your recovery phrase down before you put anything in it.</p>
+              <h4 class="steps-title">Keep it installed</h4>
+              <p>Wait for the Mozilla-signed add-on: this page will offer it as soon as Mozilla signs it. Don't turn off Firefox's signature check to install this one: that would let any unsigned add-on in.</p>
+            </div>
           </div>
 
           <!-- Safari -->
@@ -385,14 +414,14 @@
           <div class="cmd">
             <p class="cmd__label">macOS or Linux, in Terminal</p>
             <div class="cmd__row">
-              <code class="cmd__code" id="cmd-shasum">shasum -a 256 irondivi-wallet-chrome-v0.0.6.zip</code>
+              <code class="cmd__code" id="cmd-shasum">shasum -a 256 irondivi-wallet-chrome-v0.0.13.zip</code>
               <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-shasum">Copy</button>
             </div>
           </div>
           <div class="cmd">
             <p class="cmd__label">Windows, in PowerShell</p>
             <div class="cmd__row">
-              <code class="cmd__code" id="cmd-ps">Get-FileHash irondivi-wallet-chrome-v0.0.6.zip -Algorithm SHA256</code>
+              <code class="cmd__code" id="cmd-ps">Get-FileHash irondivi-wallet-chrome-v0.0.13.zip -Algorithm SHA256</code>
               <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-ps">Copy</button>
             </div>
           </div>
@@ -414,7 +443,7 @@
         <p><span class="mono">SHA256SUMS</span> is signed with our release key, which never leaves our password manager. Its fingerprint is <code class="mono">SHA256:dyjX+6dCi19wwNdKJwS8yiqlIoKjAXGTxPyhYifA6gQ</code>; compare it with the one in the <a href="https://github.com/bshuler/irondivi-browser-extension#release-signing">source repository</a>, so this site alone cannot vouch for itself. With the files in one folder, in Terminal:</p>
         <div class="cmd">
           <div class="cmd__row">
-            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.divi.domains -n file -s SHA256SUMS-v0.0.5.sig &lt; SHA256SUMS-v0.0.5</code>
+            <code class="cmd__code" id="cmd-sig">ssh-keygen -Y verify -f allowed_signers -I releases@browser.irondivi.com -n file -s SHA256SUMS-v0.0.13.sig &lt; SHA256SUMS-v0.0.13</code>
             <button class="btn btn--ghost btn--sm copy" type="button" data-copy-target="cmd-sig">Copy</button>
           </div>
         </div>
@@ -486,7 +515,7 @@
           </details>
           <details>
             <summary>Which sites can use it?</summary>
-            <p>Sites on your Allowed Sites list, which starts as <span class="mono">games.divi.domains</span> alone. That covers Divi Games. The IronDivi web wallet at services.divi.domains is a wallet of its own and does not need this one. The wallet talks to sites through its own <code>window.irondivi</code> provider, not WalletConnect.</p>
+            <p>Sites on your Allowed Sites list, which starts as <span class="mono">games.divi.domains</span> alone. That covers Divi Games. The IronDivi web wallet at wallet.irondivi.com is a wallet of its own and does not need this one. The wallet talks to sites through its own <code>window.irondivi</code> provider, not WalletConnect.</p>
           </details>
         </div>
       </div>
@@ -497,10 +526,7 @@
     <div class="container site-footer__inner">
       <div class="site-footer__brand">
         <span class="brand">
-          <span class="brand__tile" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-          </span>
-          <span class="brand__word">Iron<span>Divi</span> Wallet</span>
+          <img class="brand__mark" src="/assets/brand/irondivi-wordmark.svg" alt="IronDivi" width="98" height="28"><span class="brand__product">Wallet</span>
         </span>
         <p class="site-footer__note">Beta software for the Divi blockchain. Use it at your own risk.</p>
       </div>
@@ -508,7 +534,7 @@
         <a href="https://github.com/bshuler/irondivi-browser-extension" rel="noopener">Source on GitHub</a>
         <a href="https://github.com/bshuler/irondivi-browser-extension/issues" rel="noopener">Report a problem</a>
         <a href="https://games.divi.domains/" rel="noopener">Divi Games</a>
-        <a href="https://services.divi.domains/" rel="noopener">IronDivi web wallet</a>
+        <a href="https://wallet.irondivi.com/" rel="noopener">IronDivi web wallet</a>
         <a href="/downloads/">All downloads</a>
         <a href="/privacy/">Privacy policy</a>
       </nav>

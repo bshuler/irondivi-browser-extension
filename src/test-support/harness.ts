@@ -54,7 +54,13 @@ export interface Harness {
   /** The content scripts the background has registered. */
   registeredScripts: any[];
   createdWindows: Array<{ id: number; url: string }>;
+  /** The size a new window really opens at; unset, the size asked for (Safari can ignore it). */
+  openWindowsAt?: { width: number; height: number };
+  /** windows.update calls, in order. */
+  windowUpdates: Array<Record<string, number>>;
   closeWindow: (id: number) => void;
+  /** The user granting a site outside the extension, as Safari's website access does. */
+  grantInBrowser: (origin: string) => void;
   broadcasts: string[];
   /** What the node's address index reports; a test may edit it in place (not reassign it) to make the node lie. */
   utxos: Utxo[];
@@ -83,7 +89,7 @@ export interface Harness {
    */
   restartWorker: () => Promise<void>;
   /** Open a wallet window's port to the background, as the popup does; from another URL if given */
-  openUiPort: (url?: string) => { disconnect: () => void };
+  openUiPort: (url?: string) => { disconnect: () => void; messages: any[] };
   /** Tell the background the idle state changed ('active', 'idle' or 'locked') */
   setIdleState: (state: string) => void;
   /** Whether the running worker's signing session is open (for the account) */
@@ -158,7 +164,9 @@ export async function createHarness(
   const onConnect = event();
   const onIdle = event();
   const onRemoved = event();
+  const onPermissionsAdded = event();
   const createdWindows: Array<{ id: number; url: string }> = [];
+  const windowUpdates: Array<Record<string, number>> = [];
   const broadcasts: string[] = [];
   const utxos: Utxo[] = [];
   const addressTxids: string[] = [];
@@ -225,11 +233,13 @@ export async function createHarness(
     action: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {} },
     windows: {
       getAll: async () => [],
-      create: async (opts: { url: string }) => {
+      create: async (opts: { url: string; width?: number; height?: number }) => {
         const w = { id: nextWindowId++, url: opts.url };
         createdWindows.push(w);
-        return { id: w.id, tabs: [{ id: w.id * 10 }] };
+        const size = h.openWindowsAt ?? { width: opts.width, height: opts.height };
+        return { id: w.id, tabs: [{ id: w.id * 10 }], ...size };
       },
+      update: async (id: number, opts: Record<string, number>) => { windowUpdates.push({ id, ...opts }); return { id }; },
       remove: async (id: number) => { onRemoved.listeners.forEach(l => l(id)); },
       onRemoved,
     },
@@ -257,6 +267,7 @@ export async function createHarness(
         grantedOrigins.push(...origins.filter(o => !grantedOrigins.includes(o)));
         return true;
       },
+      onAdded: onPermissionsAdded,
     },
   };
   (globalThis as any).chrome = chromeFake;
@@ -393,7 +404,12 @@ export async function createHarness(
     provider: () => fakeWindow.irondivi,
     registeredScripts,
     createdWindows,
+    windowUpdates,
     closeWindow: (id) => onRemoved.listeners.forEach(l => l(id)),
+    grantInBrowser: (origin) => {
+      grantedOrigins.push(origin);
+      onPermissionsAdded.listeners.forEach(l => l({ origins: [origin] }));
+    },
     broadcasts,
     utxos,
     fund,
@@ -408,9 +424,10 @@ export async function createHarness(
     restartWorker,
     openUiPort: (url = `${EXT_BASE}popup.html`) => {
       const onDisconnect = event();
-      const port = { name: 'irondivi-ui', sender: { id: EXT_ID, url }, onDisconnect, onMessage: event() };
+      const messages: any[] = [];
+      const port = { name: 'irondivi-ui', sender: { id: EXT_ID, url }, onDisconnect, onMessage: event(), postMessage: (m: any) => { messages.push(m); } };
       onConnect.listeners.forEach(l => l(port));
-      return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)) };
+      return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)), messages };
     },
     setIdleState: (state) => onIdle.listeners.forEach(l => l(state)),
     isAuthenticated: async (accountId?: string) =>

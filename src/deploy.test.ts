@@ -19,7 +19,7 @@ describe('EXT-13 deploy.sh stages privately and checks the whole site', () => {
   it('the stage is a fresh mktemp -d directory on the host, removed afterwards', () => {
     expect(local).toMatch(/STAGE=\$\(ssh "\$HOST" 'mktemp -d'\)/);
     expect(local).toMatch(/trap '.*ssh "\$HOST" "rm -rf/);
-    expect(local).toMatch(/scp -q [^\n]*"\$HOST:\$STAGE\/\$SITE\.conf"/);
+    expect(local).toMatch(/scp -q [^\n]*\$OLD_SITE\.conf" "\$HOST:\$STAGE\/"/);
   });
 
   it('before any sudo copy the host checks the stage is ours alone and holds no symlink', () => {
@@ -42,8 +42,11 @@ describe('EXT-13 deploy.sh stages privately and checks the whole site', () => {
     expect(rootCheck).toBeGreaterThan(remote.indexOf('sudo rsync -rlc "$STAGE/downloads/"'));
   });
 
-  it('the vhost is installed from the private stage', () => {
-    expect(remote).toContain('sudo cp "$conf_src" "$conf"');
+  it('both vhosts are installed from the private stage, the new site first', () => {
+    expect(remote).toContain('CONFS="$STAGE"');
+    expect(remote).toContain('local name=$1 src="$CONFS/$1.conf" conf');
+    expect(remote).toContain('sudo cp "$src" "$conf"');
+    expect(remote.indexOf('install_vhost "$SITE"')).toBeLessThan(remote.indexOf('install_vhost "$OLD_SITE"'));
   });
 });
 
@@ -52,7 +55,7 @@ describe('EXT-13 deploy.sh stages privately and checks the whole site', () => {
 // that styles the install instructions
 describe('EXT-31 the site loads nothing from another origin', () => {
   const site = (file: string) => readFileSync(fileURLToPath(new URL(`../site/${file}`, import.meta.url)), 'utf8');
-  const nginx = site('deploy/nginx/browser.divi.domains.conf');
+  const nginx = site('deploy/nginx/browser.irondivi.com.conf');
   const pages = ['index.html', '404.html', 'privacy/index.html'];
 
   for (const page of pages) {
@@ -60,7 +63,7 @@ describe('EXT-31 the site loads nothing from another origin', () => {
       const html = site(page);
       expect(html).not.toMatch(/googleapis|gstatic/);
       for (const [, url] of html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)="([^"]+)"/g)) {
-        const own = url.startsWith('https://browser.divi.domains/') || (url.startsWith('/') && !url.startsWith('//'));
+        const own = url.startsWith('https://browser.irondivi.com/') || (url.startsWith('/') && !url.startsWith('//'));
         expect(own, url).toBe(true);
       }
       const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)![1];

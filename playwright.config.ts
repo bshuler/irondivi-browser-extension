@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 60000,
   retries: 1,
   use: {
-    headless: false,
+    headless: process.env.PW_HEADED !== '1',
     viewport: { width: 400, height: 600 },
     screenshot: 'only-on-failure',
   },

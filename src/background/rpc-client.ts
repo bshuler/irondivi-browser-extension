@@ -73,6 +73,81 @@ interface AddressBalanceResponse {
   received: number; // In satoshis
 }
 
+/**
+ * Whether a transaction pays or spends any of the given addresses
+ */
+export function touchesAddresses(tx: any, ourAddresses: string[]): boolean {
+  const ourSet = new Set(ourAddresses);
+  return (tx.vout || []).some((v: any) => (v.scriptPubKey?.addresses || []).some((a: string) => ourSet.has(a)))
+    || (tx.vin || []).some((v: any) => v.address && ourSet.has(v.address));
+}
+
+/**
+ * Calculate net amount for a transaction relative to our addresses
+ */
+export function calculateTxAmount(tx: any, ourAddresses: string[]): number {
+  const ourSet = new Set(ourAddresses);
+  let received = 0;
+  let sent = 0;
+
+  // Sum outputs going to our addresses
+  for (const vout of tx.vout || []) {
+    const addresses = vout.scriptPubKey?.addresses || [];
+    for (const addr of addresses) {
+      if (ourSet.has(addr)) {
+        received += vout.value || 0;
+      }
+    }
+  }
+
+  // Sum inputs from our addresses
+  // DIVI RPC returns address and value directly on vin, not in prevout
+  for (const vin of tx.vin || []) {
+    if (vin.address && ourSet.has(vin.address)) {
+      sent += vin.value || 0;
+    }
+  }
+
+  return received - sent;
+}
+
+/**
+ * Extract all addresses involved in a transaction
+ */
+export function extractTxAddresses(tx: any): string[] {
+  const addresses = new Set<string>();
+
+  for (const vout of tx.vout || []) {
+    const addrs = vout.scriptPubKey?.addresses || [];
+    for (const addr of addrs) {
+      addresses.add(addr);
+    }
+  }
+
+  // DIVI RPC returns address directly on vin
+  for (const vin of tx.vin || []) {
+    if (vin.address) {
+      addresses.add(vin.address);
+    }
+  }
+
+  return Array.from(addresses);
+}
+
+/** A transaction as the wallet's history lists it, relative to our addresses */
+export function historyItemFromTx(tx: any, ourAddresses: string[]): TransactionHistoryItem {
+  const netAmount = calculateTxAmount(tx, ourAddresses);
+  return {
+    txid: tx.txid,
+    time: tx.time || tx.blocktime || Date.now() / 1000,
+    confirmations: tx.confirmations || 0,
+    amount: Math.abs(netAmount),
+    fee: tx.fee || 0,
+    addresses: extractTxAddresses(tx),
+    type: netAmount >= 0 ? 'receive' : 'send',
+  };
+}
+
 export class RPCClient {
   private readonly TIMEOUT_MS = 30000; // 30 seconds
   private network: NetworkType = 'testnet';
@@ -88,7 +163,7 @@ export class RPCClient {
   /**
    * Make an RPC call
    */
-  private async rpc<T = any>(method: string, params: any[] = []): Promise<T> {
+  async rpc<T = any>(method: string, params: any[] = []): Promise<T> {
     const url = NETWORKS[this.network].rpcUrl;
 
     // Create AbortController for timeout
@@ -255,17 +330,8 @@ export class RPCClient {
           const result = results[j];
           if (result.status === 'fulfilled' && result.value) {
             const tx = result.value;
-            if (maybeOurs.has(batch[j]) && !this.touchesAddresses(tx, addresses)) continue;
-            const netAmount = this.calculateTxAmount(tx, addresses);
-            const item: TransactionHistoryItem = {
-              txid: tx.txid,
-              time: tx.time || tx.blocktime || Date.now() / 1000,
-              confirmations: tx.confirmations || 0,
-              amount: Math.abs(netAmount),
-              fee: tx.fee || 0,
-              addresses: this.extractTxAddresses(tx),
-              type: netAmount >= 0 ? 'receive' : 'send',
-            };
+            if (maybeOurs.has(batch[j]) && !touchesAddresses(tx, addresses)) continue;
+            const item = historyItemFromTx(tx, addresses);
             (item.confirmations === 0 ? pending : transactions).push(item);
           } else if (result.status === 'rejected' && !maybeOurs.has(batch[j])) {
             console.warn(`Failed to get transaction ${batch[j]}`);
@@ -342,67 +408,6 @@ export class RPCClient {
       throw new Error('Node returned an invalid transaction');
     }
     return hex;
-  }
-
-  /**
-   * Whether a transaction pays or spends any of the given addresses
-   */
-  private touchesAddresses(tx: any, ourAddresses: string[]): boolean {
-    const ourSet = new Set(ourAddresses);
-    return (tx.vout || []).some((v: any) => (v.scriptPubKey?.addresses || []).some((a: string) => ourSet.has(a)))
-      || (tx.vin || []).some((v: any) => v.address && ourSet.has(v.address));
-  }
-
-  /**
-   * Calculate net amount for a transaction relative to our addresses
-   */
-  private calculateTxAmount(tx: any, ourAddresses: string[]): number {
-    const ourSet = new Set(ourAddresses);
-    let received = 0;
-    let sent = 0;
-
-    // Sum outputs going to our addresses
-    for (const vout of tx.vout || []) {
-      const addresses = vout.scriptPubKey?.addresses || [];
-      for (const addr of addresses) {
-        if (ourSet.has(addr)) {
-          received += vout.value || 0;
-        }
-      }
-    }
-
-    // Sum inputs from our addresses
-    // DIVI RPC returns address and value directly on vin, not in prevout
-    for (const vin of tx.vin || []) {
-      if (vin.address && ourSet.has(vin.address)) {
-        sent += vin.value || 0;
-      }
-    }
-
-    return received - sent;
-  }
-
-  /**
-   * Extract all addresses involved in a transaction
-   */
-  private extractTxAddresses(tx: any): string[] {
-    const addresses = new Set<string>();
-
-    for (const vout of tx.vout || []) {
-      const addrs = vout.scriptPubKey?.addresses || [];
-      for (const addr of addrs) {
-        addresses.add(addr);
-      }
-    }
-
-    // DIVI RPC returns address directly on vin
-    for (const vin of tx.vin || []) {
-      if (vin.address) {
-        addresses.add(vin.address);
-      }
-    }
-
-    return Array.from(addresses);
   }
 
   /**

@@ -34,6 +34,16 @@ ssh "$host" bash -s "$remote_dir" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 export CI=1
+# The Node pinned in .nvmrc (and package.json engines), not the host's: under the
+# host's Node 20 the provider-channel, approval-window and site-scripts tests fail.
+node_version="$(cat .nvmrc)"
+export NVM_DIR="$HOME/.nvm"
+# nvm.sh exits non-zero over an npm prefix in ~/.npmrc, so test for the function instead
+. "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+command -v nvm >/dev/null || { echo "nvm is not installed on $(hostname)" >&2; exit 1; }
+[ -x "$NVM_DIR/versions/node/v$node_version/bin/node" ] || nvm install "$node_version" >/dev/null 2>&1 || true
+export PATH="$NVM_DIR/versions/node/v$node_version/bin:$PATH"
+[ "$(node -v)" = "v$node_version" ] || { echo "Node $node_version is not available on $(hostname)" >&2; exit 1; }
 echo "node $(node -v), npm $(npm -v), $(nproc) cores"
 npm ci --no-audit --no-fund --loglevel=error
 npx tsc --noEmit

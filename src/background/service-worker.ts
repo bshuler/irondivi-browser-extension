@@ -10,7 +10,10 @@ import { Transaction, bytesToHex } from '../lib/transaction';
 import { recordSpend, spentToday } from './spend-ledger';
 import { highWaterBalance, recordBalance } from './balance-record';
 import { rpcClient } from './rpc-client';
+import { chain, getServerConfig, saveServerConfig } from './chain';
+import { PUBLIC_ELECTRUM, cleanServerUrl, type ServerConfig, type ServerMode } from '../shared/server-config';
 import { addPendingTx, getPendingSpends, getPendingTxids, outpoint, prunePendingTxs } from './pending-txs';
+import { filterNftCoins, isColored } from './nft-guard';
 import { connectionManager, type PendingRequest } from './connection-manager';
 import { secureWipe } from '../shared/crypto-utils';
 import { accessStatus, askedTooRecently, canonicalOrigin, cleanReason, mayUse, withBlock, withChoice, withoutBlock, withoutGrant, MAX_SITE_ENTRIES, type AccessChoice, type AccessStatus } from '../shared/site-access';
@@ -22,6 +25,8 @@ import { checkRecipient, recipientNote } from '../popup/recipient-check';
 import { connectRelay, RELAY_ALARM, RELAY_PREFIX } from './connect-relay';
 import { swapService, SWAP_TICK_ALARM } from './swap-service';
 import { installRecordsSeal, getRecordsWarning, dismissRecordsWarning, noteDroppedSitePatterns } from './records-seal';
+import { notePaymentRefused, getPaymentNotice, dismissPaymentNotice } from './payment-notice';
+import { isRecordFee } from '../lib/dvns';
 
 // Every write of the unencrypted records goes through the seal (EXT-3)
 installRecordsSeal();
@@ -34,8 +39,9 @@ const BLOCKED = { success: false, error: 'BLOCKED: this site is blocked in IronD
 const PASSWORD_NEEDED = { success: false, error: 'Enter your password to confirm' };
 // What a site is told when a payment it asks for cannot be made
 const CANNOT_PAY = 'The wallet cannot make this payment';
-// What a site may put in a send; the memo is the "memo" capability
-const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo'];
+// What a site may put in a send; the memo is the "memo" capability, and
+// "opReturn" is the same memo by the name the IronDivi Name Service page uses
+const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
 /**
  * Unlock with the password given for one send or signature from the popup.
@@ -81,15 +87,26 @@ function diviText(sats: bigint): string {
 /**
  * Build (unsigned) a send from the account, enforcing the transaction limits
  * on what leaves the wallet: the amount plus the fee.
+ * A name record's fee paid from the popup (`recordFee`, see isRecordFee) is
+ * held to the absolute limits only: its payee and amount are fixed by the
+ * protocol, and the default 10% would block a 500 DIVI name below 5,000.
  * Throws with a user-facing message if the send is not allowed.
  */
-async function buildSend(account: Account, request: TransactionRequest): Promise<BuiltTransaction & { balanceSats: bigint }> {
+/** What the node reports the spendable coins add up to */
+function reported(utxos: { satoshis: bigint }[]): bigint {
+  return utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+}
+
+async function buildSend(account: Account, request: TransactionRequest, recordFee = false): Promise<BuiltTransaction & { balanceSats: bigint }> {
   const addresses = account.addresses.map(a => a.address);
   // The node lists a coin as unspent until the send that spends it is mined,
   // so coins this wallet already spent are left out (EXT-27)
   const pendingSpends = await getPendingSpends(account.network);
-  const listed = await rpcClient.getUtxos(addresses);
-  const utxos = listed.filter(u => !pendingSpends.has(outpoint(u)));
+  const listed = await chain.getUtxos(addresses);
+  const unspent = listed.filter(u => !pendingSpends.has(outpoint(u)));
+  // A Divi NFT coin is never spent as plain DIVI: that would destroy the NFT
+  // (DIVI-ASSET-STANDARD §10). A coin that cannot be checked is held too.
+  const { spendable: utxos, held } = await filterNftCoins(account.network, unspent, txid => chain.getRawTransactionHex(txid));
 
   let built: BuiltTransaction;
   try {
@@ -101,49 +118,63 @@ async function buildSend(account: Account, request: TransactionRequest): Promise
       memo: request.memo,
     }, account.network);
   } catch (error) {
-    if (utxos.length < listed.length && error instanceof Error && /^Insufficient funds/.test(error.message)) {
-      throw new Error(`${error.message}. Some coins are held by an earlier send until it confirms`);
+    if (error instanceof Error && /^Insufficient funds/.test(error.message)) {
+      if (held.length > 0) {
+        throw new Error(`${error.message}. Some coins carry a Divi NFT or could not be checked and are never spent as DIVI`);
+      }
+      if (unspent.length < listed.length) {
+        throw new Error(`${error.message}. Some coins are held by an earlier send until it confirms`);
+      }
     }
     throw error;
   }
 
   const limits = (await getSettings()).transactionLimits;
+  // The Spending limits switch is off: the owner chose to send any amount (ADR 0002)
+  if (!limits.enabled) return { ...built, balanceSats: reported(utxos) };
   const spend = built.amountSats + built.feeSats;
   // Percentages are of the larger of what the node reports now and the most
   // the wallet has seen this week, so a node that hides coins cannot block
   // sends. One that invents coins cannot spend them (sendFromAccount checks
   // the previous transactions) but does loosen the percentages; the absolute
   // limits are the control for that.
-  const reported = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
-  await recordBalance(account.id, account.network, reported);
+  const now = reported(utxos);
+  await recordBalance(account.id, account.network, now);
   const seen = await highWaterBalance(account.id, account.network);
-  const balance = seen > reported ? seen : reported;
+  const balance = seen > now ? seen : now;
 
+  // Every refusal names the limit, the most that can go now, and where to change it
+  const over = (limit: string, most: bigint, note = '') =>
+    new Error(`Over your spending limit: ${limit} (up to ${diviText(most > 0n ? most : 0n)} DIVI now, fee included)${note}. Settings → Spending limits`);
   if (limits.maxAmountAbsolute > 0 && spend > diviToSatoshis(limits.maxAmountAbsolute)) {
-    throw new Error(`Transaction exceeds maximum amount limit of ${limits.maxAmountAbsolute} DIVI (amount plus fee)`);
+    throw over(`${limits.maxAmountAbsolute} DIVI per send`, diviToSatoshis(limits.maxAmountAbsolute));
   }
-  if (limits.maxAmountPercent > 0) {
+  // Why a name record's fee was held to a percentage limit after all
+  const recordNote = !recordFee && request.memo?.startsWith('DVNS1\n')
+    ? '. A name record goes past the percentage limits only when the popup pays the registry exactly its fee'
+    : '';
+  if (limits.maxAmountPercent > 0 && !recordFee) {
     const bp = basisPoints(limits.maxAmountPercent);
     if (spend * 10000n > balance * bp) {
-      throw new Error(`Transaction exceeds ${limits.maxAmountPercent}% of balance (max: ${diviText(balance * bp / 10000n)} DIVI including the fee)`);
+      throw over(`${limits.maxAmountPercent}% of your balance per send`, balance * bp / 10000n, recordNote);
     }
   }
 
   if (limits.dailyLimitAbsolute > 0 || limits.dailyLimitPercent > 0) {
     const spent = await spentToday(account.id, account.network);
     if (limits.dailyLimitAbsolute > 0 && spent + spend > diviToSatoshis(limits.dailyLimitAbsolute)) {
-      throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitAbsolute} DIVI (sent in the last 24 hours: ${diviText(spent)} DIVI)`);
+      throw over(`${limits.dailyLimitAbsolute} DIVI a day`, diviToSatoshis(limits.dailyLimitAbsolute) - spent);
     }
-    if (limits.dailyLimitPercent > 0) {
+    if (limits.dailyLimitPercent > 0 && !recordFee) {
       // The balance 24 hours ago is roughly today's plus what was sent since
       const bp = basisPoints(limits.dailyLimitPercent);
       if ((spent + spend) * 10000n > (balance + spent) * bp) {
-        throw new Error(`Transaction exceeds the daily limit of ${limits.dailyLimitPercent}% of balance`);
+        throw over(`${limits.dailyLimitPercent}% of your balance a day`, (balance + spent) * bp / 10000n - spent, recordNote);
       }
     }
   }
 
-  return { ...built, balanceSats: reported };
+  return { ...built, balanceSats: now };
 }
 
 /**
@@ -248,9 +279,12 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
       if (!request.data.message) {
         return { success: false, error: 'Message is required for sign_message' };
       }
+      // Checked again against the account as it is now (unlock re-derived its
+      // addresses), so only the exact address shown in the window can sign
+      const signer = resolveAddress(account, request.data.address, request.data.addressIndex);
       const signature = await signingSession.signMessage(
         request.data.message,
-        request.data.addressIndex || 0,
+        signer.index,
         account.network,
         request.accountId
       );
@@ -309,13 +343,16 @@ async function verifyInputs(built: BuiltTransaction): Promise<void> {
   for (const input of built.inputs) {
     let prev = byTxid.get(input.txid);
     if (!prev) {
-      prev = Transaction.fromHex(await rpcClient.getRawTransactionHex(input.txid));
+      prev = Transaction.fromHex(await chain.getRawTransactionHex(input.txid));
       if (prev.txid() !== input.txid) {
         throw new Error('Node returned a different transaction than the coin being spent');
       }
       byTxid.set(input.txid, prev);
     }
     const output = prev.outputs[input.vout];
+    if (output && isColored(prev, input.vout)) {
+      throw new Error('A coin carries a Divi NFT; spending it would destroy the NFT');
+    }
     if (!output || output.value !== input.satoshis ||
         bytesToHex(output.script as Uint8Array) !== p2pkhScript(input.address)) {
       throw new Error('A coin the node reported does not match the transaction that made it');
@@ -337,9 +374,10 @@ class FeeRoseError extends Error {
 async function sendFromAccount(
   account: Account,
   request: TransactionRequest,
-  maxFeeSats?: bigint
+  maxFeeSats?: bigint,
+  recordFee = false
 ): Promise<{ txid: string; fee: number }> {
-  const built = await buildSend(account, request);
+  const built = await buildSend(account, request, recordFee);
   if (maxFeeSats !== undefined && built.feeSats > maxFeeSats) {
     throw new FeeRoseError();
   }
@@ -373,7 +411,7 @@ async function sendFromAccount(
       network: account.network,
       memo: request.memo,
     });
-    const txid = await rpcClient.broadcastTransaction(signedHex);
+    const txid = await chain.broadcastTransaction(signedHex);
     await recordSpend(account.id, account.network, built.amountSats + built.feeSats);
     await addPendingTx(account.network, txid, built.inputs);
     return { txid, fee: built.fee };
@@ -390,9 +428,15 @@ async function sendFromAccount(
  */
 function resolveAddress(account: Account, address?: unknown, addressIndex?: unknown): AccountAddress {
   let found: AccountAddress | undefined;
-  if (address !== undefined && address !== null && address !== '') {
+  if (address !== undefined) {
+    if (typeof address !== 'string' || !address) {
+      throw new Error('Invalid address');
+    }
     found = account.addresses.find(a => a.address === address);
   } else if (addressIndex !== undefined && addressIndex !== null) {
+    if (typeof addressIndex !== 'number' || !Number.isInteger(addressIndex) || addressIndex < 0) {
+      throw new Error('Invalid address index');
+    }
     found = account.addresses.find(a => a.index === addressIndex);
   } else {
     found = account.addresses[0];
@@ -561,7 +605,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         const addresses = payload?.address
           ? [resolveAddress(account, payload.address).address]
           : account.addresses.map(a => a.address);
-        const balance = await rpcClient.getBalance(addresses);
+        const balance = await chain.getBalance(addresses);
         if (!payload?.address && Number.isFinite(balance) && balance > 0) {
           await recordBalance(account.id, account.network, diviToSatoshis(balance));
         }
@@ -582,7 +626,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         const ourAddresses = account.addresses.map(a => a.address);
         const ourAddressSet = new Set(ourAddresses);
         const pendingTxids = await getPendingTxids(account.network);
-        const history = await rpcClient.getTransactionHistory(ourAddresses, payload?.limit || 50, pendingTxids);
+        const history = await chain.getTransactionHistory(ourAddresses, payload?.limit || 50, pendingTxids);
         await prunePendingTxs(account.network, new Set(history.filter(tx => tx.confirmations > 0).map(tx => tx.txid)));
 
         // Map to UI Transaction format
@@ -642,8 +686,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           if (!isConnected) return NOT_CONNECTED;
           if (account.addresses.length === 0) return noAddressesOn(account);
 
-          // Sign with the address the site asked for, which must be ours
-          const signer = resolveAddress(account, payload?.address, payload?.addressIndex);
+          // Sign with the address the site asked for, which must be ours; a
+          // site names addresses, never internal derivation indexes
+          const signer = resolveAddress(account, payload?.address);
 
           try {
             // A game transaction is refused here; a session grant comes only
@@ -736,13 +781,17 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
             return { success: false, error: `Unsupported option: ${unknown.join(', ')}`, code: ERR.UNSUPPORTED };
           }
         }
+        // opReturn is another name for memo; two different values are refused
+        if (payload?.opReturn !== undefined && payload?.memo !== undefined && payload.opReturn !== payload.memo) {
+          return { success: false, error: 'memo and opReturn differ; send one of them', code: ERR.INVALID_PARAMS };
+        }
         const request: TransactionRequest = {
           to: payload.to,
           amount: payload.amount,
           // Only the owner, in the popup, may choose the fee; a site's is ignored
           fee: origin ? undefined : payload.fee,
           fromAddresses: payload.fromAddresses,
-          memo: payload.memo,
+          memo: payload?.memo ?? payload?.opReturn,
         };
 
         // From a dApp (has origin): needs a connection, then the user's approval
@@ -757,7 +806,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           let built: Awaited<ReturnType<typeof buildSend>>;
           try {
             built = await buildSend(account, request);
-          } catch {
+          } catch (error) {
+            // The site gets no reason; the owner sees it in the popup
+            await notePaymentRefused(origin, request.amount, error instanceof Error ? error.message : String(error));
             return { success: false, error: CANNOT_PAY };
           }
 
@@ -791,7 +842,14 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         // From the popup: every send needs the password, so an open session
         // alone sends nothing
         if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
-        const sent = await sendFromAccount(account, request);
+        // Only the owner, in the popup, gets a name record's fee past the
+        // percentage limits; a site's payment never does. A bad amount is
+        // left for the build to name.
+        let recordFee = false;
+        try {
+          recordFee = isRecordFee(account.network, request.to, parseDiviAmount(request.amount), request.memo);
+        } catch { /* not a record fee */ }
+        const sent = await sendFromAccount(account, request, undefined, recordFee);
         return { success: true, data: sent };
       }
 
@@ -836,7 +894,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true };
 
       case MSG.VALIDATE_ADDRESS: {
-        const isValid = await rpcClient.validateAddress(payload.address);
+        const isValid = await chain.validateAddress(payload.address);
         return { success: true, data: { isValid } };
       }
 
@@ -846,11 +904,54 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true, data: { settings: currentSettings } };
       }
 
+      // One banner in the popup: a records warning first, else why a site's
+      // payment was refused
       case MSG.GET_RECORDS_WARNING:
-        return { success: true, data: { warning: await getRecordsWarning() } };
+        return { success: true, data: { warning: await getRecordsWarning() ?? await getPaymentNotice() } };
+
+      case MSG.GET_SERVER:
+        return { success: true, data: await chain.status() };
+
+      // Test a server address without saving it (design §5, §6)
+      case MSG.TEST_SERVER: {
+        const url = cleanServerUrl(payload?.url);
+        if (!url) return { success: false, error: 'Use an address that starts with wss://' };
+        return { success: true, data: await chain.test(url, rpcClient.getNetwork()) };
+      }
+
+      // Save is only for a server that passed the test just now
+      case MSG.SET_SERVER: {
+        const network = payload?.network as NetworkType;
+        const mode = payload?.mode as ServerMode;
+        if (!Object.prototype.hasOwnProperty.call(NETWORKS, network) || !['default', 'public', 'own'].includes(mode)) {
+          return { success: false, error: 'Invalid server setting' };
+        }
+        const current = await getServerConfig();
+        const next: ServerConfig = { ...current };
+        if (mode === 'own' || mode === 'public') {
+          const url = mode === 'public' ? PUBLIC_ELECTRUM[network] : cleanServerUrl(payload.url);
+          if (!url) return { success: false, error: 'Use an address that starts with wss://' };
+          const check = await chain.test(url, network);
+          if (!check.ok) return { success: false, error: check.message };
+          next[network] = mode === 'own' ? { mode, url } : { mode };
+        } else {
+          next[network] = { mode };
+        }
+        await saveServerConfig(next);
+        chain.reset();
+        stopPush();
+        void startPush();
+        return { success: true, data: await chain.status() };
+      }
+
+      case MSG.USE_DEFAULT_SERVER_SESSION:
+        chain.useDefaultThisSession();
+        stopPush();
+        return { success: true, data: await chain.status() };
 
       case MSG.DISMISS_RECORDS_WARNING:
-        await dismissRecordsWarning();
+        if (await getRecordsWarning()) await dismissRecordsWarning();
+        else await dismissPaymentNotice();
         return { success: true };
 
       case MSG.GET_NETWORK: {
@@ -890,6 +991,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         // Update RPC client network if changed
         if (updates.network) {
           rpcClient.setNetwork(updates.network);
+          chain.reset();
+          stopPush();
+          void startPush();
         }
         // The wallet's scripts follow the allowed sites
 
@@ -1189,11 +1293,50 @@ runtime.onConnect?.addListener((port: chrome.runtime.Port) => {
   // Only the extension's own pages; a content script's port has a web page URL
   if (port.name !== UI_PORT || !port.sender?.url?.startsWith(runtime.getURL(''))) return;
   openUiPorts.add(port);
+  void startPush();
   port.onDisconnect.addListener(() => {
     openUiPorts.delete(port);
-    if (openUiPorts.size === 0) void signingSession.clearSession();
+    if (openUiPorts.size === 0) {
+      void signingSession.clearSession();
+      stopPush();
+      chain.endSession();
+    }
   });
 });
+
+// With a chosen Electrum server the node pushes new blocks and changes to our
+// addresses; tell the open windows to refresh. The default path has no push.
+let stopWatching: Array<() => void> = [];
+let pushStarting = false;
+function tellWindows(): void {
+  for (const port of openUiPorts) {
+    try { port.postMessage({ type: 'chain-push' }); } catch { /* window went away */ }
+  }
+}
+async function startPush(): Promise<void> {
+  if (stopWatching.length > 0 || pushStarting) return;
+  pushStarting = true;
+  try {
+    const off: Array<() => void> = [];
+    const blocks = await chain.watchBlocks(tellWindows);
+    if (blocks) off.push(blocks);
+    const account = await accountManager.getSelectedAccount();
+    if (account && blocks) {
+      const addrs = await chain.watchAddresses(account.addresses.map(a => a.address), tellWindows);
+      if (addrs) off.push(addrs);
+    }
+    stopWatching = off;
+    if (openUiPorts.size === 0) stopPush();
+  } catch {
+    // No push is not an error: the wallet refreshes when asked
+  } finally {
+    pushStarting = false;
+  }
+}
+function stopPush(): void {
+  stopWatching.forEach(off => off());
+  stopWatching = [];
+}
 
 // Lock when the screen locks
 idle.onStateChanged?.addListener((state: string) => {
@@ -1215,6 +1358,10 @@ async function initialize() {
 
 browserAPI.runtime.onInstalled?.addListener(() => { void syncSiteScripts(); });
 browserAPI.runtime.onStartup?.addListener(() => { void syncSiteScripts(); });
+// Safari grants website access in its own settings and toolbar, not through
+// the extension; register for a newly allowed site now, not at the next launch
+browserAPI.permissions?.onAdded?.addListener(() => { void syncSiteScripts(); });
+browserAPI.permissions?.onRemoved?.addListener(() => { void syncSiteScripts(); });
 
 // Keep web pages' content scripts out of local storage, where the encrypted
 // vault lives. They ask SITE_ALLOWED instead. Chrome and Edge support this for

@@ -118,6 +118,14 @@ describe('EXT-3 changes made outside the wallet are undone', () => {
     expect((await h.popup('UPDATE_SETTINGS', { hideBalance: true })).success).toBe(true);
   });
 
+  it('the Spending limits switch turned off outside the wallet is put back on', async () => {
+    const { DEFAULT_SETTINGS } = await import('../shared/storage');
+    const settings = h.storage.settings ?? DEFAULT_SETTINGS;
+    h.storage.settings = { ...settings, transactionLimits: { ...settings.transactionLimits, enabled: false } };
+    expect((await unlock()).success).toBe(true);
+    expect(h.storage.settings.transactionLimits.enabled).toBe(true);
+  });
+
   it('a changed contact address is put back', async () => {
     const added = await h.popup('ADD_CONTACT', { name: 'Friend', address: account.addresses[0].address, network: 'testnet' });
     expect(added.success).toBe(true);

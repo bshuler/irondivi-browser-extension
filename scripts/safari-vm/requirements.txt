@@ -1,0 +1,4 @@
+vncdotool==1.4.2
+Twisted==26.4.0
+Pillow==13.0.0
+cryptography==50.0.2

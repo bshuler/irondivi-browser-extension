@@ -14,10 +14,12 @@ describe('L6 the recovery phrase cannot be copied', () => {
     expect(modal).not.toMatch(/copy/i);
   });
 
-  it('the only text put on the clipboard is the address', () => {
+  it('the only text put on the clipboard is the address, or a payment request for it', () => {
     for (const file of ['modals.ts', 'account-ui.ts', 'settings-ui.ts', 'popup.ts', 'send-ui.ts', 'contacts-ui.ts', 'signing-request-ui.ts']) {
       expect(read(file), file).not.toMatch(/clipboard\s*\.\s*write/);
     }
-    expect(read('wallet-ui.ts').match(/clipboard\s*\.\s*write\w*\(([^)]*)\)/g)).toEqual(['clipboard.writeText(primaryAddress)']);
+    expect(read('wallet-ui.ts').match(/clipboard\s*\.\s*write\w*\(([^)]*)\)/g)).toEqual(['clipboard.writeText(request.text)', 'clipboard.writeText(primaryAddress)']);
+    // request.text is only ever formatPaymentUri of the selected address
+    expect(read('wallet-ui.ts')).toMatch(/const text = formatPaymentUri\(\{ address, amount, label, memo \}\)/);
   });
 });

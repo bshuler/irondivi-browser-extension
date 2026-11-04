@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-10
-- **Decided by:** Bert Shuler
+- **Decided by:** human
 - **Scope:** the Safari target (`scripts/safari.sh`, `npm run build:safari:app`)
 
 ## Ruling

@@ -2,7 +2,7 @@
 
 The text, answers and files each extension store asks for, kept here so a
 submission is copy and paste. The privacy policy is
-<https://browser.divi.domains/privacy/> (`site/privacy/index.html`).
+<https://browser.irondivi.com/privacy/> (`site/privacy/index.html`).
 
 Screenshots: `STORE_SHOTS=1 npx playwright test tests/store-screenshots.spec.ts`
 against a release build (`npm run build:all`). It writes five 1280x800 PNGs to
@@ -40,7 +40,7 @@ mocked testnet node and never show a recovery phrase.
 
 **Category:** Chrome: Tools (Productivity > Tools). AMO: Other. Edge: Productivity.
 
-**Support / homepage:** https://browser.divi.domains
+**Support / homepage:** https://browser.irondivi.com
 
 **Issues:** https://github.com/bshuler/irondivi-browser-extension/issues
 
@@ -63,6 +63,7 @@ Upload `packages/irondivi-wallet-chrome-v<version>.zip` (Edge:
 | `alarms` | Locks the wallet after the idle time the user chose, and keeps an IronDivi Connect pairing polling its relay, while the service worker sleeps. |
 | `idle` | Locks the wallet when the computer is idle or the screen locks. |
 | `scripting` | Adds the `window.irondivi` provider only to sites the user allowed, by registering the content script for those sites at run time. |
+| `activeTab` | When the user presses "Scan this tab" on Send, the popup takes one capture of the visible tab and reads a payment QR code from it, in the popup. The capture is never stored or sent anywhere. Only the tab open when the user opened the wallet is reachable, and only while the popup is open. |
 | `https://*/*` (host) | The user can allow any https site to ask the wallet for payments; the wallet registers its content script on that site only after the user allows it, and nowhere else. The same permission lets the wallet reach the IronDivi Connect relay named in a pairing code the user pasted. |
 | `https://games.divi.domains/*` | The Divi Games site, allowed by default. |
 | `https://services.divi.domains/*`, `https://vps1.divi.domains/*` | The Divi network node (RPC) and the faucets the wallet reads balances from and sends transactions through. |
@@ -74,12 +75,12 @@ Upload `packages/irondivi-wallet-chrome-v<version>.zip` (Edge:
 collect or transmit personal data. Certify: not sold to third parties, not
 used for unrelated purposes, not used for creditworthiness or lending.
 
-**Privacy policy URL:** https://browser.divi.domains/privacy/
+**Privacy policy URL:** https://browser.irondivi.com/privacy/
 
 ## Firefox Add-ons (AMO)
 
 Upload `packages/irondivi-wallet-firefox-v<version>.xpi`. The add-on ID is
-`irondivi-wallet@divi.domains` and the manifest declares
+`irondivi-wallet@irondivi.com` and the manifest declares
 `data_collection_permissions: { required: ["none"] }`.
 
 **Summary** (250 characters at most):
@@ -117,5 +118,5 @@ git archive --format=zip -o packages/store/irondivi-wallet-source-v$v.zip v$v
 ## Safari (Mac App Store)
 
 `scripts/safari.sh` builds the app with Xcode. Signing, notarization and the
-App Store listing need Bert's Apple Developer account; reuse the text above,
+App Store listing need Human's Apple Developer account; reuse the text above,
 the privacy policy URL, and "Data Not Collected" for App Privacy.

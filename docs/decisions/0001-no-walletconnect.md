@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-05
-- **Decided by:** Bert Shuler
+- **Decided by:** human
 - **Scope:** this extension and every Divi wallet (`divi-infrastructure/divi-wallet`,
   the NFT marketplace's `wallet-bridge.ts`, any future dApp integration)
 

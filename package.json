@@ -1,6 +1,6 @@
 {
   "name": "irondivi-browser-extension",
-  "version": "0.0.6",
+  "version": "0.0.14",
   "description": "IronDivi Wallet Browser Extension",
   "type": "module",
   "engines": {
@@ -19,7 +19,7 @@
     "package:release": "npm run package",
     "lint": "eslint src/",
     "test": "playwright test",
-    "test:headed": "playwright test --headed",
+    "test:headed": "PW_HEADED=1 playwright test --headed",
     "test:unit": "vitest",
     "check:remote": "scripts/remote-check.sh",
     "reproduce": "scripts/reproduce.sh"
@@ -31,7 +31,8 @@
     "esbuild": "0.20.2",
     "eslint": "8.57.1",
     "typescript": "5.9.3",
-    "vitest": "1.6.1"
+    "vitest": "1.6.1",
+    "web-ext": "10.7.0"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",

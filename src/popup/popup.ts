@@ -5,6 +5,7 @@
  * All substantive logic is delegated to specialized modules.
  */
 
+import { setupNamesUIHandlers } from './names-ui';
 import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, hideView } from './ui-state';
@@ -14,6 +15,7 @@ import { runtime } from '../shared/browser-polyfill';
 import { setupMnemonicModalHandlers, showPasswordModal } from './modals';
 import { setUnlockDeps } from './unlock-retry';
 import { showRecordsWarning } from './records-warning-ui';
+import { refreshServerUI, setupServerUIHandlers } from './server-ui';
 import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensureNetworkAddresses } from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
@@ -105,10 +107,12 @@ function setupEventListeners(): void {
   onPasswordAccepted(() => void showRecordsWarning());
   setupAccountUIHandlers();
   setupWalletUIHandlers();
+  setupServerUIHandlers();
   setupSendUIHandlers();
   setupContactsUIHandlers();
   setupSettingsUIHandlers();
   setupSigningRequestUIHandlers();
+  setupNamesUIHandlers();
 
   // Tab management
   setupTabHandlers();
@@ -143,11 +147,19 @@ async function init(): Promise<void> {
   // Held open while this window is; when the last wallet window closes, the
   // background locks the wallet. A browser without it still opens the popup.
   try {
-    runtime.connect({ name: UI_PORT });
+    const port = runtime.connect({ name: UI_PORT });
+    // The chosen Electrum server pushed a new block or a change to our addresses
+    port?.onMessage?.addListener((msg: { type?: string }) => {
+      if (msg?.type !== 'chain-push') return;
+      void loadBalance();
+      void loadTransactions();
+    });
   } catch {
     console.warn('Could not tell the background this window is open');
   }
   setupEventListeners();
+  // An approval window's title bar takes some of its height: fill what is left
+  if (checkApprovalParams()) document.body.classList.add('approval-window');
 
   showLoading('Loading wallet...');
 
@@ -172,6 +184,7 @@ async function init(): Promise<void> {
     await loadAccounts();
     // Every unlock can find the records changed; an approval window shows it too
     void showRecordsWarning();
+    void refreshServerUI();
 
     if (approvalParams) {
       // This is an approval popup - check for the specific pending request

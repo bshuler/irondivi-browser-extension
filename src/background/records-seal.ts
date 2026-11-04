@@ -23,7 +23,7 @@
 import { storage } from '../shared/browser-polyfill';
 import { NETWORKS, UNLOCK_NEEDED, type NetworkType } from '../shared/constants';
 import {
-  DEFAULT_SETTINGS, normalizeSettings, setRecordsWriter, getSecrets,
+  DEFAULT_SETTINGS, normalizeSettings, setRecordsWriter, getSecrets, limitsSet,
   storeRecordsKey, anySecretHoldsRecordsKey, openSecretQuietly,
   type Account, type Connection, type Contact, type OpenedSecret, type RecordsPatch,
   type Settings, type TransactionLimits,
@@ -212,6 +212,8 @@ const EMPTY: Snapshot = {
   settings: { access: { allowed: [], blocked: [] }, limits: { ...DEFAULT_SETTINGS.transactionLimits }, timeout: 0 },
 };
 
+const LIMIT_NUMBERS = ['maxAmountAbsolute', 'maxAmountPercent', 'dailyLimitAbsolute', 'dailyLimitPercent'] as const;
+
 function settingsLooser(cur: Snapshot['settings'], sealed: Snapshot['settings']): boolean {
   // A site allowed that the seal did not allow, or a block lifted
   const was = sealedAccess(sealed);
@@ -220,8 +222,11 @@ function settingsLooser(cur: Snapshot['settings'], sealed: Snapshot['settings'])
   if (now.allowed.some(s => !known.has(s))) return true;
   const blocked = new Set(now.blocked);
   if (was.blocked.some(o => !blocked.has(o))) return true;
-  for (const k of Object.keys(cur.limits) as (keyof TransactionLimits)[]) {
-    if (looser(cur.limits[k], sealed.limits[k] ?? 0)) return true;
+  // A seal from before the switch was on if any limit was set (ADR 0002)
+  const sealedOn = typeof sealed.limits.enabled === 'boolean' ? sealed.limits.enabled : limitsSet(sealed.limits);
+  if (cur.limits.enabled === false && sealedOn) return true;
+  for (const k of LIMIT_NUMBERS) {
+    if (looser(cur.limits[k] ?? 0, sealed.limits[k] ?? 0)) return true;
   }
   // A changed phrase would let a page that planted it pass for the wallet
   if ((cur.phrase ?? '') !== (sealed.phrase ?? '')) return true;

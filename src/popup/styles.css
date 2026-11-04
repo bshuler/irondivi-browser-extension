@@ -40,6 +40,8 @@ body[data-network="testnet"] {
 body {
   width: 360px;
   height: 600px;
+  /* A window bigger than the wallet (Safari can open one) keeps it centred */
+  margin: 0 auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a3e 100%);
   color: var(--text-primary);
@@ -47,7 +49,14 @@ body {
   font-size: 14px;
 }
 
+/* The window's height, not 600px, so nothing sits under the bottom edge */
+body.approval-window {
+  height: 100vh;
+}
+
 #app {
+  /* Views and dialogs fill the wallet, not the whole window */
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
@@ -74,19 +83,8 @@ body {
 .logo {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: 0 4px 14px var(--accent-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   flex-shrink: 0;
-}
-
-.logo svg {
-  width: 16px;
-  height: 16px;
-  color: white;
 }
 
 /* "Iron" white, "Divi" in the network colour, as on the web wallet */
@@ -156,12 +154,30 @@ body {
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--shadow-heavy);
   z-index: 100;
-  max-height: 300px;
+  max-height: 360px;
   overflow-y: auto;
 }
 
 .account-list {
   border-bottom: 1px solid var(--border);
+}
+
+.menu-heading {
+  padding: 10px 16px 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.menu-item .check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.menu-item.danger {
+  color: var(--danger);
 }
 
 .menu-item {
@@ -1530,7 +1546,9 @@ body {
   flex-direction: column;
   padding: 12px 16px;
   gap: 10px;
-  overflow: hidden;
+  /* A short window scrolls to the Approve and Reject buttons */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .signing-origin-wrapper {
@@ -1924,3 +1942,144 @@ body:not([data-network]) .network-bar {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* QR pay (Send) and QR ask (Receive) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.qr-scan-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.qr-scan-actions .secondary-btn {
+  flex: 1;
+  text-align: center;
+  cursor: pointer;
+}
+
+.payment-request-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.payment-request-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.payment-request-info .detail-row span:last-child,
+.confirm-memo {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.qr-code.qr-request {
+  width: 200px;
+  height: 200px;
+}
+
+.payment-request-form {
+  width: 100%;
+}
+
+.payment-request-form summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.payment-request-form .form-group input {
+  width: 100%;
+}
+
+.receive-request-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+  word-break: break-all;
+}
+
+.receive-request-status.error {
+  color: var(--danger);
+}
+
+/* Names view (IronDivi Name Service) */
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-btn input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.names-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.names-result .detail-row span:last-child {
+  word-break: break-all;
+  text-align: right;
+}
+
+.confirm-name {
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* Settings -> Server, the home-screen label and the unreachable banner */
+.server-label {
+  margin: 6px 12px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+  align-self: center;
+}
+.server-label.hidden { display: none; }
+.server-choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.server-host { color: var(--text-muted); font-size: 11px; }
+.server-url {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.server-url:disabled { opacity: 0.5; }
+.server-actions { display: flex; gap: 8px; }
+.server-actions button { flex: 1; }
+#server-result[data-ok="true"] { color: var(--success); }
+#server-result[data-ok="false"] { color: var(--danger); }

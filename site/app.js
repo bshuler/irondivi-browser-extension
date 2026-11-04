@@ -141,7 +141,8 @@
       out.files[k] = {
         file: f.file,
         sha256: (typeof f.sha256 === 'string' && SAFE_HASH.test(f.sha256)) ? f.sha256.toLowerCase() : null,
-        bytes: (typeof f.bytes === 'number' && isFinite(f.bytes) && f.bytes > 0) ? f.bytes : null
+        bytes: (typeof f.bytes === 'number' && isFinite(f.bytes) && f.bytes > 0) ? f.bytes : null,
+        signed: f.signed === 'mozilla'
       };
     });
     return Object.keys(out.files).length ? out : null;
@@ -263,7 +264,7 @@
     setText($('cmd-shasum'), 'shasum -a 256 ' + name);
     setText($('cmd-ps'), 'Get-FileHash ' + name + ' -Algorithm SHA256');
     var sums = state.release && state.release.version ? 'SHA256SUMS-v' + state.release.version : 'SHA256SUMS-v{version}';
-    setText($('cmd-sig'), 'ssh-keygen -Y verify -f allowed_signers -I releases@browser.divi.domains -n file -s ' + sums + '.sig < ' + sums);
+    setText($('cmd-sig'), 'ssh-keygen -Y verify -f allowed_signers -I releases@browser.irondivi.com -n file -s ' + sums + '.sig < ' + sums);
   }
 
   function showReleaseStatus() {
@@ -320,8 +321,19 @@
         fillSums();
         updateCommands();
         updateHero();
+        showFirefoxSteps();
       })
       .catch(function () { releaseFailed(); });
+  }
+
+  // A Mozilla-signed .xpi installs like any add-on; until there is one the
+  // panel explains the temporary install
+  function showFirefoxSteps() {
+    var entry = fileFor('firefox');
+    var signed = !!(entry && entry.signed);
+    var a = $('firefox-unsigned'), b = $('firefox-signed');
+    if (a) a.hidden = signed;
+    if (b) b.hidden = !signed;
   }
 
   /* ---------- Hero ---------- */
@@ -378,6 +390,10 @@
   }
 
   function initHero() {
+    // The browser row in the hero opens that browser's install steps
+    document.querySelectorAll('[data-pick]').forEach(function (a) {
+      a.addEventListener('click', function () { selectTab(a.getAttribute('data-pick'), false); });
+    });
     var btn = $('hero-download');
     if (!btn) return;
     btn.addEventListener('click', function () {

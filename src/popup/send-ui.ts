@@ -6,9 +6,14 @@ import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { MSG, DUST_THRESHOLD } from '../shared/constants';
+import { MSG, DUST_THRESHOLD, NETWORKS, type NetworkType } from '../shared/constants';
 import { loadBalance, loadTransactions } from './wallet-ui';
 import { checkRecipient, chunkAddress, recipientNote, type KnownContact } from './recipient-check';
+import { memoProblem, parsePaymentUri, type PaymentRequest } from '../lib/payment-uri';
+import { visibleText } from './visible-text';
+import type { PendingSendTx } from './types';
+import { looksLikeName, notifyRecord, resolveName } from '../lib/dvns';
+import { canCaptureTab, qrTextFromFile, qrTextFromVisibleTab } from './qr-image';
 
 // ============================================================
 // Send Transaction Handlers
@@ -62,9 +67,24 @@ export async function handleSendConfirm(): Promise<void> {
   const amountInput = document.getElementById('send-amount') as HTMLInputElement;
   const feeInput = document.getElementById('send-fee') as HTMLInputElement;
 
+  // A pasted divi: payment request fills the form for the owner to check
+  if (/^divi:/i.test(toInput.value.trim())) {
+    applyPaymentRequestText(toInput.value);
+    return;
+  }
+
   const to = toInput.value.trim();
   const amount = parseFloat(amountInput.value);
   const fee = parseFloat(feeInput.value);
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  const memo = memoInput?.value.trim() ? memoInput.value : undefined;
+  if (memo !== undefined) {
+    const problem = memoProblem(memo);
+    if (problem) {
+      showToast(problem, 'error');
+      return;
+    }
+  }
 
   if (!to || !amount || amount <= 0) {
     showToast('Please enter a valid address and amount', 'error');
@@ -81,10 +101,38 @@ export async function handleSendConfirm(): Promise<void> {
     return;
   }
 
-  // Validate the recipient address
+  // The recipient: an address, or a IronDivi Name Service name that resolves to
+  // one (SPEC §8). A name that is not registered, or a lookup that fails,
+  // stops here; nothing else is ever used in its place
+  let toAddress = to;
+  let name: string | undefined;
   try {
-    const validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: to });
-    if (!validation.isValid) {
+    let validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: to });
+    if (!validation.isValid && looksLikeName(to)) {
+      const network = state.currentAccount?.network as NetworkType | undefined;
+      if (!network) return;
+      let resolution;
+      try {
+        showLoading('Looking up name...');
+        resolution = await resolveName(to, network);
+      } catch (error: unknown) {
+        showToast(error instanceof Error ? error.message : 'The name could not be looked up', 'error');
+        return;
+      } finally {
+        hideLoading();
+      }
+      if (resolution.status === 'not-registered') {
+        showToast(`"${resolution.name}" is not registered`, 'error');
+        return;
+      }
+      name = resolution.record.name;
+      toAddress = resolution.record.divi;
+      validation = await sendMessage<{ isValid: boolean }>(MSG.VALIDATE_ADDRESS, { address: toAddress });
+      if (!validation.isValid) {
+        showToast(`"${name}" points to an address this wallet cannot pay`, 'error');
+        return;
+      }
+    } else if (!validation.isValid) {
       showToast('Invalid recipient address', 'error');
       return;
     }
@@ -98,18 +146,33 @@ export async function handleSendConfirm(): Promise<void> {
   const fromValue = fromSelect.value;
   const fromAddresses = fromValue === 'auto' ? undefined : [fromValue];
 
-  state.pendingSendTx = { to, amount, amountText: amountInput.value.trim(), fee, fromAddresses };
+  await showSendConfirm({ to: toAddress, amount, amountText: amountInput.value.trim(), fee, fromAddresses, memo, name });
+}
 
-  // Update confirm view
+/**
+ * Show a payment for the owner to check and sign: what it is for, the name
+ * and the address it pays, the amount, any memo and the fee
+ */
+export async function showSendConfirm(tx: PendingSendTx, purpose?: string): Promise<void> {
+  state.pendingSendTx = tx;
+  showConfirmMemo(tx.memo);
+  setRow('confirm-purpose-row', 'confirm-purpose', purpose);
+  setRow('confirm-name-row', 'confirm-name', tx.name);
+
+  const to = tx.to;
   showRecipient(to, await loadRecipientContacts());
-  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(amount)} DIVI`;
-  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(fee)} DIVI`;
-
-  // Calculate and display total
-  const total = amount + fee;
+  (document.getElementById('confirm-amount') as HTMLSpanElement).textContent = `${formatAmount(tx.amount)} DIVI`;
+  (document.getElementById('confirm-fee') as HTMLSpanElement).textContent = `${formatAmount(tx.fee)} DIVI`;
+  const total = tx.amount + tx.fee;
   (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} DIVI`;
 
   showView(elements.viewSendConfirm);
+}
+
+function setRow(rowId: string, valueId: string, value: string | undefined): void {
+  document.getElementById(rowId)?.classList.toggle('hidden', value === undefined);
+  const el = document.getElementById(valueId);
+  if (el) el.textContent = value ?? '';
 }
 
 /**
@@ -180,10 +243,22 @@ async function sendTransaction(password: string): Promise<void> {
       amount: state.pendingSendTx.amountText,
       fee: state.pendingSendTx.fee,
       fromAddresses: state.pendingSendTx.fromAddresses,
+      memo: state.pendingSendTx.memo,
     });
 
     showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
+    const dvns = state.pendingSendTx.dvns;
     state.pendingSendTx = null;
+    // A name record: tell the name service, so it shows as pending. The
+    // payment is made either way; the service also finds it on chain
+    if (dvns && state.currentAccount) {
+      try {
+        await notifyRecord(state.currentAccount.network as NetworkType, response.txid);
+      } catch {
+        showToast('Sent; the name service will see it once it is in a block', 'success');
+      }
+    }
+    clearPaymentRequest();
 
     // Mark contact as recently used if this address is a contact
     try {
@@ -206,6 +281,106 @@ async function sendTransaction(password: string): Promise<void> {
   } finally {
     hideLoading();
   }
+}
+
+// ============================================================
+// QR pay: fill the send form from a divi: payment request
+// ============================================================
+
+const MAX_SHOWN = 300;
+
+/** Untrusted text from a QR code, with hidden characters made visible */
+function shown(text: string): string {
+  const visible = visibleText(text).text;
+  return visible.length > MAX_SHOWN ? `${visible.slice(0, MAX_SHOWN)}…` : visible;
+}
+
+function setRequestLine(rowId: string, valueId: string, value: string | undefined): void {
+  document.getElementById(rowId)?.classList.toggle('hidden', value === undefined);
+  const el = document.getElementById(valueId);
+  if (el) el.textContent = value === undefined ? '' : shown(value);
+}
+
+/** Show who asked and what for; neither goes on chain */
+function showRequestInfo(request: PaymentRequest | null): void {
+  const label = request?.label;
+  const message = request?.message;
+  setRequestLine('send-request-label-row', 'send-request-label', label);
+  setRequestLine('send-request-message-row', 'send-request-message', message);
+  document.getElementById('send-request-info')?.classList.toggle('hidden', label === undefined && message === undefined);
+}
+
+function clearPaymentRequest(): void {
+  showRequestInfo(null);
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  if (memoInput) memoInput.value = '';
+}
+
+function showConfirmMemo(memo: string | undefined): void {
+  document.getElementById('confirm-memo-row')?.classList.toggle('hidden', memo === undefined);
+  const el = document.getElementById('confirm-memo');
+  if (el) el.textContent = memo === undefined ? '' : visibleText(memo).text;
+}
+
+/**
+ * Fill address, amount and memo from a payment request and show its label
+ * and message. Nothing is sent: the owner checks the form and continues.
+ */
+export function applyPaymentRequestText(text: string): boolean {
+  const network = state.currentAccount?.network;
+  if (!network || !Object.hasOwn(NETWORKS, network)) return false;
+  const parsed = parsePaymentUri(text, network as NetworkType);
+  if (!parsed.ok) {
+    showToast(shown(parsed.error), 'error');
+    return false;
+  }
+  const { request } = parsed;
+  (document.getElementById('send-to') as HTMLInputElement).value = request.address;
+  (document.getElementById('send-amount') as HTMLInputElement).value = request.amount ?? '';
+  const memoInput = document.getElementById('send-memo') as HTMLInputElement | null;
+  if (memoInput) memoInput.value = request.memo ?? '';
+  showRequestInfo(request);
+  showToast(request.amount ? 'Payment request filled in; check it, then Continue' : 'Address filled in; enter the amount', 'success');
+  return true;
+}
+
+async function scanWith(read: () => Promise<string | null>): Promise<void> {
+  let text: string | null;
+  try {
+    text = await read();
+  } catch (error: unknown) {
+    showToast(error instanceof Error ? error.message : 'The picture could not be read', 'error');
+    return;
+  }
+  if (text === null) {
+    showToast('No QR code found', 'error');
+    return;
+  }
+  applyPaymentRequestText(text);
+}
+
+function setupQrPay(): void {
+  const tabBtn = document.getElementById('send-scan-tab-btn') as HTMLButtonElement | null;
+  if (tabBtn) {
+    // iOS Safari cannot capture a tab; the picture picker opens the camera there
+    tabBtn.classList.toggle('hidden', !canCaptureTab());
+    tabBtn.addEventListener('click', async () => {
+      tabBtn.disabled = true;
+      try {
+        await scanWith(qrTextFromVisibleTab);
+      } finally {
+        tabBtn.disabled = false;
+      }
+    });
+  }
+
+  const file = document.getElementById('send-qr-input') as HTMLInputElement | null;
+  file?.addEventListener('change', async () => {
+    const picked = file.files?.[0];
+    file.value = '';
+    if (!picked) return;
+    await scanWith(() => qrTextFromFile(picked));
+  });
 }
 
 /**
@@ -287,11 +462,15 @@ export function setupSendUIHandlers(): void {
 
   // Send confirm view
   document.getElementById('send-confirm-back-btn')?.addEventListener('click', () => {
-    showView(elements.viewSend);
+    // A name record was prepared on the Names view; go back there
+    const fromNames = state.pendingSendTx?.dvns !== undefined;
+    state.pendingSendTx = null;
+    showView(fromNames ? document.getElementById('view-names')! : elements.viewSend);
   });
 
   document.getElementById('send-submit-btn')?.addEventListener('click', handleSendSubmit);
 
   // Setup contact suggestions
   setupContactSuggestions();
+  setupQrPay();
 }

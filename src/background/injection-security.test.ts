@@ -65,7 +65,8 @@ describe('M1 the content script never reads extension storage', () => {
 
   it('the manifest asks only for what the wallet needs: https pages, so sites can ask, and its own hosts', () => {
     const m = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
-    expect(m.permissions).toEqual(['storage', 'alarms', 'idle', 'scripting']);
+    // activeTab: "Scan this tab" on Send captures the visible tab for a payment QR code
+    expect(m.permissions).toEqual(['storage', 'alarms', 'idle', 'scripting', 'activeTab']);
     expect(m.host_permissions).toEqual([
       'https://*/*', 'https://games.divi.domains/*', 'https://services.divi.domains/*', 'https://vps1.divi.domains/*',
     ]);

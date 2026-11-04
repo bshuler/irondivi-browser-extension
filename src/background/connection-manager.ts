@@ -162,6 +162,10 @@ export class ConnectionManager {
       if (win?.id !== undefined && this.pendingRequests.has(requestId)) {
         this.requestWindows.set(requestId, win.id);
       }
+      // Safari can open it at full-screen size; ask again once it exists
+      if (win?.id !== undefined && (win.width !== width || win.height !== height)) {
+        await chrome.windows.update(win.id, { width, height, left, top }).catch(() => {});
+      }
     } catch {
       // Popup creation failed - request will timeout
     }
