@@ -392,11 +392,11 @@ async function handleReceiveAddressChange(): Promise<void> {
   const select = document.getElementById('receive-address-select') as HTMLSelectElement;
 
   if (select.value === 'new') {
-    // Generate new address - requires password
-    const { showPasswordModal } = await import('./modals');
-    const password = await showPasswordModal('Enter password to generate new address');
+    // Generate new address - requires password or passkey
+    const { showAuthModal } = await import('./modals');
+    const auth = await showAuthModal('Enter password to generate new address', state.currentAccount!.id);
 
-    if (!password) {
+    if (!auth) {
       // User cancelled - revert selection
       select.value = String(state.selectedReceiveAddressIndex);
       return;
@@ -405,7 +405,7 @@ async function handleReceiveAddressChange(): Promise<void> {
     try {
       const response = await sendMessage<{ address: { index: number; address: string; path: string } }>(
         MSG.GENERATE_NEW_ADDRESS,
-        { accountId: state.currentAccount!.id, password }
+        { accountId: state.currentAccount!.id, ...auth }
       );
 
       // Add the new address to the current account

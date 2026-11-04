@@ -10,6 +10,7 @@ import { MSG, NETWORKS, sendMessage, type NetworkType } from '../shared/constant
 import { showLoading, hideLoading, showToast, showView, hideView, formatAmount } from './ui-state';
 import { visibleText } from './visible-text';
 import { retryAfterUnlock } from './unlock-retry';
+import { assertPasskeyForAccount } from './passkey-client';
 import type { GameTxSummary, SessionGrant } from '../lib/game-tx';
 
 // Type for a pending request (connection, signing, or transaction)
@@ -46,6 +47,7 @@ export interface SigningRequest {
   recipient?: { text: string; level: 'ok' | 'warn' | 'danger' };
   // A page paired over IronDivi Connect: what its pairing code claims
   relay?: RelayClaim | null;
+  hasPasskeys?: boolean;
   createdAt: number;
 }
 
@@ -105,6 +107,7 @@ function getElements() {
     password: document.getElementById('signing-password') as HTMLInputElement,
     rejectBtn: document.getElementById('reject-request-btn') as HTMLButtonElement,
     approveBtn: document.getElementById('approve-request-btn') as HTMLButtonElement,
+    approvePasskeyBtn: document.getElementById('approve-passkey-btn') as HTMLButtonElement | null,
     neverBtn: document.getElementById('never-request-btn') as HTMLButtonElement | null,
   };
 }
@@ -123,16 +126,18 @@ let armTimer: ReturnType<typeof setTimeout> | undefined;
 function disarmApprove(): void {
   armedAt = Infinity;
   clearTimeout(armTimer);
-  const { approveBtn } = getElements();
+  const { approveBtn, approvePasskeyBtn } = getElements();
   if (approveBtn) approveBtn.disabled = true;
+  if (approvePasskeyBtn) approvePasskeyBtn.disabled = true;
 }
 
 function armApprove(): void {
   disarmApprove();
   armedAt = Date.now() + APPROVE_DELAY_MS;
   armTimer = setTimeout(() => {
-    const { approveBtn } = getElements();
+    const { approveBtn, approvePasskeyBtn } = getElements();
     if (approveBtn && Date.now() >= armedAt && !blocked && !approving) approveBtn.disabled = false;
+    if (approvePasskeyBtn && Date.now() >= armedAt && !blocked && !approving) approvePasskeyBtn.disabled = false;
   }, APPROVE_DELAY_MS);
 }
 
@@ -355,6 +360,8 @@ export function showSigningRequestView(request: SigningRequest): void {
   if (passwordFormGroup) {
     passwordFormGroup.style.display = request.type === 'connect' || asking ? 'none' : 'block';
   }
+  const showPasskeyApprove = request.type !== 'connect' && !asking && Boolean(request.hasPasskeys);
+  elements.approvePasskeyBtn?.classList.toggle('hidden', !showPasskeyApprove);
 
   // Show the view
   showView(elements.view);
@@ -554,6 +561,9 @@ export function setupSigningRequestUIHandlers(): void {
   if (elements.approveBtn) {
     elements.approveBtn.addEventListener('click', handleApprove);
   }
+  elements.approvePasskeyBtn?.addEventListener('click', () => {
+    void handlePasskeyApprove();
+  });
 
   // Leaving the window disarms Approve; coming back starts the delay again
   window.addEventListener('blur', () => { if (currentRequest) disarmApprove(); });
@@ -576,6 +586,53 @@ export function setupSigningRequestUIHandlers(): void {
         handleApprove();
       }
     });
+  }
+}
+
+async function handlePasskeyApprove(): Promise<void> {
+  if (!currentRequest || approving || blocked) return;
+  if (currentRequest.type === 'connect' || currentRequest.type === 'access') return;
+  if (Date.now() < armedAt) return;
+
+  const elements = getElements();
+  approving = true;
+  elements.approveBtn.disabled = true;
+  if (elements.approvePasskeyBtn) elements.approvePasskeyBtn.disabled = true;
+
+  try {
+    const passkeyAuth = await assertPasskeyForAccount(currentRequest.accountId);
+    showLoading(currentRequest.type === 'send_transaction' ? 'Sending transaction...' : 'Signing...');
+
+    const response = await sendMessage({
+      type: MSG.APPROVE_SIGNING_REQUEST,
+      payload: {
+        requestId: currentRequest.id,
+        passkeyAuth,
+      },
+    });
+    if (!response?.success) throw new Error(response?.error || 'Failed to approve request');
+
+    hideLoading();
+
+    if (currentRequest.type === 'sign_message') {
+      showToast('Message signed successfully', 'success');
+    } else if (currentRequest.type === 'sign_game_tx') {
+      showToast('Transaction signed', 'success');
+    } else {
+      showToast('Transaction sent successfully', 'success');
+    }
+
+    setTimeout(() => {
+      window.close();
+    }, 500);
+  } catch (error) {
+    hideLoading();
+    showToast(error instanceof Error ? error.message : 'Failed to approve request', 'error');
+    approving = false;
+    armApprove();
+    return;
+  } finally {
+    approving = false;
   }
 }
 

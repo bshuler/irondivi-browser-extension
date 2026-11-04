@@ -116,6 +116,21 @@ export const MSG = {
   SWAP_BEGIN: 'SWAP_BEGIN',
   SWAP_LOCK: 'SWAP_LOCK',
   SWAP_REFUND: 'SWAP_REFUND',
+
+  // Passkey & session lock operations (extension pages only)
+  GET_PASSKEY_SLOTS: 'GET_PASSKEY_SLOTS',
+  START_PASSKEY_ENROL: 'START_PASSKEY_ENROL',
+  GET_PASSKEY_ENROL_INFO: 'GET_PASSKEY_ENROL_INFO',
+  FINISH_PASSKEY_ENROL: 'FINISH_PASSKEY_ENROL',
+  CANCEL_PASSKEY_ENROL: 'CANCEL_PASSKEY_ENROL',
+  REMOVE_PASSKEY_SLOT: 'REMOVE_PASSKEY_SLOT',
+  UNLOCK_WALLET_PASSKEY: 'UNLOCK_WALLET_PASSKEY',
+  LOCK_WALLET: 'LOCK_WALLET',
+  GET_SESSION_STATUS: 'GET_SESSION_STATUS',
+  STAGE_PASSKEY_SEND: 'STAGE_PASSKEY_SEND',
+  GET_STAGED_PASSKEY_SEND: 'GET_STAGED_PASSKEY_SEND',
+  EXECUTE_STAGED_PASSKEY_SEND: 'EXECUTE_STAGED_PASSKEY_SEND',
+  PASSKEY_CEREMONY_DONE: 'PASSKEY_CEREMONY_DONE',
 } as const;
 
 export type MessageType = typeof MSG[keyof typeof MSG];
@@ -160,24 +175,30 @@ export interface ImportAccountPayload {
   password: string;
   network?: NetworkType;
 }
-export interface DeleteAccountPayload { accountId: string; password: string }
+export interface PasskeyAuthInput {
+  credentialId: string;
+  prfOutput: string;
+}
+
+export interface DeleteAccountPayload { accountId: string; password?: string; passkeyAuth?: PasskeyAuthInput }
 export interface RenameAccountPayload { accountId: string; name: string }
-export interface ExportMnemonicPayload { accountId: string; password: string }
+export interface ExportMnemonicPayload { accountId: string; password?: string; passkeyAuth?: PasskeyAuthInput }
 
 // Wallet operations
 export interface GetBalancePayload {}
 export interface GetAddressesPayload {}
 export interface GetTransactionsPayload { limit?: number }
-export interface GenerateNewAddressPayload { accountId: string; password: string }
+export interface GenerateNewAddressPayload { accountId: string; password?: string; passkeyAuth?: PasskeyAuthInput }
 
 // Signing operations
-export interface AuthenticatePayload { accountId: string; password: string }
+export interface AuthenticatePayload { accountId: string; password?: string; passkeyAuth?: PasskeyAuthInput }
 export interface SignMessagePayload {
   message: string;
-  // From the popup: the account to sign with, and its password, which every
+  // From the popup: the account to sign with, and its password/passkey, which every
   // signature needs
   accountId?: string;
   password?: string;
+  passkeyAuth?: PasskeyAuthInput;
   address?: string;
   addressIndex?: number;
 }
@@ -188,13 +209,14 @@ export interface SignTransactionPayload {
 }
 export interface SendTransactionPayload {
   to: string;
-  amount: number;
+  amount: number | string;
   fee?: number;
   fromAddresses?: string[];
   // Text sent unchanged in one OP_RETURN output
   memo?: string;
-  // From the popup: the password, which every send needs
+  // From the popup: the password or passkeyAuth, which every send needs
   password?: string;
+  passkeyAuth?: PasskeyAuthInput;
 }
 
 // Faucet
@@ -230,6 +252,9 @@ export interface UpdateSettingsPayload {
   authTimeoutMinutes?: number;
   currency?: string;
   hideBalance?: boolean;
+  password?: string;
+  passkeyAuth?: PasskeyAuthInput;
+  [key: string]: unknown;
 }
 
 // dApp connection
@@ -241,7 +266,7 @@ export interface RevokeSitePayload { origin: string }
 
 // Signing request approval
 export interface GetPendingSigningRequestsPayload {}
-export interface ApproveSigningRequestPayload { requestId: string; password: string }
+export interface ApproveSigningRequestPayload { requestId: string; password?: string; passkeyAuth?: PasskeyAuthInput; isConnection?: boolean }
 export interface RejectSigningRequestPayload { requestId: string }
 
 // ============================================================
@@ -256,6 +281,7 @@ export type WalletMessage =
   | { type: typeof MSG.DELETE_ACCOUNT; payload: DeleteAccountPayload }
   | { type: typeof MSG.RENAME_ACCOUNT; payload: RenameAccountPayload }
   | { type: typeof MSG.EXPORT_MNEMONIC; payload: ExportMnemonicPayload }
+  | { type: typeof MSG.ADD_NETWORK_ADDRESSES; payload: { accountId: string; password?: string; passkeyAuth?: PasskeyAuthInput } }
   | { type: typeof MSG.GET_BALANCE; payload?: GetBalancePayload }
   | { type: typeof MSG.GET_ADDRESSES; payload?: GetAddressesPayload }
   | { type: typeof MSG.GET_TRANSACTIONS; payload?: GetTransactionsPayload }
@@ -298,7 +324,20 @@ export type WalletMessage =
   | { type: typeof MSG.SWAP_LIST; payload?: undefined }
   | { type: typeof MSG.SWAP_BEGIN; payload: { offerId: string; btcSats: number } }
   | { type: typeof MSG.SWAP_LOCK; payload: { id: string } }
-  | { type: typeof MSG.SWAP_REFUND; payload: { id: string } };
+  | { type: typeof MSG.SWAP_REFUND; payload: { id: string } }
+  | { type: typeof MSG.GET_PASSKEY_SLOTS; payload?: { accountId?: string } }
+  | { type: typeof MSG.START_PASSKEY_ENROL; payload: { accountId: string; password: string; label?: string } }
+  | { type: typeof MSG.GET_PASSKEY_ENROL_INFO; payload: { token: string } }
+  | { type: typeof MSG.FINISH_PASSKEY_ENROL; payload: { token: string; credentialId: string; prfSalt: string; prfOutput: string; label?: string } }
+  | { type: typeof MSG.CANCEL_PASSKEY_ENROL; payload?: { token?: string } }
+  | { type: typeof MSG.REMOVE_PASSKEY_SLOT; payload: { accountId: string; slotId: string; password?: string; passkeyAuth?: PasskeyAuthInput } }
+  | { type: typeof MSG.UNLOCK_WALLET_PASSKEY; payload: { accountId: string; credentialId?: string; prfOutput?: string; passkeyAuth?: PasskeyAuthInput } }
+  | { type: typeof MSG.LOCK_WALLET; payload?: undefined }
+  | { type: typeof MSG.GET_SESSION_STATUS; payload?: { accountId?: string } }
+  | { type: typeof MSG.STAGE_PASSKEY_SEND; payload: { accountId?: string; to: string; amount: number | string; fee?: number; fromAddresses?: string[]; memo?: string } }
+  | { type: typeof MSG.GET_STAGED_PASSKEY_SEND; payload: { token: string } }
+  | { type: typeof MSG.EXECUTE_STAGED_PASSKEY_SEND; payload: { token: string; passkeyAuth: PasskeyAuthInput } }
+  | { type: typeof MSG.PASSKEY_CEREMONY_DONE; payload: { mode: string; accountId?: string; result?: unknown } };
 
 // ============================================================
 // Generic response wrapper

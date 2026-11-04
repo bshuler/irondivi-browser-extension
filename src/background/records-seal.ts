@@ -24,10 +24,11 @@ import { storage } from '../shared/browser-polyfill';
 import { NETWORKS, UNLOCK_NEEDED, type NetworkType } from '../shared/constants';
 import {
   DEFAULT_SETTINGS, normalizeSettings, setRecordsWriter, getSecrets, limitsSet,
-  storeRecordsKey, anySecretHoldsRecordsKey, openSecretQuietly,
+  storeRecordsKey, storeRecordsKeyViaPasskey, anySecretHoldsRecordsKey, openSecretQuietly,
   type Account, type Connection, type Contact, type OpenedSecret, type RecordsPatch,
   type Settings, type TransactionLimits,
 } from '../shared/storage';
+import { isVaultV4Doc, type PasskeyAuthPayload } from '../shared/crypto-utils';
 import { addressesOn, setAddressesOn, withSeed } from '../shared/account-addresses';
 import { looser } from '../shared/settings-check';
 import { OLD_DEFAULT_PATTERNS } from '../shared/origin';
@@ -430,7 +431,7 @@ const TAMPER_WARNING = 'The wallet found its settings changed outside the wallet
  * them. Never throws for a problem it can repair; the caller logs anything
  * else and carries on, since the password was right.
  */
-export function openRecords(accountId: string, password: string, opened: OpenedSecret): Promise<void> {
+export function openRecords(accountId: string, auth: string | PasskeyAuthPayload, opened: OpenedSecret): Promise<void> {
   return oneAtATime(async () => {
     let tamper = opened.relabeled;
     let key = await loadKey();
@@ -445,7 +446,7 @@ export function openRecords(accountId: string, password: string, opened: OpenedS
     } else if (!key && sealedInstall) {
       // Another account holds the key. The owner often uses one password
       // for every account, so try it on those, without counting a miss.
-      key = await keyFromOtherSecrets(accountId, password);
+      key = typeof auth === 'string' ? await keyFromOtherSecrets(accountId, auth) : null;
       if (!key) {
         await checkUnsealedAccount(accountId, opened.mnemonic);
         return;
@@ -461,7 +462,11 @@ export function openRecords(accountId: string, password: string, opened: OpenedS
     // A relabeled secret is written again with its true label, or every
     // unlock after this one would read it as tampered
     if (opened.recordsKey !== key || opened.relabeled) {
-      await storeRecordsKey(accountId, password, opened.mnemonic, key, opened.blob);
+      if (typeof auth === 'string') {
+        await storeRecordsKey(accountId, auth, opened.mnemonic, key, opened.blob);
+      } else {
+        await storeRecordsKeyViaPasskey(accountId, auth, opened.mnemonic, key, opened.blob);
+      }
     }
     await keepKey(key);
 
@@ -504,7 +509,7 @@ export function openRecords(accountId: string, password: string, opened: OpenedS
 async function keyFromOtherSecrets(accountId: string, password: string): Promise<string | null> {
   const secrets = await getSecrets();
   for (const [id, secret] of Object.entries(secrets)) {
-    if (id === accountId || (secret?.version ?? 0) < 3) continue;
+    if (id === accountId || (!isVaultV4Doc(secret) && (secret?.version ?? 0) < 3)) continue;
     const other = await openSecretQuietly(id, password);
     if (other?.recordsKey) return other.recordsKey;
   }

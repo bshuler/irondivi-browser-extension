@@ -9,7 +9,7 @@ import {
 import { Mnemonic, type WordlistLanguage } from '../lib/mnemonic';
 import { NETWORKS, type NetworkType } from '../shared/constants';
 import { deriveAddresses } from '../lib/derivation';
-import { unlockSecret } from './unlock-limit';
+import { unlockSecretWithAuth, type SecretAuth } from './unlock-limit';
 import { withSeed, addressesOn, setAddressesOn, viewOn } from '../shared/account-addresses';
 import { recordsKeyForNewAccount, forgetRecordsIfEmpty } from './records-seal';
 
@@ -110,11 +110,11 @@ export class AccountManager {
   }
 
   /**
-   * Delete an account (requires password verification)
+   * Delete an account (requires password or passkey verification)
    */
-  async deleteAccount(accountId: string, password: string): Promise<void> {
-    // Verify password by attempting decryption
-    await unlockSecret(accountId, password);
+  async deleteAccount(accountId: string, auth: SecretAuth): Promise<void> {
+    // Verify credential by attempting decryption
+    await unlockSecretWithAuth(accountId, auth);
 
     // Remove from accounts list
     const accounts = await getAccounts();
@@ -174,10 +174,10 @@ export class AccountManager {
    * Give an account its first address on the current network, if it has
    * none there yet (an account made by 0.0.1 only has its own network's).
    */
-  async setUpNetwork(accountId: string, password: string): Promise<Account> {
+  async setUpNetwork(accountId: string, auth: SecretAuth): Promise<Account> {
     const network = await currentNetwork();
     // Unlocked before the records are read: unlocking may repair them
-    const mnemonic = await unlockSecret(accountId, password);
+    const mnemonic = await unlockSecretWithAuth(accountId, auth);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
@@ -204,10 +204,10 @@ export class AccountManager {
   }
 
   /**
-   * Export mnemonic (requires password)
+   * Export mnemonic (requires password or passkey)
    */
-  async exportMnemonic(accountId: string, password: string): Promise<string> {
-    return unlockSecret(accountId, password);
+  async exportMnemonic(accountId: string, auth: SecretAuth): Promise<string> {
+    return unlockSecretWithAuth(accountId, auth);
   }
 
   /**
@@ -215,11 +215,11 @@ export class AccountManager {
    */
   async discoverAddresses(
     accountId: string,
-    password: string,
+    auth: SecretAuth,
     checkHasTransactions: (address: string) => Promise<boolean>
   ): Promise<AccountAddress[]> {
     // Unlocked before the records are read: unlocking may repair them
-    const mnemonic = await unlockSecret(accountId, password);
+    const mnemonic = await unlockSecretWithAuth(accountId, auth);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');
@@ -257,9 +257,9 @@ export class AccountManager {
   /**
    * Add a new receiving address on the current network
    */
-  async generateNewAddress(accountId: string, password: string): Promise<AccountAddress> {
+  async generateNewAddress(accountId: string, auth: SecretAuth): Promise<AccountAddress> {
     // Unlocked before the records are read: unlocking may repair them
-    const mnemonic = await unlockSecret(accountId, password);
+    const mnemonic = await unlockSecretWithAuth(accountId, auth);
     const accounts = await getAccounts();
     const account = accounts.find(a => a.id === accountId);
     if (!account) throw new Error('Account not found');

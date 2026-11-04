@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IronDivi Passkey</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="passkey-window-shell">
+    <header id="header" class="header">
+      <div class="header-left">
+        <img src="icons/icon32.png" alt="Divi" class="logo">
+        <span class="brand">IronDivi</span>
+      </div>
+    </header>
+
+    <main class="view passkey-ceremony-view" style="display: block; padding: 20px;">
+      <h2 id="passkey-title" style="margin-bottom: 8px;">Passkey Verification</h2>
+      <p id="passkey-subtitle" class="muted" style="margin-bottom: 16px;">Confirm with your device passkey.</p>
+
+      <div id="passkey-enrol-fields" class="form-group hidden" style="margin-bottom: 16px;">
+        <label for="passkey-enrol-label">Passkey Name</label>
+        <input type="text" id="passkey-enrol-label" data-testid="passkey-enrol-label" class="input" maxlength="64" placeholder="e.g. MacBook Touch ID">
+        <p class="form-hint" style="margin-top: 8px;">
+          Passkeys unlock this browser vault locally using WebAuthn PRF. A passkey does not store or replace your 12/24-word recovery phrase — keep your recovery phrase backed up offline.
+        </p>
+      </div>
+
+      <div id="passkey-send-summary" class="confirm-details hidden" style="margin-bottom: 16px;">
+        <div class="detail-row">
+          <span class="label">Account:</span>
+          <span id="passkey-send-account" class="value"></span>
+        </div>
+        <div class="detail-row">
+          <span class="label">To:</span>
+          <span id="passkey-send-to" class="value mono"></span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Amount:</span>
+          <span id="passkey-send-amount" class="value"></span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Fee:</span>
+          <span id="passkey-send-fee" class="value"></span>
+        </div>
+        <div class="detail-row total">
+          <span class="label">Total:</span>
+          <span id="passkey-send-total" class="value"></span>
+        </div>
+        <div id="passkey-send-memo-row" class="detail-row hidden">
+          <span class="label">Memo:</span>
+          <span id="passkey-send-memo" class="value mono"></span>
+        </div>
+      </div>
+
+      <div id="passkey-error" data-testid="passkey-error" class="error-msg hidden" style="margin-bottom: 12px;"></div>
+      <div id="passkey-status" data-testid="passkey-status" class="success-banner hidden" style="margin-bottom: 12px;"></div>
+
+      <div class="button-row" style="display: flex; flex-direction: column; gap: 10px;">
+        <button type="button" id="passkey-ceremony-btn" data-testid="passkey-ceremony-btn" class="btn btn-primary btn-block">
+          Continue with Passkey
+        </button>
+        <button type="button" id="passkey-cancel-btn" data-testid="passkey-cancel-btn" class="btn btn-secondary btn-block">
+          Cancel
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="passkey-window.js"></script>
+</body>
+</html>

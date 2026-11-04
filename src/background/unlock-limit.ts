@@ -1,6 +1,26 @@
 import { storage } from '../shared/browser-polyfill';
-import { openSecret, getSecrets, type OpenedSecret } from '../shared/storage';
+import { openSecret, openSecretWithPasskey, getSecrets, type OpenedSecret } from '../shared/storage';
+import type { PasskeyAuthPayload } from '../shared/crypto-utils';
 import { openRecords } from './records-seal';
+
+export type SecretAuth = string | PasskeyAuthPayload;
+
+export function isPasskeyAuthPayload(v: unknown): v is PasskeyAuthPayload {
+  if (typeof v !== 'object' || v === null) return false;
+  const p = v as Partial<PasskeyAuthPayload>;
+  return typeof p.credentialId === 'string' && p.credentialId.length > 0 &&
+    typeof p.prfOutput === 'string' && p.prfOutput.length > 0;
+}
+
+export function resolveSecretAuth(payload: { password?: unknown; passkeyAuth?: unknown }): SecretAuth {
+  if (isPasskeyAuthPayload(payload.passkeyAuth)) {
+    return payload.passkeyAuth;
+  }
+  if (typeof payload.password === 'string') {
+    return payload.password;
+  }
+  return '';
+}
 
 /**
  * The limit on wrong passwords. Every way of opening an account's phrase with
@@ -109,11 +129,12 @@ export function isLockedError(error: unknown): boolean {
 }
 
 /**
- * Decrypt an account's phrase, counting a wrong password towards the lockout.
+ * Decrypt an account's phrase via password or passkey PRF, counting any failed
+ * attempt towards the account's shared lockout state.
  * Throws "Account locked. Try again in N seconds." while the account is
- * locked, without trying the password.
+ * locked, without trying the credential.
  */
-export function unlockSecret(accountId: string, password: string): Promise<string> {
+export function unlockSecretWithAuth(accountId: string, auth: SecretAuth): Promise<string> {
   return oneAtATime(async () => {
     // Only real accounts are counted, so made-up ids cannot fill storage
     if (typeof accountId !== 'string' || !Object.hasOwn(await getSecrets(), accountId)) {
@@ -131,7 +152,13 @@ export function unlockSecret(accountId: string, password: string): Promise<strin
 
     let opened: OpenedSecret;
     try {
-      opened = await openSecret(accountId, password);
+      if (typeof auth === 'string') {
+        opened = await openSecret(accountId, auth);
+      } else if (isPasskeyAuthPayload(auth)) {
+        opened = await openSecretWithPasskey(accountId, auth.credentialId, auth.prfOutput);
+      } else {
+        throw new Error('Decryption failed - invalid credentials');
+      }
     } catch (error) {
       const failed = entry ?? { count: 0, lockedUntil: 0, lockoutTier: 0, lastFailureAt: now };
       failed.count++;
@@ -145,8 +172,8 @@ export function unlockSecret(accountId: string, password: string): Promise<strin
       throw error;
     }
 
-    // The right password clears the count, but a tier already earned stays
-    // until FAILURE_MEMORY_MS after the last wrong password
+    // The right credential clears the count, but a tier already earned stays
+    // until FAILURE_MEMORY_MS after the last wrong attempt
     if (entry && entry.lockoutTier > 0) {
       entry.count = 0;
       entry.lockedUntil = 0;
@@ -156,14 +183,22 @@ export function unlockSecret(accountId: string, password: string): Promise<strin
     await saveState(state);
 
     // Check and seal the unencrypted records with the key the secret holds.
-    // The password was right, so a problem here does not fail the unlock,
+    // The credential was right, so a problem here does not fail the unlock,
     // except an account whose addresses were changed and cannot be checked.
     try {
-      await openRecords(accountId, password, opened);
+      await openRecords(accountId, auth, opened);
     } catch (error) {
       if (error instanceof Error && error.message.includes('addresses were changed outside the wallet')) throw error;
       console.error('IronDivi: could not check the wallet records', error);
     }
     return opened.mnemonic;
   });
+}
+
+export function unlockSecret(accountId: string, password: string): Promise<string> {
+  return unlockSecretWithAuth(accountId, password);
+}
+
+export function unlockSecretWithPasskey(accountId: string, passkeyAuth: PasskeyAuthPayload): Promise<string> {
+  return unlockSecretWithAuth(accountId, passkeyAuth);
 }

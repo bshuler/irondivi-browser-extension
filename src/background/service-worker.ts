@@ -1,9 +1,24 @@
 
 import { runtime, alarms, idle, browserAPI, storage } from '../shared/browser-polyfill';
 import { MSG, NETWORKS, DAPP_METHODS, UI_PORT, type NetworkType } from '../shared/constants';
-import { getSettings, saveSettings, droppedSitePatterns, getAccounts, getSelectedAccountId, type Account, type AccountAddress, type Settings } from '../shared/storage';
+import {
+  getSettings,
+  saveSettings,
+  droppedSitePatterns,
+  getAccounts,
+  getSelectedAccountId,
+  getPasskeySlots,
+  preparePasskeyEnrol,
+  commitPasskeyEnrol,
+  removePasskeySlot,
+  type Account,
+  type AccountAddress,
+  type Settings,
+  type PreparedPasskeyEnrol,
+} from '../shared/storage';
 import { accountManager } from './account-manager';
 import { signingSession } from './signing-session';
+import { isPasskeyAuthPayload, resolveSecretAuth } from './unlock-limit';
 import { addressBook } from './address-book';
 import { walletCore, diviToSatoshis, parseDiviAmount, satoshisText, p2pkhScript, type BuiltTransaction, type TransactionRequest } from './wallet-core';
 import { Transaction, bytesToHex } from '../lib/transaction';
@@ -43,14 +58,111 @@ const CANNOT_PAY = 'The wallet cannot make this payment';
 // "opReturn" is the same memo by the name the IronDivi Name Service page uses
 const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
+const UI_LOCKED_SESSION_KEY = 'uiLocked';
+const PASSKEY_CEREMONY_TTL_MS = 120_000;
+
+let uiLockedMem: boolean | null = null;
+
+async function getUiLocked(): Promise<boolean> {
+  if (uiLockedMem !== null) return uiLockedMem;
+  try {
+    const got = await storage.session.get<Record<string, unknown>>(UI_LOCKED_SESSION_KEY);
+    uiLockedMem = got[UI_LOCKED_SESSION_KEY] === true;
+    return uiLockedMem;
+  } catch {
+    return false;
+  }
+}
+
+async function setUiLocked(locked: boolean): Promise<void> {
+  uiLockedMem = locked;
+  try {
+    if (locked) {
+      await storage.session.set({ [UI_LOCKED_SESSION_KEY]: true });
+    } else {
+      await storage.session.remove(UI_LOCKED_SESSION_KEY);
+    }
+  } catch {
+    // Session storage unavailable in fallback environments
+  }
+}
+
+interface PendingPasskeyEnrolState {
+  token: string;
+  accountId: string;
+  accountName: string;
+  label: string;
+  existingCredentialIds: string[];
+  prepared: PreparedPasskeyEnrol;
+  expiresAt: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+interface StagedPasskeySendState {
+  token: string;
+  accountId: string;
+  accountName: string;
+  request: TransactionRequest;
+  summary: {
+    to: string;
+    amount: string;
+    fee: number;
+    total: string;
+    network: NetworkType;
+    memo?: string;
+  };
+  maxFeeSats: bigint;
+  recordFee: boolean;
+  expiresAt: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+let pendingPasskeyEnrol: PendingPasskeyEnrolState | null = null;
+let stagedPasskeySend: StagedPasskeySendState | null = null;
+
+function randomCeremonyToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function clearPendingPasskeyEnrol(): void {
+  if (!pendingPasskeyEnrol) return;
+  clearTimeout(pendingPasskeyEnrol.timer);
+  secureWipe(pendingPasskeyEnrol.prepared.dek);
+  pendingPasskeyEnrol = null;
+}
+
+function clearStagedPasskeySend(): void {
+  if (!stagedPasskeySend) return;
+  clearTimeout(stagedPasskeySend.timer);
+  stagedPasskeySend = null;
+}
+
+function clearPendingPasskeyState(): void {
+  clearPendingPasskeyEnrol();
+  clearStagedPasskeySend();
+}
+
 /**
- * Unlock with the password given for one send or signature from the popup.
+ * Unlock with the password or passkey given for one send or signature from the popup.
  * The signing session stays open for the auto-lock time, but nothing that
- * moves funds or signs uses it without the password (EXT-2).
+ * moves funds or signs uses it without an explicit credential (EXT-2).
  */
-async function authenticateAction(accountId: string, password: unknown): Promise<boolean> {
-  if (typeof password !== 'string' || !password) return false;
-  return signingSession.authenticate(accountId, password);
+async function authenticateAction(
+  accountId: string,
+  payload: { password?: unknown; passkeyAuth?: unknown } | undefined,
+): Promise<boolean> {
+  if (isPasskeyAuthPayload(payload?.passkeyAuth)) {
+    const ok = await signingSession.authenticateWithPasskey(accountId, payload.passkeyAuth);
+    if (ok) await setUiLocked(false);
+    return ok;
+  }
+  if (typeof payload?.password === 'string' && payload.password) {
+    const ok = await signingSession.authenticate(accountId, payload.password);
+    if (ok) await setUiLocked(false);
+    return ok;
+  }
+  return false;
 }
 
 // A wallet made by 0.0.1 on one network has no addresses on the other until
@@ -242,14 +354,17 @@ async function approveSigningRequest(request: PendingRequest, payload: any): Pro
     }
   }
 
-  // Authenticate with provided password for signing requests
-  const authSuccess = await signingSession.authenticate(
+  // Authenticate with provided password or passkey PRF for signing requests
+  const hasPasskey = isPasskeyAuthPayload(payload?.passkeyAuth);
+  const auth = resolveSecretAuth(payload ?? {});
+  const authSuccess = await signingSession.authenticateWithAuth(
     request.accountId,
-    payload.password
+    auth
   );
   if (!authSuccess) {
-    return { success: false, error: 'Invalid password' };
+    return { success: false, error: hasPasskey ? 'Passkey verification failed' : 'Invalid password' };
   }
+  await setUiLocked(false);
 
   try {
     let result: { signature?: string; address?: string; txid?: string; fee?: number } | undefined;
@@ -579,7 +694,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
       }
 
       case MSG.DELETE_ACCOUNT:
-        await accountManager.deleteAccount(payload.accountId, payload.password);
+        await accountManager.deleteAccount(payload.accountId, resolveSecretAuth(payload ?? {}));
         return { success: true };
 
       case MSG.RENAME_ACCOUNT:
@@ -587,13 +702,14 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         return { success: true };
 
       case MSG.ADD_NETWORK_ADDRESSES: {
-        const account = await accountManager.setUpNetwork(payload.accountId, payload.password);
+        const account = await accountManager.setUpNetwork(payload.accountId, resolveSecretAuth(payload ?? {}));
         return { success: true, data: { account } };
       }
 
-      case MSG.EXPORT_MNEMONIC:
-        const mnemonic = await accountManager.exportMnemonic(payload.accountId, payload.password);
+      case MSG.EXPORT_MNEMONIC: {
+        const mnemonic = await accountManager.exportMnemonic(payload.accountId, resolveSecretAuth(payload ?? {}));
         return { success: true, data: { mnemonic } };
+      }
 
       // ============ Wallet Operations ============
       case MSG.GET_BALANCE: {
@@ -660,21 +776,29 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
       case MSG.GENERATE_NEW_ADDRESS: {
         const newAddress = await accountManager.generateNewAddress(
           payload.accountId,
-          payload.password
+          resolveSecretAuth(payload ?? {})
         );
         return { success: true, data: { address: newAddress } };
       }
 
       // ============ Signing Operations ============
-      case MSG.AUTHENTICATE:
-        const authenticated = await signingSession.authenticate(
+      case MSG.AUTHENTICATE: {
+        const hasPasskey = isPasskeyAuthPayload(payload?.passkeyAuth);
+        const authenticated = await signingSession.authenticateWithAuth(
           payload.accountId,
-          payload.password
+          resolveSecretAuth(payload ?? {})
         );
         // Swaps left open by a closed browser go on from here: the browser may
         // have dropped the tick alarm, and a locked wallet could not tick anyway
-        if (authenticated) void swapTick();
-        return { success: authenticated, error: authenticated ? undefined : 'Invalid password' };
+        if (authenticated) {
+          await setUiLocked(false);
+          void swapTick();
+        }
+        return {
+          success: authenticated,
+          error: authenticated ? undefined : (hasPasskey ? 'Passkey verification failed' : 'Invalid password')
+        };
+      }
 
       case MSG.SIGN_MESSAGE: {
         // From a dApp (has origin): needs a connection, then the user's approval
@@ -723,7 +847,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           ? await accountManager.getAccount(payload.accountId)
           : null;
         if (!account) return { success: false, error: 'Name the account to sign with' };
-        if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
+        if (!(await authenticateAction(account.id, payload))) return PASSWORD_NEEDED;
         if (account.addresses.length === 0) return noAddressesOn(account);
         try {
           checkMessageShape(payload.message);
@@ -839,9 +963,9 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           }
         }
 
-        // From the popup: every send needs the password, so an open session
-        // alone sends nothing
-        if (!(await authenticateAction(account.id, payload?.password))) return PASSWORD_NEEDED;
+        // From the popup: every send needs the password or passkey, so an open
+        // session alone sends nothing
+        if (!(await authenticateAction(account.id, payload))) return PASSWORD_NEEDED;
         // Only the owner, in the popup, gets a name record's fee past the
         // percentage limits; a site's payment never does. A bad amount is
         // left for the build to name.
@@ -961,28 +1085,31 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
       }
 
       case MSG.UPDATE_SETTINGS: {
-        // The password is only a check; never saved
-        const { password, ...raw } = payload ?? {};
+        // The password or passkeyAuth is only a check; never saved
+        const { password, passkeyAuth, ...raw } = payload ?? {};
         const currentSettings = await getSettings();
         const checked = checkSettingsUpdate(raw, currentSettings);
         if (!checked.ok) return { success: false, error: checked.error };
         const { updates } = checked;
         const switching = !!updates.network && updates.network !== currentSettings.network;
         // Moving a wallet between Mainnet and Testnet, or loosening a
-        // protection, needs its password; before there is a wallet there is
-        // nothing to protect
+        // protection, needs its password or passkey; before there is a wallet
+        // there is nothing to protect
         const accounts = switching || checked.loosens ? await getAccounts() : [];
         const accountId = accounts.length > 0 ? (await getSelectedAccountId()) ?? accounts[0].id : null;
+        const hasPasskey = isPasskeyAuthPayload(passkeyAuth);
+        const hasPassword = typeof password === 'string' && password.length > 0;
+        const auth = hasPasskey ? passkeyAuth : password;
         if (accountId) {
-          if (typeof password !== 'string' || !password) {
+          if (!hasPasskey && !hasPassword) {
             return { success: false, error: switching ? 'Enter your password to switch network' : 'Enter your password to change this setting' };
           }
-          if (!(await signingSession.verifyPassword(accountId, password))) {
-            return { success: false, error: 'Invalid password' };
+          if (!(await signingSession.verifyAuth(accountId, auth))) {
+            return { success: false, error: hasPasskey ? 'Passkey verification failed' : 'Invalid password' };
           }
         }
 
-        // Checking the password also checks the records, and may have put
+        // Checking the credential also checks the records, and may have put
         // back settings changed outside the wallet: build on what is stored now
         const base = accountId ? await getSettings() : currentSettings;
         const newSettings = { ...base, ...updates };
@@ -1001,7 +1128,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           // Nothing unlocked on one network carries over to the other
           await signingSession.clearSession();
           // and the wallet has an address on the network it moved to
-          if (accountId && password) await accountManager.setUpNetwork(accountId, password);
+          if (accountId && auth) await accountManager.setUpNetwork(accountId, auth);
         }
 
         return { success: true, data: newSettings };
@@ -1143,6 +1270,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         const accounts = await getAccounts();
         const requests = await Promise.all(connectionManager.getAllPendingRequests().map(async r => {
           const network = r.data?.network ?? settings.network;
+          const slots = r.accountId ? await getPasskeySlots(r.accountId) : [];
           return {
             id: r.id,
             type: r.type,
@@ -1152,6 +1280,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
             data: r.data,
             firstUse: r.firstUse,
             createdAt: r.createdAt,
+            hasPasskeys: slots.length > 0,
             ...(await requestContext(r, network, accounts)),
             ...(r.origin.startsWith(RELAY_PREFIX) ? { relay: connectRelay.forOrigin(r.origin) ?? null } : {}),
           };
@@ -1248,6 +1377,327 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
         }
       }
 
+      // ============ Passkey & Session Lock (Extension Pages Only) ============
+      case MSG.GET_PASSKEY_SLOTS: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const targetId = typeof payload?.accountId === 'string' && payload.accountId
+          ? payload.accountId
+          : await getSelectedAccountId();
+        if (!targetId) return { success: true, data: { slots: [] } };
+        const slots = await getPasskeySlots(targetId);
+        return { success: true, data: { slots } };
+      }
+
+      case MSG.START_PASSKEY_ENROL: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const accountId = typeof payload?.accountId === 'string' ? payload.accountId : '';
+        const password = typeof payload?.password === 'string' ? payload.password : '';
+        if (!accountId || !password) {
+          return { success: false, error: 'Enter your password to enrol a passkey' };
+        }
+        const ok = await signingSession.authenticate(accountId, password);
+        if (!ok) {
+          return { success: false, error: 'Invalid password' };
+        }
+        await setUiLocked(false);
+
+        const account = await accountManager.getAccount(accountId);
+        if (!account) return { success: false, error: 'Account not found' };
+
+        const existing = await getPasskeySlots(accountId);
+        const rawLabel = typeof payload?.label === 'string' ? payload.label.trim() : '';
+        const label = (rawLabel || `Passkey ${existing.length + 1}`).slice(0, 64);
+
+        const prepared = await preparePasskeyEnrol(accountId, password);
+        clearPendingPasskeyEnrol();
+        const token = randomCeremonyToken();
+        const timer = setTimeout(() => {
+          if (pendingPasskeyEnrol?.token === token) {
+            clearPendingPasskeyEnrol();
+          }
+        }, PASSKEY_CEREMONY_TTL_MS);
+
+        pendingPasskeyEnrol = {
+          token,
+          accountId,
+          accountName: account.name,
+          label,
+          existingCredentialIds: existing.map(s => s.credentialId),
+          prepared,
+          expiresAt: Date.now() + PASSKEY_CEREMONY_TTL_MS,
+          timer,
+        };
+
+        return {
+          success: true,
+          data: {
+            token,
+            accountId,
+            accountName: account.name,
+            label,
+            existingCredentialIds: existing.map(s => s.credentialId),
+          },
+        };
+      }
+
+      case MSG.GET_PASSKEY_ENROL_INFO: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const token = typeof payload?.token === 'string' ? payload.token : '';
+        if (!pendingPasskeyEnrol || pendingPasskeyEnrol.token !== token) {
+          return { success: false, error: 'Passkey enrolment session expired. Start again from Settings.' };
+        }
+        if (Date.now() >= pendingPasskeyEnrol.expiresAt) {
+          clearPendingPasskeyEnrol();
+          return { success: false, error: 'Passkey enrolment session expired. Start again from Settings.' };
+        }
+        return {
+          success: true,
+          data: {
+            accountId: pendingPasskeyEnrol.accountId,
+            accountName: pendingPasskeyEnrol.accountName,
+            label: pendingPasskeyEnrol.label,
+            existingCredentialIds: pendingPasskeyEnrol.existingCredentialIds,
+          },
+        };
+      }
+
+      case MSG.FINISH_PASSKEY_ENROL: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const token = typeof payload?.token === 'string' ? payload.token : '';
+        if (!pendingPasskeyEnrol || pendingPasskeyEnrol.token !== token) {
+          return { success: false, error: 'Passkey enrolment session expired. Start again from Settings.' };
+        }
+        const entry = pendingPasskeyEnrol;
+        clearTimeout(entry.timer);
+        pendingPasskeyEnrol = null;
+
+        if (Date.now() >= entry.expiresAt) {
+          secureWipe(entry.prepared.dek);
+          return { success: false, error: 'Passkey enrolment session expired. Start again from Settings.' };
+        }
+
+        const credentialId = typeof payload?.credentialId === 'string' ? payload.credentialId : '';
+        const prfSalt = typeof payload?.prfSalt === 'string' ? payload.prfSalt : '';
+        const prfOutput = typeof payload?.prfOutput === 'string' ? payload.prfOutput : '';
+        const label = typeof payload?.label === 'string' && payload.label.trim()
+          ? payload.label.trim().slice(0, 64)
+          : entry.label;
+
+        const slot = await commitPasskeyEnrol(entry.prepared, {
+          label,
+          credentialId,
+          prfSalt,
+          prfOutputB64Url: prfOutput,
+        });
+        await setUiLocked(false);
+        return { success: true, data: { slot } };
+      }
+
+      case MSG.CANCEL_PASSKEY_ENROL: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        if (!payload?.token || pendingPasskeyEnrol?.token === payload.token) {
+          clearPendingPasskeyEnrol();
+        }
+        return { success: true };
+      }
+
+      case MSG.REMOVE_PASSKEY_SLOT: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const accountId = typeof payload?.accountId === 'string' ? payload.accountId : '';
+        const slotId = typeof payload?.slotId === 'string' ? payload.slotId : '';
+        if (!accountId || !slotId) {
+          return { success: false, error: 'Account and passkey slot are required' };
+        }
+        const hasPasskey = isPasskeyAuthPayload(payload?.passkeyAuth);
+        const auth = resolveSecretAuth(payload ?? {});
+        if (!hasPasskey && (!auth || typeof auth !== 'string')) {
+          return { success: false, error: 'Enter your password or verify with a passkey to remove this passkey' };
+        }
+        const verified = await signingSession.verifyAuth(accountId, auth);
+        if (!verified) {
+          return { success: false, error: hasPasskey ? 'Passkey verification failed' : 'Invalid password' };
+        }
+        await removePasskeySlot(accountId, auth, slotId);
+        const slots = await getPasskeySlots(accountId);
+        return { success: true, data: { slots } };
+      }
+
+      case MSG.UNLOCK_WALLET_PASSKEY: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const accountId = typeof payload?.accountId === 'string' && payload.accountId
+          ? payload.accountId
+          : (await getSelectedAccountId()) ?? '';
+        if (!accountId) return { success: false, error: 'No account selected' };
+
+        const passkeyAuth = isPasskeyAuthPayload(payload?.passkeyAuth)
+          ? payload.passkeyAuth
+          : (typeof payload?.credentialId === 'string' && typeof payload?.prfOutput === 'string'
+              ? { credentialId: payload.credentialId, prfOutput: payload.prfOutput }
+              : null);
+        if (!passkeyAuth || !isPasskeyAuthPayload(passkeyAuth)) {
+          return { success: false, error: 'Passkey verification failed' };
+        }
+
+        const authenticated = await signingSession.authenticateWithPasskey(accountId, passkeyAuth);
+        if (authenticated) {
+          await setUiLocked(false);
+          void swapTick();
+        }
+        return {
+          success: authenticated,
+          error: authenticated ? undefined : 'Passkey verification failed',
+        };
+      }
+
+      case MSG.LOCK_WALLET: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        clearPendingPasskeyState();
+        await signingSession.clearSession();
+        await setUiLocked(true);
+        for (const port of openUiPorts) {
+          try { port.postMessage({ type: 'wallet-locked' }); } catch { /* closed */ }
+        }
+        return { success: true };
+      }
+
+      case MSG.GET_SESSION_STATUS: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const targetId = typeof payload?.accountId === 'string' && payload.accountId
+          ? payload.accountId
+          : await getSelectedAccountId();
+        const slots = targetId ? await getPasskeySlots(targetId) : [];
+        return {
+          success: true,
+          data: {
+            uiLocked: await getUiLocked(),
+            authenticated: targetId ? await signingSession.isAuthenticated(targetId) : false,
+            hasPasskeys: slots.length > 0,
+            passkeyCount: slots.length,
+          },
+        };
+      }
+
+      case MSG.STAGE_PASSKEY_SEND: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const account = typeof payload?.accountId === 'string' && payload.accountId
+          ? await accountManager.getAccount(payload.accountId)
+          : await accountManager.getSelectedAccount();
+        if (!account) return { success: false, error: 'No account selected' };
+        if (account.addresses.length === 0) return noAddressesOn(account);
+
+        const request: TransactionRequest = {
+          to: payload.to,
+          amount: payload.amount,
+          fee: payload.fee,
+          fromAddresses: payload.fromAddresses,
+          memo: payload?.memo,
+        };
+        walletCore.checkRequest(request, account.network);
+        let recordFee = false;
+        try {
+          recordFee = isRecordFee(account.network, request.to, parseDiviAmount(request.amount), request.memo);
+        } catch { /* not a record fee */ }
+        const built = await buildSend(account, request, recordFee);
+
+        clearStagedPasskeySend();
+        const token = randomCeremonyToken();
+        const summary = {
+          to: request.to,
+          amount: diviText(built.amountSats),
+          fee: built.fee,
+          total: diviText(built.amountSats + built.feeSats),
+          network: account.network,
+          ...(request.memo ? { memo: request.memo } : {}),
+        };
+        const timer = setTimeout(() => {
+          if (stagedPasskeySend?.token === token) {
+            clearStagedPasskeySend();
+          }
+        }, PASSKEY_CEREMONY_TTL_MS);
+
+        stagedPasskeySend = {
+          token,
+          accountId: account.id,
+          accountName: account.name,
+          request,
+          summary,
+          maxFeeSats: built.feeSats,
+          recordFee,
+          expiresAt: Date.now() + PASSKEY_CEREMONY_TTL_MS,
+          timer,
+        };
+
+        return { success: true, data: { token, accountId: account.id, accountName: account.name, summary } };
+      }
+
+      case MSG.GET_STAGED_PASSKEY_SEND: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const token = typeof payload?.token === 'string' ? payload.token : '';
+        if (!stagedPasskeySend || stagedPasskeySend.token !== token) {
+          return { success: false, error: 'Pending transaction expired. Start the send again.' };
+        }
+        if (Date.now() >= stagedPasskeySend.expiresAt) {
+          clearStagedPasskeySend();
+          return { success: false, error: 'Pending transaction expired. Start the send again.' };
+        }
+        return {
+          success: true,
+          data: {
+            accountId: stagedPasskeySend.accountId,
+            accountName: stagedPasskeySend.accountName,
+            summary: stagedPasskeySend.summary,
+          },
+        };
+      }
+
+      case MSG.EXECUTE_STAGED_PASSKEY_SEND: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        const token = typeof payload?.token === 'string' ? payload.token : '';
+        if (!stagedPasskeySend || stagedPasskeySend.token !== token) {
+          return { success: false, error: 'Pending transaction expired. Start the send again.' };
+        }
+        const entry = stagedPasskeySend;
+        clearTimeout(entry.timer);
+        stagedPasskeySend = null;
+
+        if (Date.now() >= entry.expiresAt) {
+          return { success: false, error: 'Pending transaction expired. Start the send again.' };
+        }
+        if (!isPasskeyAuthPayload(payload?.passkeyAuth)) {
+          return { success: false, error: 'Passkey verification failed' };
+        }
+        const ok = await signingSession.authenticateWithPasskey(entry.accountId, payload.passkeyAuth);
+        if (!ok) {
+          return { success: false, error: 'Passkey verification failed' };
+        }
+        await setUiLocked(false);
+
+        const currentNetwork = (await getSettings()).network;
+        if (entry.summary.network !== currentNetwork) {
+          return { success: false, error: 'The wallet changed network since this send was prepared.' };
+        }
+        const account = await accountManager.getAccount(entry.accountId, currentNetwork);
+        if (!account) return { success: false, error: 'Account not found' };
+
+        const sent = await sendFromAccount(account, entry.request, entry.maxFeeSats, entry.recordFee);
+        return { success: true, data: sent };
+      }
+
+      case MSG.PASSKEY_CEREMONY_DONE: {
+        if (origin) return { success: false, error: 'Unauthorized sender' };
+        for (const port of openUiPorts) {
+          try {
+            port.postMessage({
+              type: 'passkey-ceremony-done',
+              mode: payload?.mode,
+              accountId: payload?.accountId,
+              result: payload?.result,
+            });
+          } catch { /* window went away */ }
+        }
+        return { success: true };
+      }
+
       default:
         return { success: false, error: `Unknown message type: ${type}` };
     }
@@ -1340,7 +1790,11 @@ function stopPush(): void {
 
 // Lock when the screen locks
 idle.onStateChanged?.addListener((state: string) => {
-  if (state === 'locked') void signingSession.clearSession();
+  if (state === 'locked') {
+    clearPendingPasskeyState();
+    void setUiLocked(true);
+    void signingSession.clearSession();
+  }
 });
 
 // Initialize on startup

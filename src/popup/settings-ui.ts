@@ -7,8 +7,15 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView } from './ui-state';
 import { sendMessage } from './message-api';
-import { showMnemonicModal, showPasswordModal } from './modals';
+import { showMnemonicModal, showPasswordModal, showAuthModal, type AuthModalResult } from './modals';
 import { MSG, NETWORKS, NetworkType } from '../shared/constants';
+import {
+  createAndVerifyPasskeyInWindow,
+  fetchPasskeySlots,
+  isTransientToolbarPopup,
+  openPasskeyCeremonyWindow,
+} from './passkey-client';
+import type { PasskeySlotInfo } from '../shared/storage';
 import { canonicalOrigin, DEFAULT_SITES, type SiteAccess } from '../shared/site-access';
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { Settings, ConnectedSite, TransactionLimits } from './types';
@@ -235,21 +242,21 @@ export function updateConnectedSitesList(sites: ConnectedSite[]): void {
  */
 export async function updateSettings(updates: Partial<Settings>): Promise<void> {
   // Allowing a new site, raising or removing a limit, or a longer lock time
-  // needs the wallet's password; the background refuses it otherwise
+  // needs the wallet's password or passkey; the background refuses it otherwise
   const checked = checkSettingsUpdate(updates, state.settings as any);
   if (!checked.ok) {
     showToast(checked.error, 'error');
     updateSettingsDisplay();
     return;
   }
-  let message: Partial<Settings> & { password?: string } = updates;
+  let message: Partial<Settings> & AuthModalResult = updates;
   if (checked.loosens && state.accounts.length > 0) {
-    const password = await showPasswordModal('Enter your password to change this setting');
-    if (password === null) {
+    const auth = await showAuthModal('Enter your password to change this setting');
+    if (auth === null) {
       updateSettingsDisplay();
       return;
     }
-    message = { ...updates, password };
+    message = { ...updates, ...auth };
   }
   try {
     await sendMessage(MSG.UPDATE_SETTINGS, message);
@@ -270,18 +277,18 @@ export async function updateSettings(updates: Partial<Settings>): Promise<void> 
  */
 async function switchNetwork(network: NetworkType): Promise<void> {
   const name = NETWORKS[network].name;
-  // Moving a wallet between Mainnet and Testnet needs its password
-  let password: string | null = null;
+  // Moving a wallet between Mainnet and Testnet needs its password or passkey
+  let auth: AuthModalResult | null = null;
   if (state.accounts.length > 0) {
-    password = await showPasswordModal(`Enter your password to switch to ${name}`);
-    if (password === null) {
+    auth = await showAuthModal(`Enter your password to switch to ${name}`);
+    if (auth === null) {
       updateSettingsDisplay();
       return;
     }
   }
   try {
     showLoading(`Switching to ${name}...`);
-    await sendMessage(MSG.UPDATE_SETTINGS, password === null ? { network } : { network, password });
+    await sendMessage(MSG.UPDATE_SETTINGS, auth === null ? { network } : { network, ...auth });
   } catch (error: unknown) {
     hideLoading();
     showToast(error instanceof Error ? error.message : 'Failed to switch network', 'error');
@@ -322,15 +329,15 @@ export async function disconnectSite(origin: string): Promise<void> {
  * Export mnemonic
  */
 async function handleExportMnemonic(): Promise<void> {
-  const password = await showPasswordModal('Enter password to export recovery phrase');
-  if (!password) return;
+  const auth = await showAuthModal('Enter password to export recovery phrase');
+  if (!auth) return;
 
   try {
     showLoading('Exporting recovery phrase...');
-    await sendMessage(MSG.AUTHENTICATE, { accountId: state.currentAccount?.id, password });
+    await sendMessage(MSG.AUTHENTICATE, { accountId: state.currentAccount?.id || '', ...auth });
     const response = await sendMessage<{ mnemonic: string }>(MSG.EXPORT_MNEMONIC, {
-      accountId: state.currentAccount?.id,
-      password,
+      accountId: state.currentAccount?.id || '',
+      ...auth,
     });
     hideLoading();
 
@@ -338,6 +345,167 @@ async function handleExportMnemonic(): Promise<void> {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to export recovery phrase';
     showToast(errorMessage, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+function formatPasskeyDate(ts: number): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export async function refreshPasskeysSection(): Promise<void> {
+  const listEl = document.getElementById('passkeys-list');
+  const addBtn = document.getElementById('add-passkey-btn') as HTMLButtonElement | null;
+  if (!listEl) return;
+
+  const accountId = state.currentAccount?.id;
+  if (addBtn) addBtn.disabled = !accountId;
+  if (!accountId) {
+    listEl.replaceChildren();
+    return;
+  }
+
+  const slots = await fetchPasskeySlots(accountId);
+  listEl.replaceChildren();
+
+  if (slots.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.style.padding = '8px 0';
+    empty.style.fontSize = '13px';
+    empty.textContent = 'No passkeys enrolled';
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (const slot of slots) {
+    const row = document.createElement('div');
+    row.className = 'passkey-item';
+
+    const info = document.createElement('div');
+    info.className = 'passkey-item-info';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'passkey-item-label';
+    labelEl.textContent = slot.label;
+
+    const dateEl = document.createElement('span');
+    dateEl.className = 'passkey-item-date';
+    dateEl.textContent = `Added ${formatPasskeyDate(slot.createdAt)}`;
+
+    info.append(labelEl, dateEl);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'disconnect-btn';
+    removeBtn.dataset.testid = 'remove-passkey-btn';
+    removeBtn.dataset.slotId = slot.id;
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => {
+      void handleRemovePasskey(slot);
+    });
+
+    row.append(info, removeBtn);
+    listEl.appendChild(row);
+  }
+}
+
+async function handleAddPasskey(): Promise<void> {
+  const account = state.currentAccount;
+  if (!account) {
+    showToast('No wallet open', 'error');
+    return;
+  }
+
+  const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
+  const requestedLabel = labelInput?.value.trim() || undefined;
+
+  const password = await showPasswordModal('Enter your password to add a passkey');
+  if (!password) return;
+
+  let enrolData: {
+    token: string;
+    accountId: string;
+    accountName: string;
+    label: string;
+    existingCredentialIds: string[];
+  };
+
+  try {
+    showLoading('Preparing passkey enrolment...');
+    enrolData = await sendMessage(MSG.START_PASSKEY_ENROL, {
+      accountId: account.id,
+      password,
+      label: requestedLabel,
+    });
+    hideLoading();
+  } catch (err) {
+    hideLoading();
+    showToast(err instanceof Error ? err.message : 'Failed to start passkey enrolment', 'error');
+    return;
+  }
+
+  if (await isTransientToolbarPopup()) {
+    try {
+      await openPasskeyCeremonyWindow({
+        mode: 'enrol',
+        token: enrolData.token,
+      });
+    } catch (err) {
+      await sendMessage(MSG.CANCEL_PASSKEY_ENROL, { token: enrolData.token }).catch(() => {});
+      showToast(err instanceof Error ? err.message : 'Could not open passkey window', 'error');
+    }
+    return;
+  }
+
+  try {
+    showLoading('Waiting for passkey...');
+    const created = await createAndVerifyPasskeyInWindow({
+      accountName: enrolData.accountName,
+      label: enrolData.label,
+      existingCredentialIds: enrolData.existingCredentialIds,
+    });
+
+    await sendMessage(MSG.FINISH_PASSKEY_ENROL, {
+      token: enrolData.token,
+      credentialId: created.credentialId,
+      prfSalt: created.prfSalt,
+      prfOutput: created.prfOutput,
+      label: enrolData.label,
+    });
+
+    if (labelInput) labelInput.value = '';
+    await refreshPasskeysSection();
+    showToast('Passkey added', 'success');
+  } catch (err) {
+    await sendMessage(MSG.CANCEL_PASSKEY_ENROL, { token: enrolData.token }).catch(() => {});
+    showToast(err instanceof Error ? err.message : 'Failed to add passkey', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleRemovePasskey(slot: PasskeySlotInfo): Promise<void> {
+  const account = state.currentAccount;
+  if (!account) return;
+
+  const auth = await showAuthModal(`Verify to remove “${slot.label}”`, account.id);
+  if (!auth) return;
+
+  try {
+    showLoading('Removing passkey...');
+    await sendMessage(MSG.REMOVE_PASSKEY_SLOT, {
+      accountId: account.id,
+      slotId: slot.id,
+      ...auth,
+    });
+    await refreshPasskeysSection();
+    showToast('Passkey removed', 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Failed to remove passkey', 'error');
   } finally {
     hideLoading();
   }
@@ -352,8 +520,12 @@ export function setupSettingsUIHandlers(): void {
     showView(elements.viewSettings);
     loadConnectedSites();
     loadPairings();
+    void refreshPasskeysSection();
   });
   setupConnectUIHandlers();
+  document.getElementById('add-passkey-btn')?.addEventListener('click', () => {
+    void handleAddPasskey();
+  });
 
   // Settings view back button
   document.getElementById('settings-back-btn')?.addEventListener('click', hideView);

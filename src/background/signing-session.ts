@@ -1,7 +1,7 @@
-import { SecureString, secureWipe } from '../shared/crypto-utils';
+import { SecureString, secureWipe, type PasskeyAuthPayload } from '../shared/crypto-utils';
 import { storage, alarms } from '../shared/browser-polyfill';
 import { getSettings } from '../shared/storage';
-import { isLockedError, unlockSecret } from './unlock-limit';
+import { isLockedError, unlockSecretWithAuth, type SecretAuth } from './unlock-limit';
 import { Mnemonic } from '../lib/mnemonic';
 import { HDKey } from '../lib/hdkey';
 import { Signer } from '../lib/signer';
@@ -27,12 +27,12 @@ export class SigningSession {
   private currentAccountId: string | null = null;
   private expiresAt = 0;
   /**
-   * Authenticate with password to start a signing session
+   * Authenticate with password or passkey PRF to start a signing session
    */
-  async authenticate(accountId: string, password: string): Promise<boolean> {
+  async authenticateWithAuth(accountId: string, auth: SecretAuth): Promise<boolean> {
     let mnemonic: string;
     try {
-      mnemonic = await unlockSecret(accountId, password);
+      mnemonic = await unlockSecretWithAuth(accountId, auth);
     } catch (error) {
       // Re-throw rate limit errors so the caller can surface the message
       if (isLockedError(error)) throw error;
@@ -57,18 +57,30 @@ export class SigningSession {
     return true;
   }
 
+  async authenticate(accountId: string, password: string): Promise<boolean> {
+    return this.authenticateWithAuth(accountId, password);
+  }
+
+  async authenticateWithPasskey(accountId: string, passkeyAuth: PasskeyAuthPayload): Promise<boolean> {
+    return this.authenticateWithAuth(accountId, passkeyAuth);
+  }
+
   /**
-   * Check an account's password without starting a signing session. Wrong
-   * passwords count towards the same lockout as authenticate().
+   * Check an account's password or passkey PRF without starting a signing session.
+   * Failed attempts count towards the same lockout as authenticate().
    */
-  async verifyPassword(accountId: string, password: string): Promise<boolean> {
+  async verifyAuth(accountId: string, auth: SecretAuth): Promise<boolean> {
     try {
-      new SecureString(await unlockSecret(accountId, password)).wipe();
+      new SecureString(await unlockSecretWithAuth(accountId, auth)).wipe();
     } catch (error) {
       if (isLockedError(error)) throw error;
       return false;
     }
     return true;
+  }
+
+  async verifyPassword(accountId: string, password: string): Promise<boolean> {
+    return this.verifyAuth(accountId, password);
   }
 
   /**

@@ -59,6 +59,13 @@ async function build() {
     outfile: join(outdir, 'popup.js'),
   });
 
+  // Build standalone passkey ceremony window
+  await esbuild.build({
+    ...commonConfig,
+    entryPoints: [join(__dirname, 'src/popup/passkey-window.ts')],
+    outfile: join(outdir, 'passkey-window.js'),
+  });
+
   // Build content script
   await esbuild.build({
     ...commonConfig,
@@ -76,6 +83,7 @@ async function build() {
 
   // Copy static files
   cpSync(join(__dirname, 'src/popup/popup.html'), join(outdir, 'popup.html'));
+  cpSync(join(__dirname, 'src/popup/passkey.html'), join(outdir, 'passkey.html'));
   cpSync(join(__dirname, 'src/popup/styles.css'), join(outdir, 'styles.css'));
   cpSync(join(__dirname, 'src/swap/pkg/swap_wasm_bg.wasm'), join(outdir, 'swap_wasm_bg.wasm'));
   cpSync(join(__dirname, 'assets/icons'), join(outdir, 'icons'), { recursive: true });

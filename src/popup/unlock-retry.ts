@@ -5,14 +5,16 @@
  * UNLOCK_NEEDED error; the popup asks for the password once, unlocks, and
  * sends the same message again.
  */
-import { UNLOCK_NEEDED, type MessageResponse } from '../shared/constants';
+import { UNLOCK_NEEDED, type MessageResponse, type PasskeyAuthInput } from '../shared/constants';
+
+export type UnlockCredential = string | { password?: string; passkeyAuth?: PasskeyAuthInput };
 
 export interface UnlockDeps {
-  // The password, or null when the owner cancels
-  ask(reason: string): Promise<string | null>;
+  // The password or passkey credential, or null when the owner cancels
+  ask(reason: string): Promise<UnlockCredential | null>;
   // The account to unlock when the caller names none
   currentAccountId(): string | undefined;
-  authenticate(accountId: string, password: string): Promise<MessageResponse>;
+  authenticate(accountId: string, credential: UnlockCredential): Promise<MessageResponse>;
 }
 
 let deps: UnlockDeps | null = null;
@@ -32,9 +34,9 @@ export async function retryAfterUnlock(send: () => Promise<MessageResponse>, acc
   const id = accountId ?? deps.currentAccountId();
   const reason = first.error!.slice(UNLOCK_NEEDED.length).trim();
   if (!id) return { success: false, error: reason };
-  const password = await deps.ask(reason);
-  if (!password) return { success: false, error: 'Not saved: the password was not entered' };
-  const auth = await deps.authenticate(id, password);
+  const credential = await deps.ask(reason);
+  if (!credential) return { success: false, error: 'Not saved: the password was not entered' };
+  const auth = await deps.authenticate(id, credential);
   if (!auth?.success) return { success: false, error: auth?.error || 'Invalid password' };
   return send();
 }

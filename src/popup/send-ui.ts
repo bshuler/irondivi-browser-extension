@@ -6,8 +6,14 @@ import { elements } from './elements';
 import { state } from './state';
 import { formatAddress, formatAmount, showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { MSG, DUST_THRESHOLD, NETWORKS, type NetworkType } from '../shared/constants';
+import { MSG, DUST_THRESHOLD, NETWORKS, type NetworkType, type PasskeyAuthInput } from '../shared/constants';
 import { loadBalance, loadTransactions } from './wallet-ui';
+import {
+  assertPasskeyInWindow,
+  fetchPasskeySlots,
+  isTransientToolbarPopup,
+  openPasskeyCeremonyWindow,
+} from './passkey-client';
 import { checkRecipient, chunkAddress, recipientNote, type KnownContact } from './recipient-check';
 import { memoProblem, parsePaymentUri, type PaymentRequest } from '../lib/payment-uri';
 import { visibleText } from './visible-text';
@@ -166,7 +172,27 @@ export async function showSendConfirm(tx: PendingSendTx, purpose?: string): Prom
   const total = tx.amount + tx.fee;
   (document.getElementById('send-confirm-total') as HTMLSpanElement).textContent = `${formatAmount(total)} DIVI`;
 
+  const passkeyWrap = document.getElementById('send-passkey-wrap') as HTMLDivElement | null;
+  const passkeyBtn = document.getElementById('send-passkey-btn') as HTMLButtonElement | null;
+  const slots = await fetchPasskeySlots(state.currentAccount?.id);
+  if (slots.length > 0 && passkeyWrap && passkeyBtn) {
+    passkeyBtn.disabled = false;
+    passkeyBtn.textContent = 'Verify with Passkey & Send';
+    passkeyBtn.dataset.testid = 'reauth-passkey-btn';
+    passkeyWrap.classList.remove('hidden');
+  } else {
+    passkeyWrap?.classList.add('hidden');
+    if (passkeyBtn) delete passkeyBtn.dataset.testid;
+  }
+
   showView(elements.viewSendConfirm);
+}
+
+function clearSendPasskeyTestId(): void {
+  const passkeyWrap = document.getElementById('send-passkey-wrap') as HTMLDivElement | null;
+  const passkeyBtn = document.getElementById('send-passkey-btn') as HTMLButtonElement | null;
+  passkeyWrap?.classList.add('hidden');
+  if (passkeyBtn) delete passkeyBtn.dataset.testid;
 }
 
 function setRow(rowId: string, valueId: string, value: string | undefined): void {
@@ -274,6 +300,100 @@ async function sendTransaction(password: string): Promise<void> {
     await loadBalance();
     await loadTransactions();
 
+    clearSendPasskeyTestId();
+    hideView();
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to send transaction';
+    showToast(errorMessage, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleSendWithPasskey(): Promise<void> {
+  if (!state.pendingSendTx) return;
+  const passkeyBtn = document.getElementById('send-passkey-btn') as HTMLButtonElement | null;
+
+  if (await isTransientToolbarPopup()) {
+    try {
+      showLoading('Preparing transaction...');
+      const staged = await sendMessage<{ token: string }>(MSG.STAGE_PASSKEY_SEND, {
+        accountId: state.currentAccount?.id,
+        to: state.pendingSendTx.to,
+        amount: state.pendingSendTx.amountText,
+        fee: state.pendingSendTx.fee,
+        fromAddresses: state.pendingSendTx.fromAddresses,
+        memo: state.pendingSendTx.memo,
+      });
+      hideLoading();
+      await openPasskeyCeremonyWindow({ mode: 'confirm-send', token: staged.token });
+    } catch (err: unknown) {
+      hideLoading();
+      showToast(err instanceof Error ? err.message : 'Failed to prepare transaction', 'error');
+    }
+    return;
+  }
+
+  try {
+    if (passkeyBtn) {
+      passkeyBtn.disabled = true;
+      passkeyBtn.textContent = 'Waiting for passkey...';
+    }
+    const slots = await fetchPasskeySlots(state.currentAccount?.id);
+    const passkeyAuth = await assertPasskeyInWindow(slots);
+    await sendTransactionWithPasskey(passkeyAuth);
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Passkey verification failed', 'error');
+  } finally {
+    if (passkeyBtn) {
+      passkeyBtn.disabled = false;
+      passkeyBtn.textContent = 'Verify with Passkey & Send';
+    }
+  }
+}
+
+async function sendTransactionWithPasskey(passkeyAuth: PasskeyAuthInput): Promise<void> {
+  if (!state.pendingSendTx) return;
+
+  const toAddress = state.pendingSendTx.to;
+
+  try {
+    showLoading('Sending transaction...');
+
+    const response = await sendMessage<{ txid: string }>(MSG.SEND_TRANSACTION, {
+      passkeyAuth,
+      to: toAddress,
+      amount: state.pendingSendTx.amountText,
+      fee: state.pendingSendTx.fee,
+      fromAddresses: state.pendingSendTx.fromAddresses,
+      memo: state.pendingSendTx.memo,
+    });
+
+    showToast(`Transaction sent: ${formatAddress(response.txid)}`, 'success');
+    const dvns = state.pendingSendTx.dvns;
+    state.pendingSendTx = null;
+    if (dvns && state.currentAccount) {
+      try {
+        await notifyRecord(state.currentAccount.network as NetworkType, response.txid);
+      } catch {
+        showToast('Sent; the name service will see it once it is in a block', 'success');
+      }
+    }
+    clearPaymentRequest();
+
+    try {
+      const contact = state.contacts.find(c => c.address === toAddress);
+      if (contact) {
+        await sendMessage(MSG.MARK_CONTACT_USED, { contactId: contact.id });
+      }
+    } catch {
+      // Ignore errors marking contact used
+    }
+
+    await loadBalance();
+    await loadTransactions();
+
+    clearSendPasskeyTestId();
     hideView();
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to send transaction';
@@ -465,10 +585,14 @@ export function setupSendUIHandlers(): void {
     // A name record was prepared on the Names view; go back there
     const fromNames = state.pendingSendTx?.dvns !== undefined;
     state.pendingSendTx = null;
+    clearSendPasskeyTestId();
     showView(fromNames ? document.getElementById('view-names')! : elements.viewSend);
   });
 
   document.getElementById('send-submit-btn')?.addEventListener('click', handleSendSubmit);
+  document.getElementById('send-passkey-btn')?.addEventListener('click', () => {
+    void handleSendWithPasskey();
+  });
 
   // Setup contact suggestions
   setupContactSuggestions();

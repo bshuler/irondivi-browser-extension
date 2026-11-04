@@ -6,7 +6,7 @@ import { elements } from './elements';
 import { state } from './state';
 import { showLoading, hideLoading, showToast, showView, hideView, clearPasswordInput } from './ui-state';
 import { sendMessage } from './message-api';
-import { showMnemonicModal, showPasswordModal, showConfirmModal, showInputModal } from './modals';
+import { showMnemonicModal, showPasswordModal, showAuthModal, showConfirmModal, showInputModal } from './modals';
 import { MSG, NETWORKS } from '../shared/constants';
 import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-strength';
 import { Account } from './types';
@@ -50,14 +50,14 @@ export async function ensureNetworkAddresses(): Promise<void> {
 
   const name = NETWORKS[state.settings.network].name;
   hideLoading();
-  const password = await showPasswordModal(`Enter your password to set up your ${name} address`);
-  if (!password) {
+  const auth = await showAuthModal(`Enter your password to set up your ${name} address`, account.id);
+  if (!auth) {
     showToast(`No ${name} address yet. Unlock the wallet to add one.`, 'error');
     return;
   }
   try {
     showLoading(`Setting up ${name}...`);
-    await sendMessage(MSG.ADD_NETWORK_ADDRESSES, { accountId: account.id, password });
+    await sendMessage(MSG.ADD_NETWORK_ADDRESSES, { accountId: account.id, ...auth });
     await loadAccounts();
   } catch (error: unknown) {
     showToast(error instanceof Error ? error.message : `Failed to set up ${name}`, 'error');
@@ -74,6 +74,10 @@ export async function ensureNetworkAddresses(): Promise<void> {
  * Update the account display in the header
  */
 export function updateAccountDisplay(): void {
+  const lockBtn = document.getElementById('lock-wallet-btn');
+  const isApproval = new URLSearchParams(window.location.search).has('approve');
+  lockBtn?.classList.toggle('hidden', !state.currentAccount || isApproval);
+
   if (!state.currentAccount) {
     elements.currentAccountName.textContent = 'No wallet';
     return;
@@ -173,12 +177,12 @@ export async function removeCurrentAccount(): Promise<void> {
   );
   if (!confirmed) return;
 
-  const password = await showPasswordModal('Enter your password to remove this wallet');
-  if (!password) return;
+  const auth = await showAuthModal('Enter your password to remove this wallet', state.currentAccount.id);
+  if (!auth) return;
 
   try {
     showLoading('Removing wallet...');
-    await sendMessage(MSG.DELETE_ACCOUNT, { accountId: state.currentAccount.id, password });
+    await sendMessage(MSG.DELETE_ACCOUNT, { accountId: state.currentAccount.id, ...auth });
     showToast('Wallet removed from this device', 'success');
     hideView();
     await loadAccounts();

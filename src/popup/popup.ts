@@ -9,11 +9,11 @@ import { setupNamesUIHandlers } from './names-ui';
 import { setupPlayerCertUIHandlers } from './player-cert-ui';
 import { elements } from './elements';
 import { state } from './state';
-import { showLoading, hideLoading, hideView } from './ui-state';
+import { showLoading, hideLoading, hideView, showToast, formatAddress } from './ui-state';
 import { sendMessage, onPasswordAccepted } from './message-api';
 import { MSG, UI_PORT } from '../shared/constants';
 import { runtime } from '../shared/browser-polyfill';
-import { setupMnemonicModalHandlers, showPasswordModal } from './modals';
+import { setupMnemonicModalHandlers, showAuthModal, showUnlockModal, hideUnlockModal } from './modals';
 import { setUnlockDeps } from './unlock-retry';
 import { showRecordsWarning } from './records-warning-ui';
 import { refreshServerUI, setupServerUIHandlers } from './server-ui';
@@ -21,7 +21,7 @@ import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensu
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
 import { loadContacts, setupContactsUIHandlers } from './contacts-ui';
-import { loadSettings, setupSettingsUIHandlers } from './settings-ui';
+import { loadSettings, refreshPasskeysSection, setupSettingsUIHandlers } from './settings-ui';
 import { checkPendingRequests, setupSigningRequestUIHandlers } from './signing-request-ui';
 
 // ============================================================
@@ -97,15 +97,35 @@ function setupEventListeners(): void {
   // Core UI modules
   setupMnemonicModalHandlers();
   setUnlockDeps({
-    ask: reason => showPasswordModal(reason),
+    ask: reason => showAuthModal(reason),
     currentAccountId: () => state.currentAccount?.id,
-    authenticate: async (accountId, password) => {
-      const reply = await runtime.sendMessage({ type: MSG.AUTHENTICATE, payload: { accountId, password } });
+    authenticate: async (accountId, credential) => {
+      const payload = typeof credential === 'string'
+        ? { accountId, password: credential }
+        : { accountId, ...credential };
+      const reply = await runtime.sendMessage({ type: MSG.AUTHENTICATE, payload });
       if (reply?.success) void showRecordsWarning();
       return reply;
     },
   });
   onPasswordAccepted(() => void showRecordsWarning());
+  document.getElementById('lock-wallet-btn')?.addEventListener('click', () => {
+    void (async () => {
+      try {
+        await sendMessage(MSG.LOCK_WALLET);
+        const modal = document.getElementById('unlock-modal');
+        if (modal?.classList.contains('hidden')) {
+          await showUnlockModal(state.currentAccount?.id, () => {
+            void loadBalance();
+            void loadTransactions();
+            void showRecordsWarning();
+          });
+        }
+      } catch {
+        // Ignore lock errors
+      }
+    })();
+  });
   setupAccountUIHandlers();
   setupWalletUIHandlers();
   setupServerUIHandlers();
@@ -151,10 +171,48 @@ async function init(): Promise<void> {
   try {
     const port = runtime.connect({ name: UI_PORT });
     // The chosen Electrum server pushed a new block or a change to our addresses
-    port?.onMessage?.addListener((msg: { type?: string }) => {
-      if (msg?.type !== 'chain-push') return;
-      void loadBalance();
-      void loadTransactions();
+    port?.onMessage?.addListener((msg: { type?: string; mode?: string; result?: unknown }) => {
+      if (msg?.type === 'chain-push') {
+        void loadBalance();
+        void loadTransactions();
+        return;
+      }
+      if (msg?.type === 'wallet-locked') {
+        if (!checkApprovalParams() && state.currentAccount) {
+          void showUnlockModal(state.currentAccount.id, () => {
+            void loadBalance();
+            void loadTransactions();
+            void showRecordsWarning();
+          });
+        }
+        return;
+      }
+      if (msg?.type === 'passkey-ceremony-done') {
+        if (msg.mode === 'unlock') {
+          hideUnlockModal();
+          void loadBalance();
+          void loadTransactions();
+          void showRecordsWarning();
+        } else if (msg.mode === 'enrol') {
+          const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
+          if (labelInput) labelInput.value = '';
+          void refreshPasskeysSection();
+          showToast('Passkey added', 'success');
+        } else if (msg.mode === 'confirm-send') {
+          state.pendingSendTx = null;
+          const sendPasskeyBtn = document.getElementById('send-passkey-btn') as HTMLButtonElement | null;
+          if (sendPasskeyBtn) delete sendPasskeyBtn.dataset.testid;
+          document.getElementById('send-passkey-wrap')?.classList.add('hidden');
+          const txid = (msg.result as { txid?: string } | undefined)?.txid;
+          if (txid) {
+            showToast(`Transaction sent: ${formatAddress(txid)}`, 'success');
+          }
+          hideView();
+          void loadBalance();
+          void loadTransactions();
+          void showRecordsWarning();
+        }
+      }
     });
   } catch {
     console.warn('Could not tell the background this window is open');
@@ -208,6 +266,23 @@ async function init(): Promise<void> {
       await loadBalance();
       await loadTransactions();
       await loadContacts();
+
+      if (state.currentAccount) {
+        try {
+          const status = await sendMessage<{ uiLocked?: boolean }>(MSG.GET_SESSION_STATUS, {
+            accountId: state.currentAccount.id,
+          });
+          if (status?.uiLocked) {
+            await showUnlockModal(state.currentAccount.id, () => {
+              void loadBalance();
+              void loadTransactions();
+              void showRecordsWarning();
+            });
+          }
+        } catch {
+          // Ignore status errors
+        }
+      }
     }
   } catch (error) {
     console.error('Initialization error');

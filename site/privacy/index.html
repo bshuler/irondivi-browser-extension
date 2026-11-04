@@ -42,7 +42,7 @@
 
     <h2>What stays in your browser</h2>
     <ul>
-      <li>Your recovery phrase and private keys, encrypted with your password (PBKDF2 and AES-GCM). They are never sent anywhere.</li>
+      <li>Your recovery phrase and private keys, encrypted with your password (PBKDF2 and AES-GCM) and, if you choose to enrol a passkey, also key-wrapped locally on your device using WebAuthn PRF (HKDF-SHA256 and AES-GCM). Neither your recovery phrase, keys, password, nor passkey encryption output is ever sent anywhere.</li>
       <li>Your wallet names, addresses, settings, spending limits, the sites you allowed or blocked, and a record of your sends, in the browser's extension storage on this device.</li>
       <li>IronDivi Connect pairings, in the browser's session storage. They are gone when the browser closes.</li>
     </ul>

@@ -18,6 +18,7 @@
         <span class="brand">Iron<span>Divi</span></span>
       </div>
       <div class="header-right">
+        <button class="icon-btn hidden" id="lock-wallet-btn" data-testid="lock-wallet-btn" title="Lock Wallet">🔒</button>
         <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
       </div>
     </header>
@@ -214,6 +215,10 @@
         </div>
       </div>
       <div class="form">
+        <div id="send-passkey-wrap" class="passkey-action-wrap hidden">
+          <button type="button" class="primary-btn" id="send-passkey-btn">Verify with Passkey</button>
+          <div class="passkey-divider"><span>Or verify with password</span></div>
+        </div>
         <div class="form-group">
           <label>Enter Password to Sign</label>
           <input type="password" id="send-password" placeholder="Password" autocomplete="current-password">
@@ -456,6 +461,17 @@
           </div>
           <button class="setting-item" id="save-security-phrase-btn">Save Security Phrase</button>
           <p class="setting-hint">Every approval window shows this phrase. A website can draw a window that looks like the wallet's, but it cannot know your phrase: never type your password into a window that does not show it.</p>
+          <div class="passkeys-section" id="passkeys-section" data-testid="passkeys-section">
+            <div class="passkeys-header">
+              <h4>Passkeys</h4>
+            </div>
+            <p class="setting-hint">Unlock and verify actions on this device using WebAuthn PRF (Touch ID, Windows Hello, iCloud Keychain, Google Password Manager, or a FIDO2 security key). Passkeys only unlock this browser vault locally — they do not store or replace your 12/24-word recovery phrase.</p>
+            <div id="passkeys-list" class="passkeys-list"></div>
+            <div class="passkey-add-row">
+              <input type="text" id="new-passkey-label" data-testid="new-passkey-label" placeholder="Passkey name (optional)" maxlength="64" autocomplete="off">
+              <button type="button" class="secondary-btn" id="add-passkey-btn" data-testid="add-passkey-btn">Add Passkey</button>
+            </div>
+          </div>
         </div>
         <div class="setting-section">
           <h3>Site Access</h3>
@@ -582,13 +598,37 @@
       </div>
     </div>
 
+    <!-- Unlock Modal -->
+    <div id="unlock-modal" data-testid="unlock-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Unlock Wallet</h3>
+          <p id="unlock-account-name" class="setting-hint" style="margin-top:4px;"></p>
+        </div>
+        <div id="unlock-passkey-group" class="passkey-action-wrap hidden">
+          <button type="button" id="unlock-passkey-btn" data-testid="unlock-passkey-btn" class="primary-btn">Unlock with Passkey</button>
+          <div class="passkey-divider"><span>Or unlock with password</span></div>
+        </div>
+        <input type="password" id="unlock-password-input" data-testid="unlock-password-input" class="input" placeholder="Password" autocomplete="current-password">
+        <div id="unlock-error-msg" data-testid="unlock-error-msg" class="error-msg hidden" style="margin-bottom:12px;"></div>
+        <div class="modal-actions">
+          <button type="button" id="unlock-password-btn" data-testid="unlock-password-btn" class="primary-btn">Unlock</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Password Modal -->
     <div id="password-modal" class="modal-overlay hidden">
       <div class="modal">
         <div class="modal-header">
           <h3 id="password-modal-title">Enter Password</h3>
         </div>
+        <div id="password-modal-passkey-wrap" class="passkey-action-wrap hidden">
+          <button type="button" id="password-modal-passkey-btn" class="primary-btn">Verify with Passkey</button>
+          <div class="passkey-divider"><span>Or verify with password</span></div>
+        </div>
         <input type="password" id="password-modal-input" class="input" placeholder="Password" autocomplete="current-password">
+        <div id="password-modal-error" class="error-msg hidden" style="margin-bottom:12px;"></div>
         <div class="modal-actions">
           <button id="password-modal-cancel" class="secondary-btn">Cancel</button>
           <button id="password-modal-submit" class="primary-btn">Submit</button>
@@ -645,6 +685,7 @@
           <span id="signing-warning-text">Only approve requests from sites you trust.</span>
         </div>
         <div class="form">
+          <button type="button" id="approve-passkey-btn" data-testid="approve-passkey-btn" class="primary-btn hidden" style="width:100%;margin-bottom:10px;">Approve with Passkey</button>
           <div class="form-group">
             <label>Enter Password to Confirm</label>
             <input type="password" id="signing-password" placeholder="Password" autocomplete="current-password">

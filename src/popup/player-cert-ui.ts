@@ -9,7 +9,7 @@ import { state } from './state';
 import { ensureNetworkAddresses } from './account-ui';
 import { chunkAddress } from './recipient-check';
 import { sendMessage } from './message-api';
-import { showPasswordModal } from './modals';
+import { showAuthModal } from './modals';
 import { canCaptureTab, qrTextFromFile, qrTextFromVisibleTab } from './qr-image';
 import { showLoading, hideLoading, showToast, showView, hideView } from './ui-state';
 import { MSG, NETWORKS, type NetworkType } from '../shared/constants';
@@ -267,14 +267,14 @@ async function handleSignPlayerCert(): Promise<void> {
     return;
   }
 
-  const password = await showPasswordModal('Enter password to sign player certificate');
-  if (!password) return;
+  const auth = await showAuthModal('Enter password to sign player certificate', account.id);
+  if (!auth) return;
 
   try {
     showLoading('Signing player certificate...');
     const reply = await sendMessage<{ signature: string; address: string }>(MSG.SIGN_MESSAGE, {
       accountId: account.id,
-      password,
+      ...auth,
       message: draft.message,
       address: draft.fields.address,
     });

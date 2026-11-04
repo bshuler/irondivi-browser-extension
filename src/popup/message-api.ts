@@ -24,7 +24,10 @@ export async function sendMessage<T = unknown>(type: string, payload?: unknown):
     if (!response?.success) {
       throw new Error(response?.error || 'Request failed');
     }
-    if (typeof (payload as { password?: unknown } | undefined)?.password === 'string') {
+    if (
+      typeof (payload as { password?: unknown } | undefined)?.password === 'string' ||
+      Boolean((payload as { passkeyAuth?: unknown } | undefined)?.passkeyAuth)
+    ) {
       for (const listener of passwordListeners) listener();
     }
     return response.data as T;
