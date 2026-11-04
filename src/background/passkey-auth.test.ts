@@ -3,6 +3,7 @@ import { createHarness, TEST_MNEMONIC, TEST_PASSWORD, type Harness } from '../te
 import { b64url } from '../shared/crypto-utils';
 import { Mnemonic } from '../lib/mnemonic';
 import { deriveAddresses } from '../lib/derivation';
+import { adaptAuthModalPrompt } from '../popup/passkey-client';
 
 vi.setConfig({ testTimeout: 60000 });
 
@@ -335,5 +336,96 @@ describe('Background Passkey Enrolment, Unlock, Rate-Limit & Action Auth', () =>
     });
     expect(dappSendWithPasskey.success).toBe(false);
     expect(dappSendWithPasskey.error).toMatch(/Unsupported option: passkeyAuth/);
+  });
+
+  it('locks UI and broadcasts wallet-locked when signing-session-timeout alarm fires', async () => {
+    const pk = await enrolTestPasskey('Timeout Key');
+    const uiPort = h.openUiPort();
+
+    const initialStatus = await h.popup('GET_SESSION_STATUS', { accountId });
+    expect(initialStatus.data).toMatchObject({
+      uiLocked: false,
+      authenticated: true,
+      hasPasskeys: true,
+      passkeyCount: 1,
+    });
+
+    await h.fireAlarm('signing-session-timeout');
+
+    expect(await h.isAuthenticated(accountId)).toBe(false);
+    expect(uiPort.messages).toContainEqual({ type: 'wallet-locked' });
+
+    const timeoutStatus = await h.popup('GET_SESSION_STATUS', { accountId });
+    expect(timeoutStatus.data).toMatchObject({
+      uiLocked: true,
+      authenticated: false,
+      hasPasskeys: true,
+      passkeyCount: 1,
+    });
+
+    const unlocked = await h.popup('UNLOCK_WALLET_PASSKEY', {
+      accountId,
+      passkeyAuth: pk.passkeyAuth,
+    });
+    expect(unlocked.success).toBe(true);
+    expect((await h.popup('GET_SESSION_STATUS', { accountId })).data.uiLocked).toBe(false);
+    uiPort.disconnect();
+  });
+
+  it('keeps passkey ceremonies alive for 5 minutes (300_000 ms) before expiring', async () => {
+    const { PASSKEY_CEREMONY_TTL_MS } = await import('./service-worker');
+    expect(PASSKEY_CEREMONY_TTL_MS).toBe(300_000);
+
+    await enrolTestPasskey('TTL Key');
+    const recipient = await foreignTestnetAddress();
+    const baseNow = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseNow);
+
+    try {
+      const enrolStart = await h.popup('START_PASSKEY_ENROL', {
+        accountId,
+        password: TEST_PASSWORD,
+        label: 'Slow Touch ID',
+      });
+      expect(enrolStart.success).toBe(true);
+
+      const stagedSend = await h.popup('STAGE_PASSKEY_SEND', {
+        accountId,
+        to: recipient,
+        amount: '1',
+        fee: 0.0001,
+      });
+      expect(stagedSend.success).toBe(true);
+
+      // At +3 minutes (180_000 ms), both ceremonies must still be alive (5-minute TTL)
+      nowSpy.mockReturnValue(baseNow + 180_000);
+      expect((await h.popup('GET_PASSKEY_ENROL_INFO', { token: enrolStart.data.token })).success).toBe(true);
+      expect((await h.popup('GET_STAGED_PASSKEY_SEND', { token: stagedSend.data.token })).success).toBe(true);
+
+      // Past 5 minutes (+301_000 ms), both ceremonies expire cleanly
+      nowSpy.mockReturnValue(baseNow + 301_000);
+      const expiredEnrol = await h.popup('GET_PASSKEY_ENROL_INFO', { token: enrolStart.data.token });
+      expect(expiredEnrol.success).toBe(false);
+      expect(expiredEnrol.error).toMatch(/expired/i);
+
+      const expiredSend = await h.popup('GET_STAGED_PASSKEY_SEND', { token: stagedSend.data.token });
+      expect(expiredSend.success).toBe(false);
+      expect(expiredSend.error).toMatch(/expired/i);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('adapts password-centric auth modal prompts to neutral passkey-or-password wording', () => {
+    expect(adaptAuthModalPrompt('Enter your password to switch to Mainnet')).toBe(
+      'Confirm with passkey or password to switch to Mainnet',
+    );
+    expect(adaptAuthModalPrompt('Enter password to sign player certificate')).toBe(
+      'Confirm with passkey or password to sign player certificate',
+    );
+    expect(adaptAuthModalPrompt('Verify to remove “Touch ID”')).toBe(
+      'Confirm with passkey or password to remove “Touch ID”',
+    );
+    expect(adaptAuthModalPrompt('Enter Password')).toBe('Confirm with passkey or password');
   });
 });

@@ -5,6 +5,25 @@ import type { PasskeySlotInfo } from '../shared/storage';
 export const PRF_UNSUPPORTED_ERROR =
   'This passkey provider does not support encryption (WebAuthn PRF). Try Touch ID, Windows Hello, iCloud Keychain, Google Password Manager, or a FIDO2 security key.';
 
+/**
+ * Adapt password-centric modal prompt strings to neutral passkey-or-password
+ * wording when an account has 1+ passkey slots enrolled.
+ */
+export function adaptAuthModalPrompt(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return 'Confirm with passkey or password';
+  if (/^Enter (?:your )?password to\b/i.test(trimmed)) {
+    return trimmed.replace(/^Enter (?:your )?password to\b/i, 'Confirm with passkey or password to');
+  }
+  if (/^Verify to\b/i.test(trimmed)) {
+    return trimmed.replace(/^Verify to\b/i, 'Confirm with passkey or password to');
+  }
+  if (/^Enter (?:your )?password$/i.test(trimmed)) {
+    return 'Confirm with passkey or password';
+  }
+  return trimmed;
+}
+
 function toUint8Array(buf: unknown): Uint8Array | null {
   if (buf instanceof ArrayBuffer) {
     return new Uint8Array(buf);

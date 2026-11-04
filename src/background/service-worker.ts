@@ -59,7 +59,7 @@ const CANNOT_PAY = 'The wallet cannot make this payment';
 const SEND_OPTIONS = ['to', 'amount', 'fee', 'fromAddresses', 'memo', 'opReturn'];
 
 const UI_LOCKED_SESSION_KEY = 'uiLocked';
-const PASSKEY_CEREMONY_TTL_MS = 120_000;
+export const PASSKEY_CEREMONY_TTL_MS = 300_000;
 
 let uiLockedMem: boolean | null = null;
 
@@ -679,6 +679,7 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           payload.password,
           payload.network
         );
+        await setUiLocked(false);
 
         return { success: true, data: { account: newAccount, mnemonic } };
       }
@@ -690,11 +691,15 @@ async function dispatch(type: string, payload: any, origin: string): Promise<Mes
           payload.password,
           payload.network
         );
+        await setUiLocked(false);
         return { success: true, data: { account: imported } };
       }
 
       case MSG.DELETE_ACCOUNT:
         await accountManager.deleteAccount(payload.accountId, resolveSecretAuth(payload ?? {}));
+        if ((await getAccounts()).length === 0) {
+          await setUiLocked(false);
+        }
         return { success: true };
 
       case MSG.RENAME_ACCOUNT:
@@ -1722,7 +1727,19 @@ runtime.onMessage.addListener((message: Message, sender: chrome.runtime.MessageS
 // Set up alarm listener for signing session timeout
 alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'signing-session-timeout') {
-    await signingSession.handleAlarmTimeout();
+    const hadSession = await signingSession.handleAlarmTimeout();
+    const accounts = await getAccounts();
+    if (hadSession || accounts.length > 0) {
+      clearPendingPasskeyState();
+      await setUiLocked(true);
+      for (const port of openUiPorts) {
+        try {
+          port.postMessage({ type: 'wallet-locked' });
+        } catch {
+          // Port already disconnected
+        }
+      }
+    }
   } else if (alarm.name === RELAY_ALARM) {
     // The browser stopped the worker: the pairings' long polls start again
     await connectRelay.resume();

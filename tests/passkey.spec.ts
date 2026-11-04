@@ -154,27 +154,29 @@ async function setupMockChainAndWallet(context: BrowserContext, extensionId: str
   return { popup, own, dest, broadcasts };
 }
 
-test('full passkey lifecycle: enrol, lock/unlock, send, sign player cert, dApp approve, remove & password fallback', async ({
+test('full passkey lifecycle: onboarding offer, auto-lock timeout, send, sign player cert, dApp approve, remove & password fallback', async ({
   context,
   extensionId,
 }) => {
   const { popup, dest, broadcasts } = await setupMockChainAndWallet(context, extensionId);
   const { cdp, authenticatorId } = await addVirtualAuthenticator(context, popup, true);
 
-  // 1. Enrol a WebAuthn PRF passkey in Settings -> Security
+  // 1. Onboarding passkey enrolment offer appears immediately after wallet import,
+  //    notes mandatory recovery phrase backup, and enrols in 1 click without re-typing password!
+  const onboardingOffer = popup.getByTestId('onboarding-passkey-offer');
+  await expect(onboardingOffer).toBeVisible();
+  await expect(onboardingOffer).toContainText('recovery phrase remains mandatory');
+
+  await popup.getByTestId('onboarding-add-passkey-btn').click();
+  await expect(popup.locator('#password-modal')).toBeHidden();
+  await expect(onboardingOffer).toBeHidden({ timeout: 15000 });
+
+  // Verify Settings -> Security -> Passkeys lists the enrolled passkey and RP ID matches extensionId
   await popup.click('#settings-btn');
   await expect(popup.getByTestId('passkeys-section')).toBeVisible();
-  await popup.fill('#new-passkey-label', 'Touch ID E2E');
-  await popup.getByTestId('add-passkey-btn').click();
-
-  await expect(popup.locator('#password-modal')).toBeVisible();
-  await popup.fill('#password-modal-input', PASSWORD);
-  await popup.click('#password-modal-submit');
-
-  await expect(popup.locator('#passkeys-list')).toContainText('Touch ID E2E', { timeout: 15000 });
+  await expect(popup.locator('#passkeys-list')).toContainText('Passkey 1', { timeout: 15000 });
   await expect(popup.getByTestId('remove-passkey-btn')).toBeVisible();
 
-  // Verify extension origin RP ID binding on the virtual authenticator
   const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
   expect(credentials).toHaveLength(1);
   expect(credentials[0].rpId).toContain(extensionId);
@@ -182,7 +184,17 @@ test('full passkey lifecycle: enrol, lock/unlock, send, sign player cert, dApp a
   await popup.click('#settings-back-btn');
   await expect(popup.locator('#balance-section')).toBeVisible();
 
-  // 2. Lock wallet and unlock with passkey
+  // 2a. Auto-lock session timeout alarm locks the open popup UI and offers Unlock with Passkey
+  const [sw] = context.serviceWorkers();
+  await sw.evaluate(() => {
+    chrome.alarms.create('signing-session-timeout', { when: Date.now() + 50 });
+  });
+  await expect(popup.locator('#unlock-modal')).toBeVisible({ timeout: 10000 });
+  await expect(popup.getByTestId('unlock-passkey-btn')).toBeVisible();
+  await popup.getByTestId('unlock-passkey-btn').click();
+  await expect(popup.locator('#unlock-modal')).toBeHidden({ timeout: 15000 });
+
+  // 2b. Manual Lock wallet button also locks and unlocks with passkey
   await popup.getByTestId('lock-wallet-btn').click();
   await expect(popup.locator('#unlock-modal')).toBeVisible();
   await expect(popup.getByTestId('unlock-passkey-btn')).toBeVisible();
@@ -203,7 +215,7 @@ test('full passkey lifecycle: enrol, lock/unlock, send, sign player cert, dApp a
   await expect(popup.locator('#view-send-confirm')).toBeHidden({ timeout: 15000 });
   expect(broadcasts).toHaveLength(1);
 
-  // 4. Sign Player Certificate using Verify with Passkey in the re-auth modal
+  // 4. Sign Player Certificate using Verify with Passkey and neutral auth modal copy
   await popup.click('#player-cert-btn');
   await expect(popup.locator('#view-player-cert')).toBeVisible();
   await popup.fill('#player-cert-key-input', SAMPLE_PLAYER_PUBKEY);
@@ -211,6 +223,10 @@ test('full passkey lifecycle: enrol, lock/unlock, send, sign player cert, dApp a
   await popup.click('#player-cert-sign-btn');
 
   await expect(popup.locator('#password-modal')).toBeVisible();
+  await expect(popup.locator('#password-modal-title')).toHaveText('Verify Identity');
+  await expect(popup.locator('#password-modal-prompt')).toHaveText(
+    'Confirm with passkey or password to sign player certificate',
+  );
   await expect(popup.getByTestId('reauth-passkey-btn')).toBeVisible();
   await popup.getByTestId('reauth-passkey-btn').click();
 
@@ -265,12 +281,18 @@ test('full passkey lifecycle: enrol, lock/unlock, send, sign player cert, dApp a
   await popup.getByTestId('remove-passkey-btn').click();
 
   await expect(popup.locator('#password-modal')).toBeVisible();
+  await expect(popup.locator('#password-modal-title')).toHaveText('Verify Identity');
+  await expect(popup.locator('#password-modal-prompt')).toHaveText(
+    'Confirm with passkey or password to remove “Passkey 1”',
+  );
   await popup.getByTestId('reauth-passkey-btn').click();
   await expect(popup.locator('#passkeys-list')).toContainText('No passkeys enrolled', { timeout: 15000 });
 
-  // Export phrase now shows password-only modal (no passkey button) and succeeds with password
+  // Export phrase now shows password-only modal (unchanged title, no passkey button) and succeeds with password
   await popup.click('#export-mnemonic-btn');
   await expect(popup.locator('#password-modal')).toBeVisible();
+  await expect(popup.locator('#password-modal-title')).toHaveText('Enter password to export recovery phrase');
+  await expect(popup.locator('#password-modal-prompt')).toBeHidden();
   await expect(popup.getByTestId('reauth-passkey-btn')).toHaveCount(0);
   await popup.fill('#password-modal-input', PASSWORD);
   await popup.click('#password-modal-submit');
@@ -283,6 +305,14 @@ test('standalone passkey.html ceremony window completes enrolment without toolba
   extensionId,
 }) => {
   const { popup } = await setupMockChainAndWallet(context, extensionId);
+
+  // Dismissing the onboarding passkey offer ("Not now") hides it cleanly and persists across reloads
+  await expect(popup.getByTestId('onboarding-passkey-offer')).toBeVisible();
+  await popup.getByTestId('onboarding-skip-passkey-btn').click();
+  await expect(popup.getByTestId('onboarding-passkey-offer')).toBeHidden();
+  await popup.reload();
+  await expect(popup.locator('#balance-section')).toBeVisible({ timeout: 15000 });
+  await expect(popup.getByTestId('onboarding-passkey-offer')).toBeHidden();
 
   // Part A: Non-PRF authenticator (hasPrf: false) is rejected with exact actionable message
   const { cdp: noPrfCdp, authenticatorId: noPrfId } = await addVirtualAuthenticator(

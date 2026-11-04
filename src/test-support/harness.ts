@@ -92,6 +92,8 @@ export interface Harness {
   openUiPort: (url?: string) => { disconnect: () => void; messages: any[] };
   /** Tell the background the idle state changed ('active', 'idle' or 'locked') */
   setIdleState: (state: string) => void;
+  /** Fire a named chrome.alarms.onAlarm event in the background worker */
+  fireAlarm: (name: string) => Promise<void>;
   /** Whether the running worker's signing session is open (for the account) */
   isAuthenticated: (accountId?: string) => Promise<boolean>;
   /** Import TEST_MNEMONIC on testnet and unlock a signing session. Returns the account. */
@@ -163,6 +165,7 @@ export async function createHarness(
   const onMessage = event();
   const onConnect = event();
   const onIdle = event();
+  const onAlarm = event();
   const onRemoved = event();
   const onPermissionsAdded = event();
   const createdWindows: Array<{ id: number; url: string }> = [];
@@ -228,7 +231,7 @@ export async function createHarness(
       },
     },
     storage: { local: makeStorageArea(local), session: makeStorageArea(session) },
-    alarms: { create: () => {}, clear: (_n: string, cb?: (b: boolean) => void) => { cb?.(true); return Promise.resolve(true); }, onAlarm: event() },
+    alarms: { create: () => {}, clear: (_n: string, cb?: (b: boolean) => void) => { cb?.(true); return Promise.resolve(true); }, onAlarm },
     idle: { onStateChanged: onIdle },
     action: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {} },
     windows: {
@@ -352,7 +355,7 @@ export async function createHarness(
   (globalThis as any).document = fakeDocument;
 
   // The listeners the worker adds, so a restart can take them away again
-  const workerEvents = [onMessage, onConnect, onIdle];
+  const workerEvents = [onMessage, onConnect, onIdle, onAlarm];
   const loadWorker = async (path: string) => {
     const before = workerEvents.map(e => e.listeners.length);
     await import(/* @vite-ignore */ path);
@@ -430,6 +433,11 @@ export async function createHarness(
       return { disconnect: () => onDisconnect.listeners.forEach(l => l(port)), messages };
     },
     setIdleState: (state) => onIdle.listeners.forEach(l => l(state)),
+    fireAlarm: async (name: string) => {
+      for (const l of [...onAlarm.listeners]) {
+        await l({ name });
+      }
+    },
     isAuthenticated: async (accountId?: string) =>
       (await import('../background/signing-session')).signingSession.isAuthenticated(accountId),
     setupWallet: async () => {

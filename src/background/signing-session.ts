@@ -179,10 +179,12 @@ export class SigningSession {
   }
 
   /**
-   * Handle alarm timeout
+   * Handle alarm timeout. Returns true if an active signing session was cleared.
    */
-  async handleAlarmTimeout(): Promise<void> {
+  async handleAlarmTimeout(): Promise<boolean> {
+    const hadSession = Boolean(this.seed || this.currentAccountId);
     await this.clearSession();
+    return hadSession;
   }
 }
 

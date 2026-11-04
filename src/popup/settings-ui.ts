@@ -20,7 +20,14 @@ import { canonicalOrigin, DEFAULT_SITES, type SiteAccess } from '../shared/site-
 import { checkSettingsUpdate } from '../shared/settings-check';
 import { Settings, ConnectedSite, TransactionLimits } from './types';
 import { updateBalanceDisplay, updateFaucetVisibility, loadBalance, loadTransactions } from './wallet-ui';
-import { loadAccounts, ensureNetworkAddresses, renameCurrentAccount, removeCurrentAccount } from './account-ui';
+import {
+  loadAccounts,
+  ensureNetworkAddresses,
+  renameCurrentAccount,
+  removeCurrentAccount,
+  clearOnboardingPassword,
+  refreshOnboardingPasskeyOffer,
+} from './account-ui';
 import { loadPairings, setupConnectUIHandlers } from './connect-ui';
 
 // ============================================================
@@ -370,6 +377,7 @@ export async function refreshPasskeysSection(): Promise<void> {
 
   const slots = await fetchPasskeySlots(accountId);
   listEl.replaceChildren();
+  void refreshOnboardingPasskeyOffer();
 
   if (slots.length === 0) {
     const empty = document.createElement('div');
@@ -413,18 +421,12 @@ export async function refreshPasskeysSection(): Promise<void> {
   }
 }
 
-async function handleAddPasskey(): Promise<void> {
-  const account = state.currentAccount;
-  if (!account) {
-    showToast('No wallet open', 'error');
-    return;
-  }
-
-  const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
-  const requestedLabel = labelInput?.value.trim() || undefined;
-
-  const password = await showPasswordModal('Enter your password to add a passkey');
-  if (!password) return;
+export async function enrolPasskeyForAccount(
+  accountId: string,
+  opts?: { password?: string; label?: string },
+): Promise<boolean> {
+  const password = opts?.password ?? (await showPasswordModal('Enter your password to add a passkey'));
+  if (!password) return false;
 
   let enrolData: {
     token: string;
@@ -437,15 +439,15 @@ async function handleAddPasskey(): Promise<void> {
   try {
     showLoading('Preparing passkey enrolment...');
     enrolData = await sendMessage(MSG.START_PASSKEY_ENROL, {
-      accountId: account.id,
+      accountId,
       password,
-      label: requestedLabel,
+      label: opts?.label,
     });
     hideLoading();
   } catch (err) {
     hideLoading();
     showToast(err instanceof Error ? err.message : 'Failed to start passkey enrolment', 'error');
-    return;
+    return false;
   }
 
   if (await isTransientToolbarPopup()) {
@@ -454,11 +456,13 @@ async function handleAddPasskey(): Promise<void> {
         mode: 'enrol',
         token: enrolData.token,
       });
+      clearOnboardingPassword();
+      return true;
     } catch (err) {
       await sendMessage(MSG.CANCEL_PASSKEY_ENROL, { token: enrolData.token }).catch(() => {});
       showToast(err instanceof Error ? err.message : 'Could not open passkey window', 'error');
+      return false;
     }
-    return;
   }
 
   try {
@@ -477,15 +481,32 @@ async function handleAddPasskey(): Promise<void> {
       label: enrolData.label,
     });
 
+    clearOnboardingPassword();
+    const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
     if (labelInput) labelInput.value = '';
     await refreshPasskeysSection();
+    await refreshOnboardingPasskeyOffer();
     showToast('Passkey added', 'success');
+    return true;
   } catch (err) {
     await sendMessage(MSG.CANCEL_PASSKEY_ENROL, { token: enrolData.token }).catch(() => {});
     showToast(err instanceof Error ? err.message : 'Failed to add passkey', 'error');
+    return false;
   } finally {
     hideLoading();
   }
+}
+
+async function handleAddPasskey(): Promise<void> {
+  const account = state.currentAccount;
+  if (!account) {
+    showToast('No wallet open', 'error');
+    return;
+  }
+
+  const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
+  const requestedLabel = labelInput?.value.trim() || undefined;
+  await enrolPasskeyForAccount(account.id, { label: requestedLabel });
 }
 
 async function handleRemovePasskey(slot: PasskeySlotInfo): Promise<void> {

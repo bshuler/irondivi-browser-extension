@@ -99,6 +99,19 @@
       </button>
     </div>
 
+    <!-- Onboarding Passkey Enrolment Offer -->
+    <div id="onboarding-passkey-offer" class="onboarding-passkey-card hidden" data-testid="onboarding-passkey-offer">
+      <div class="onboarding-passkey-title">Faster unlock with a Passkey</div>
+      <p class="onboarding-passkey-copy">
+        Add Touch ID, Windows Hello, or a FIDO2 security key for local unlock and transaction confirmation.
+        Your 12/24-word recovery phrase remains mandatory for wallet recovery.
+      </p>
+      <div class="onboarding-passkey-actions">
+        <button type="button" id="onboarding-add-passkey-btn" data-testid="onboarding-add-passkey-btn" class="primary-btn">Add Passkey (Touch ID / Security Key)</button>
+        <button type="button" id="onboarding-skip-passkey-btn" data-testid="onboarding-skip-passkey-btn" class="secondary-btn">Not now</button>
+      </div>
+    </div>
+
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" data-tab="activity">Activity</button>
@@ -623,6 +636,7 @@
         <div class="modal-header">
           <h3 id="password-modal-title">Enter Password</h3>
         </div>
+        <p id="password-modal-prompt" class="modal-subtitle hidden"></p>
         <div id="password-modal-passkey-wrap" class="passkey-action-wrap hidden">
           <button type="button" id="password-modal-passkey-btn" class="primary-btn">Verify with Passkey</button>
           <div class="passkey-divider"><span>Or verify with password</span></div>

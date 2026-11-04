@@ -2293,3 +2293,51 @@ body:not([data-network]) .network-bar {
   font-size: 12px;
   word-break: break-all;
 }
+
+.modal-subtitle {
+  margin: -6px 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.onboarding-passkey-card {
+  margin: 0 16px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.onboarding-passkey-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.onboarding-passkey-copy {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.onboarding-passkey-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.onboarding-passkey-actions .primary-btn {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.onboarding-passkey-actions .secondary-btn {
+  width: auto;
+  padding: 9px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}

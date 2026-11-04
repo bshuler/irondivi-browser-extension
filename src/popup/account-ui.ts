@@ -12,6 +12,105 @@ import { MIN_PASSWORD_LENGTH, passwordStrength } from '../shared/password-streng
 import { Account } from './types';
 import { loadBalance, loadTransactions } from './wallet-ui';
 import { savePending, pendingState, unlockPending, clearPending } from './pending-account';
+import { storage } from '../shared/browser-polyfill';
+import { SecureString } from '../shared/crypto-utils';
+import { fetchPasskeySlots } from './passkey-client';
+
+const ONBOARDING_PASSWORD_TTL_MS = 300_000;
+const PASSKEY_PROMPT_DISMISSED_PREFIX = 'passkey_prompt_dismissed_';
+
+interface HeldOnboardingPassword {
+  accountId: string;
+  secret: SecureString;
+  expiresAt: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+let heldOnboardingPassword: HeldOnboardingPassword | null = null;
+
+export function clearOnboardingPassword(): void {
+  if (!heldOnboardingPassword) return;
+  clearTimeout(heldOnboardingPassword.timer);
+  heldOnboardingPassword.secret.wipe();
+  heldOnboardingPassword = null;
+}
+
+function rememberOnboardingPassword(accountId: string, password: string): void {
+  clearOnboardingPassword();
+  const secret = new SecureString(password);
+  const timer = setTimeout(() => {
+    clearOnboardingPassword();
+  }, ONBOARDING_PASSWORD_TTL_MS);
+  heldOnboardingPassword = {
+    accountId,
+    secret,
+    expiresAt: Date.now() + ONBOARDING_PASSWORD_TTL_MS,
+    timer,
+  };
+}
+
+function getOnboardingPassword(accountId: string): string | undefined {
+  if (!heldOnboardingPassword) return undefined;
+  if (heldOnboardingPassword.accountId !== accountId || Date.now() > heldOnboardingPassword.expiresAt) {
+    clearOnboardingPassword();
+    return undefined;
+  }
+  return heldOnboardingPassword.secret.toString();
+}
+
+function passkeyPromptDismissedKey(accountId: string): string {
+  return `${PASSKEY_PROMPT_DISMISSED_PREFIX}${accountId}`;
+}
+
+export async function refreshOnboardingPasskeyOffer(): Promise<void> {
+  const card = document.getElementById('onboarding-passkey-offer');
+  if (!card) return;
+
+  const accountId = state.currentAccount?.id;
+  const isApproval = new URLSearchParams(window.location.search).has('approve');
+  const webAuthnAvailable = typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined';
+
+  if (!accountId || isApproval || !webAuthnAvailable) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const key = passkeyPromptDismissedKey(accountId);
+    const stored = await storage.local.get<Record<string, unknown>>(key);
+    if (stored[key] === true) {
+      card.classList.add('hidden');
+      return;
+    }
+
+    const slots = await fetchPasskeySlots(accountId);
+    if (state.currentAccount?.id !== accountId) return;
+    card.classList.toggle('hidden', slots.length > 0);
+  } catch {
+    card.classList.add('hidden');
+  }
+}
+
+export async function dismissOnboardingPasskeyOffer(): Promise<void> {
+  clearOnboardingPassword();
+  const card = document.getElementById('onboarding-passkey-offer');
+  card?.classList.add('hidden');
+  const accountId = state.currentAccount?.id;
+  if (!accountId) return;
+  try {
+    await storage.local.set({ [passkeyPromptDismissedKey(accountId)]: true });
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+async function handleOnboardingAddPasskey(): Promise<void> {
+  const account = state.currentAccount;
+  if (!account) return;
+  const rememberedPassword = getOnboardingPassword(account.id);
+  const { enrolPasskeyForAccount } = await import('./settings-ui');
+  await enrolPasskeyForAccount(account.id, { password: rememberedPassword });
+}
 
 // ============================================================
 // Data Loading
@@ -117,12 +216,14 @@ export function updateAccountDisplay(): void {
 export async function selectAccount(accountId: string): Promise<void> {
   try {
     showLoading('Switching account...');
+    clearOnboardingPassword();
     await sendMessage(MSG.SELECT_ACCOUNT, { accountId });
     await loadAccounts();
     state.selectedReceiveAddressIndex = 0;
     await ensureNetworkAddresses();
     await loadBalance();
     await loadTransactions();
+    await refreshOnboardingPasskeyOffer();
     elements.accountMenu.classList.add('hidden');
     elements.accountDropdown.classList.remove('open');
   } catch (error) {
@@ -182,12 +283,16 @@ export async function removeCurrentAccount(): Promise<void> {
 
   try {
     showLoading('Removing wallet...');
-    await sendMessage(MSG.DELETE_ACCOUNT, { accountId: state.currentAccount.id, ...auth });
+    const removedAccountId = state.currentAccount.id;
+    clearOnboardingPassword();
+    await sendMessage(MSG.DELETE_ACCOUNT, { accountId: removedAccountId, ...auth });
+    await storage.local.remove(passkeyPromptDismissedKey(removedAccountId)).catch(() => {});
     showToast('Wallet removed from this device', 'success');
     hideView();
     await loadAccounts();
     await loadBalance();
     await loadTransactions();
+    await refreshOnboardingPasskeyOffer();
   } catch (error: unknown) {
     showToast(error instanceof Error ? error.message : 'Failed to remove wallet', 'error');
   } finally {
@@ -247,6 +352,7 @@ async function finalizePendingAccount(name: string, mnemonic: string, password: 
     await clearPending();
 
     showToast(`Wallet created: ${importResponse.account.name}`, 'success');
+    rememberOnboardingPassword(importResponse.account.id, password);
 
     // A wallet just added is the one that opens, as in the web wallet
     await sendMessage(MSG.SELECT_ACCOUNT, { accountId: importResponse.account.id });
@@ -255,6 +361,7 @@ async function finalizePendingAccount(name: string, mnemonic: string, password: 
     await loadBalance();
     await loadTransactions();
     hideView();
+    await refreshOnboardingPasskeyOffer();
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create wallet';
     showToast(errorMessage, 'error');
@@ -317,12 +424,14 @@ export async function importAccount(name: string, mnemonic: string, password: st
     });
 
     showToast(`Wallet imported: ${response.account.name}`, 'success');
+    rememberOnboardingPassword(response.account.id, password);
     await sendMessage(MSG.SELECT_ACCOUNT, { accountId: response.account.id });
     state.selectedReceiveAddressIndex = 0;
     await loadAccounts();
     await loadBalance();
     await loadTransactions();
     hideView();
+    await refreshOnboardingPasskeyOffer();
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to import wallet';
     showToast(errorMessage, 'error');
@@ -489,5 +598,13 @@ export function setupAccountUIHandlers(): void {
 
   document.getElementById('onboard-import-btn')?.addEventListener('click', () => {
     showView(elements.viewImportAccount);
+  });
+
+  // Post-onboarding passkey enrolment card
+  document.getElementById('onboarding-add-passkey-btn')?.addEventListener('click', () => {
+    void handleOnboardingAddPasskey();
+  });
+  document.getElementById('onboarding-skip-passkey-btn')?.addEventListener('click', () => {
+    void dismissOnboardingPasskeyOffer();
   });
 }

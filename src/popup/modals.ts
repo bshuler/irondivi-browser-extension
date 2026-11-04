@@ -8,11 +8,14 @@ import { elements } from './elements';
 import { state } from './state';
 import { clearPasswordInput } from './ui-state';
 import {
+  adaptAuthModalPrompt,
   assertPasskeyInWindow,
   fetchPasskeySlots,
   isTransientToolbarPopup,
   openPasskeyCeremonyWindow,
 } from './passkey-client';
+
+export { adaptAuthModalPrompt };
 
 export interface AuthModalResult {
   password?: string;
@@ -146,6 +149,7 @@ export function showPasswordModal(title: string): Promise<string | null> {
   return new Promise(resolve => {
     const modal = document.getElementById('password-modal') as HTMLDivElement;
     const titleEl = document.getElementById('password-modal-title') as HTMLHeadingElement;
+    const promptEl = document.getElementById('password-modal-prompt') as HTMLParagraphElement | null;
     const input = document.getElementById('password-modal-input') as HTMLInputElement;
     const cancelBtn = document.getElementById('password-modal-cancel') as HTMLButtonElement;
     const submitBtn = document.getElementById('password-modal-submit') as HTMLButtonElement;
@@ -155,12 +159,16 @@ export function showPasswordModal(title: string): Promise<string | null> {
 
     if (passkeyWrap) passkeyWrap.classList.add('hidden');
     if (passkeyBtn) delete passkeyBtn.dataset.testid;
+    if (promptEl) {
+      promptEl.textContent = '';
+      promptEl.classList.add('hidden');
+    }
     if (errorEl) {
       errorEl.textContent = '';
       errorEl.classList.add('hidden');
     }
 
-    titleEl.textContent = title;
+    titleEl.textContent = title || 'Enter Password';
     input.value = '';
     modal.classList.remove('hidden');
     input.focus();
@@ -205,6 +213,7 @@ export async function showAuthModal(title: string, accountId?: string): Promise<
   return new Promise(resolve => {
     const modal = document.getElementById('password-modal') as HTMLDivElement;
     const titleEl = document.getElementById('password-modal-title') as HTMLHeadingElement;
+    const promptEl = document.getElementById('password-modal-prompt') as HTMLParagraphElement | null;
     const input = document.getElementById('password-modal-input') as HTMLInputElement;
     const cancelBtn = document.getElementById('password-modal-cancel') as HTMLButtonElement;
     const submitBtn = document.getElementById('password-modal-submit') as HTMLButtonElement;
@@ -227,12 +236,24 @@ export async function showAuthModal(title: string, accountId?: string): Promise<
       passkeyBtn.disabled = false;
       passkeyBtn.dataset.testid = 'reauth-passkey-btn';
       passkeyWrap.classList.remove('hidden');
+      const neutralPrompt = adaptAuthModalPrompt(title);
+      if (promptEl) {
+        titleEl.textContent = 'Verify Identity';
+        promptEl.textContent = neutralPrompt;
+        promptEl.classList.remove('hidden');
+      } else {
+        titleEl.textContent = neutralPrompt || 'Verify Identity';
+      }
     } else {
       passkeyWrap?.classList.add('hidden');
       if (passkeyBtn) delete passkeyBtn.dataset.testid;
+      if (promptEl) {
+        promptEl.textContent = '';
+        promptEl.classList.add('hidden');
+      }
+      titleEl.textContent = title || 'Enter Password';
     }
 
-    titleEl.textContent = title;
     input.value = '';
     modal.classList.remove('hidden');
     input.focus();
@@ -241,6 +262,10 @@ export async function showAuthModal(title: string, accountId?: string): Promise<
       modal.classList.add('hidden');
       clearPasswordInput(input);
       passkeyWrap?.classList.add('hidden');
+      if (promptEl) {
+        promptEl.textContent = '';
+        promptEl.classList.add('hidden');
+      }
       if (passkeyBtn) {
         delete passkeyBtn.dataset.testid;
         passkeyBtn.onclick = null;

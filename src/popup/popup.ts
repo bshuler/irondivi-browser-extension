@@ -17,7 +17,14 @@ import { setupMnemonicModalHandlers, showAuthModal, showUnlockModal, hideUnlockM
 import { setUnlockDeps } from './unlock-retry';
 import { showRecordsWarning } from './records-warning-ui';
 import { refreshServerUI, setupServerUIHandlers } from './server-ui';
-import { loadAccounts, setupAccountUIHandlers, checkPendingAccountCreation, ensureNetworkAddresses } from './account-ui';
+import {
+  loadAccounts,
+  setupAccountUIHandlers,
+  checkPendingAccountCreation,
+  ensureNetworkAddresses,
+  clearOnboardingPassword,
+  refreshOnboardingPasskeyOffer,
+} from './account-ui';
 import { loadBalance, loadTransactions, updateBalanceDisplay, setupWalletUIHandlers } from './wallet-ui';
 import { setupSendUIHandlers } from './send-ui';
 import { loadContacts, setupContactsUIHandlers } from './contacts-ui';
@@ -112,6 +119,7 @@ function setupEventListeners(): void {
   document.getElementById('lock-wallet-btn')?.addEventListener('click', () => {
     void (async () => {
       try {
+        clearOnboardingPassword();
         await sendMessage(MSG.LOCK_WALLET);
         const modal = document.getElementById('unlock-modal');
         if (modal?.classList.contains('hidden')) {
@@ -178,11 +186,13 @@ async function init(): Promise<void> {
         return;
       }
       if (msg?.type === 'wallet-locked') {
+        clearOnboardingPassword();
         if (!checkApprovalParams() && state.currentAccount) {
           void showUnlockModal(state.currentAccount.id, () => {
             void loadBalance();
             void loadTransactions();
             void showRecordsWarning();
+            void refreshOnboardingPasskeyOffer();
           });
         }
         return;
@@ -193,10 +203,13 @@ async function init(): Promise<void> {
           void loadBalance();
           void loadTransactions();
           void showRecordsWarning();
+          void refreshOnboardingPasskeyOffer();
         } else if (msg.mode === 'enrol') {
+          clearOnboardingPassword();
           const labelInput = document.getElementById('new-passkey-label') as HTMLInputElement | null;
           if (labelInput) labelInput.value = '';
           void refreshPasskeysSection();
+          void refreshOnboardingPasskeyOffer();
           showToast('Passkey added', 'success');
         } else if (msg.mode === 'confirm-send') {
           state.pendingSendTx = null;
@@ -266,6 +279,7 @@ async function init(): Promise<void> {
       await loadBalance();
       await loadTransactions();
       await loadContacts();
+      await refreshOnboardingPasskeyOffer();
 
       if (state.currentAccount) {
         try {
@@ -277,6 +291,7 @@ async function init(): Promise<void> {
               void loadBalance();
               void loadTransactions();
               void showRecordsWarning();
+              void refreshOnboardingPasskeyOffer();
             });
           }
         } catch {
